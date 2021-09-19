@@ -1,6 +1,6 @@
 use std::{collections::HashSet, env};
 
-use serenity::{async_trait, client::{Client, Context, EventHandler}, framework::{StandardFramework, standard::{Args, CommandGroup, CommandResult, HelpOptions, help_commands, macros::{command, group, help, hook}}}, model::{channel::Message, gateway::Ready, id::UserId}};
+use serenity::{async_trait, client::{Client, Context, EventHandler}, framework::{StandardFramework, standard::{Args, CommandGroup, CommandResult, HelpOptions, WithWhiteSpace, help_commands, macros::{command, group, help, hook}}}, model::{channel::Message, gateway::Ready, id::UserId}};
 
 use songbird::SerenityInit;
 
@@ -67,7 +67,11 @@ async fn main() {
 
     let prefix = "aya";
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix(prefix).delimiter(prefix))
+        .configure(|c| c.prefix(prefix).delimiter(prefix).with_whitespace(WithWhiteSpace {
+            prefixes: true,
+            groups: true,
+            commands: true,
+        }))
         .before(before)
         .help(&MY_HELP)
         .group(&GENERAL_GROUP)
