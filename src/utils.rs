@@ -18,6 +18,8 @@ pub async fn get_manager(ctx: &Context) -> Arc<Songbird> {
    ).await.expect("Songbird Voice client placed in at initialisation.")
 }
 
+#[allow(unused_variables)]
+#[allow(dead_code)]
 pub async fn search_youtube(term: &str) {
     let ytdl_args = ["--print-json", ] ;
     todo!()

@@ -3,15 +3,15 @@ use std::{sync::Arc, time::Duration};
 use serenity::{
     client::Context,
     framework::standard::{macros::command, Args, CommandResult},
-    model::{channel::Message, misc::Mentionable},
+    model::{channel::Message, id::ChannelId, misc::Mentionable},
     prelude::*,
 };
 
 use songbird::{
-    input::{self, restartable::Restartable, Input},
-    Event, TrackEvent,
+    input::{restartable::Restartable, Input},
+    Event,
 };
-use tracing::debug;
+use tracing::info;
 
 use crate::utils;
 use crate::utils::check_msg;
@@ -61,7 +61,6 @@ async fn deafen(ctx: &Context, msg: &Message) -> CommandResult {
 #[only_in(guilds)]
 async fn join(ctx: &Context, msg: &Message) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
-    let guild_id = guild.id;
 
     let channel_id = guild
         .voice_states
@@ -82,46 +81,69 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
 
-    // TODO Prevent from joining channels if already in a channel
-    let (handle_lock, success) = manager.join(guild_id, connect_to).await;
+    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild_id = guild.id;
+    #[allow(unused_assignments)]
+    let mut joined = false;
+    let call = match manager.get(guild_id) {
+        Some(handle_lock) => {
+            joined = true;
+            let handler = handle_lock.lock().await;
+            ChannelId(handler.current_channel().unwrap().0)
+        }
+        None => {
+            joined = false;
+            ChannelId::default()
+        }
+    };
 
-    if let Ok(_channel) = success {
-        check_msg(
-            msg.channel_id
-                .say(&ctx.http, &format!("Joined {}", connect_to.mention()))
-                .await,
-        );
+    if !joined {
+        // TODO Prevent from joining channels if already in a channel
+        let (handle_lock, success) = manager.join(guild_id, connect_to).await;
 
-        let chan_id = msg.channel_id;
+        if let Ok(_channel) = success {
+            check_msg(
+                msg.channel_id
+                    .say(&ctx.http, &format!("Joined {}", connect_to.mention()))
+                    .await,
+            );
 
-        let send_http = ctx.http.clone();
+            let chan_id = msg.channel_id;
 
-        let mut handle = handle_lock.lock().await;
+            //let send_http = ctx.http.clone();
 
-        handle.add_global_event(
-            Event::Track(TrackEvent::End),
-            TrackEndNotifier {
-                chan_id,
-                http: send_http,
-            },
-        );
+            let mut handle = handle_lock.lock().await;
 
-        let send_http = ctx.http.clone();
+            // TODO Add event to send message on track start
 
-        handle.add_global_event(
-            Event::Periodic(Duration::from_secs(60), None),
-            ChannelDurationNotifier {
-                chan_id,
-                count: Default::default(),
-                http: send_http,
-            },
-        );
+            let send_http = ctx.http.clone();
+
+            handle.add_global_event(
+                Event::Periodic(Duration::from_secs(60), None),
+                ChannelDurationNotifier {
+                    chan_id,
+                    count: Default::default(),
+                    http: send_http,
+                },
+            );
+        } else {
+            check_msg(
+                msg.channel_id
+                    .say(&ctx.http, "Error joining the channel")
+                    .await,
+            );
+        }
     } else {
+        let channel_name = call.name(&ctx.cache).await.unwrap();
+        info!("Already in a channel {}, not joining", channel_name);
         check_msg(
             msg.channel_id
-                .say(&ctx.http, "Error joining the channel")
+                .say(
+                    &ctx.http,
+                    format!("Already in voice channel \"{}\"", call.mention()),
+                )
                 .await,
-        );
+        )
     }
 
     Ok(())
@@ -275,7 +297,9 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 }
 
 #[command]
-#[description("Skips the currently playing song. Ayaya wonders why you abandoned your summon so easily.")]
+#[description(
+    "Skips the currently playing song. Ayaya wonders why you abandoned your summon so easily."
+)]
 #[only_in(guilds)]
 async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
@@ -374,7 +398,11 @@ async fn pause(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
         let song_name = queue.current().unwrap().metadata().title.clone().unwrap();
         let _ = queue.pause();
 
-        check_msg(msg.channel_id.say(&ctx.http, format!("{} - paused",song_name)).await);
+        check_msg(
+            msg.channel_id
+                .say(&ctx.http, format!("{} - paused", song_name))
+                .await,
+        );
     } else {
         check_msg(
             msg.channel_id
@@ -404,7 +432,11 @@ async fn resume(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
         let song_name = queue.current().unwrap().metadata().title.clone().unwrap();
         let _ = queue.resume();
 
-        check_msg(msg.channel_id.say(&ctx.http, format!("{} - resumed",song_name)).await);
+        check_msg(
+            msg.channel_id
+                .say(&ctx.http, format!("{} - resumed", song_name))
+                .await,
+        );
     } else {
         check_msg(
             msg.channel_id

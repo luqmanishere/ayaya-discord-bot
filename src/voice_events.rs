@@ -1,33 +1,10 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc,
-};
+use std::sync::{atomic::AtomicUsize, Arc};
 
 use serenity::{async_trait, http::Http, model::prelude::ChannelId};
 
 use songbird::{Event, EventContext, EventHandler as VoiceEventHandler};
 
 use crate::utils::check_msg;
-
-pub struct TrackEndNotifier {
-    pub chan_id: ChannelId,
-    pub http: Arc<Http>,
-}
-
-#[async_trait]
-impl VoiceEventHandler for TrackEndNotifier {
-    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
-        if let EventContext::Track(track_list) = ctx {
-            check_msg(
-                self.chan_id
-                    .say(&self.http, &format!("Tracks ended: {}.", track_list.len()))
-                    .await,
-            );
-        }
-
-        None
-    }
-}
 
 pub struct ChannelDurationNotifier {
     pub chan_id: ChannelId,
@@ -38,6 +15,7 @@ pub struct ChannelDurationNotifier {
 #[async_trait]
 impl VoiceEventHandler for ChannelDurationNotifier {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
+        /*
         let count_before = self.count.fetch_add(1, Ordering::Relaxed);
         check_msg(
             self.chan_id
@@ -50,7 +28,7 @@ impl VoiceEventHandler for ChannelDurationNotifier {
                 )
                 .await,
         );
-
+        */
 
         None
     }
@@ -87,6 +65,7 @@ pub struct SongAfter60 {
 }
 
 #[async_trait]
+#[allow(unused_variables)]
 impl VoiceEventHandler for SongAfter60 {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         None
