@@ -3,7 +3,7 @@ on:
     branches:
       - main
 
-name: Release Packaging
+name: Release to Github
 
 jobs:
   release:
@@ -20,8 +20,24 @@ jobs:
           override: true
       - name: Release Build
         run: cargo build --release
-      - name: 'Upload Artifact'
+      - name: "Upload Artifact"
         uses: actions/upload-artifact@v2
         with:
           name: ${{ env.PROJECT_NAME_UNDERSCORE }}
           path: target/release/${{ env.PROJECT_NAME_UNDERSCORE }}
+
+      - name: Github Tag Bump
+        uses: anothrNick/github-tag-action@1.36.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: true
+        id: bump_version
+
+      - name: Upload files to a GitHub release
+        uses: svenstaro/upload-release-action@2.2.1
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/release/${{ env.PROJECT_NAME_UNDERSCORE }}
+          asset_name: ${{ env.PROJECT_NAME_UNDERSCORE }}-linux-amd64
+          tag: ${{ steps.bump_version.outputs.new_tag }}
+          overwrite: true
