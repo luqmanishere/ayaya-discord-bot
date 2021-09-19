@@ -1,13 +1,25 @@
 use std::{collections::HashSet, env};
 
-use serenity::{async_trait, client::{Client, Context, EventHandler}, framework::{StandardFramework, standard::{Args, CommandGroup, CommandResult, HelpOptions, WithWhiteSpace, help_commands, macros::{command, group, help, hook}}}, model::{channel::Message, gateway::Ready, id::UserId}};
+use serenity::{
+    async_trait,
+    client::{Client, Context, EventHandler},
+    framework::{
+        standard::{
+            help_commands,
+            macros::{command, group, help, hook},
+            Args, CommandGroup, CommandResult, HelpOptions, WithWhiteSpace,
+        },
+        StandardFramework,
+    },
+    model::{channel::Message, gateway::Ready, id::UserId},
+};
 
 use songbird::SerenityInit;
 
 use tracing::{error, info, instrument};
 
-use crate::voice::*;
 use crate::utils::check_msg;
+use crate::voice::*;
 
 mod utils;
 mod voice;
@@ -46,12 +58,12 @@ async fn my_help(
 }
 
 #[group]
-#[commands( ping)]
+#[commands(ping)]
 struct General;
 
 #[group]
 #[commands(
-    deafen, join, leave, mute, play, resume, pause, queue, skip, stop,  undeafen, unmute
+    deafen, join, leave, mute, play, resume, pause, queue, skip, stop, undeafen, unmute
 )]
 #[summary("Music controls")]
 struct Music;
@@ -67,11 +79,15 @@ async fn main() {
 
     let prefix = "aya";
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix(prefix).delimiter(prefix).with_whitespace(WithWhiteSpace {
-            prefixes: true,
-            groups: true,
-            commands: true,
-        }))
+        .configure(|c| {
+            c.prefix(prefix)
+                .delimiter(prefix)
+                .with_whitespace(WithWhiteSpace {
+                    prefixes: true,
+                    groups: true,
+                    commands: true,
+                })
+        })
         .before(before)
         .help(&MY_HELP)
         .group(&GENERAL_GROUP)
