@@ -79,6 +79,39 @@ pub struct SongAfter60 {
 #[allow(unused_variables)]
 impl VoiceEventHandler for SongAfter60 {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        if let EventContext::Track(tracklist) = ctx {
+            if let Some((track_state, _)) = tracklist.first() {
+                if track_state.playing == PlayMode::End
+                    || track_state.playing == PlayMode::Pause
+                    || track_state.playing == PlayMode::Stop
+                {
+                    let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
+                    info!(
+                        "Counter for channel {} in guild {} is {}/5",
+                        self.channel_id,
+                        self.guild_id,
+                        counter_before + 1
+                    );
+                } else {
+                    self.counter.store(0, Ordering::Relaxed);
+                    info!(
+                        "Counter for channel {} in guild {} is reset to {}/5",
+                        self.channel_id,
+                        self.guild_id,
+                        self.counter.load(Ordering::Relaxed)
+                    );
+                }
+            } else {
+                let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
+                info!(
+                    "Counter for channel {} in guild {} is {}/",
+                    self.channel_id,
+                    self.guild_id,
+                    counter_before + 1
+                );
+            }
+        }
+
         let counter = self.counter.load(Ordering::Relaxed);
         if counter >= 5 {
             // Leave the voice channel
@@ -107,39 +140,7 @@ impl VoiceEventHandler for SongAfter60 {
             );
             return None;
         }
-        
-        if let EventContext::Track(tracklist) = ctx {
-            if let Some((track_state, _)) = tracklist.first() {
-                if track_state.playing == PlayMode::End
-                    || track_state.playing == PlayMode::Pause
-                    || track_state.playing == PlayMode::Stop
-                {
-                    let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
-                    info!(
-                        "Counter for channel {} in guild {} is {}/10",
-                        self.channel_id,
-                        self.guild_id,
-                        counter_before + 1
-                    );
-                } else {
-                    self.counter.store(0, Ordering::Relaxed);
-                    info!(
-                        "Counter for channel {} in guild {} is reset to {}/10",
-                        self.channel_id,
-                        self.guild_id,
-                        self.counter.load(Ordering::Relaxed)
-                    );
-                }
-            } else {
-                let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
-                info!(
-                    "Counter for channel {} in guild {} is {}/10",
-                    self.channel_id,
-                    self.guild_id,
-                    counter_before + 1
-                );
-            }
-        }
+
         None
     }
 }

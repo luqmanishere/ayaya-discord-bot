@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    env,
-};
+use std::{collections::HashSet, env};
 
 use serenity::{
     async_trait,
@@ -15,6 +12,7 @@ use serenity::{
         StandardFramework,
     },
     model::{channel::Message, gateway::Ready, id::UserId},
+    utils::MessageBuilder,
 };
 
 use songbird::SerenityInit;
@@ -61,12 +59,12 @@ async fn my_help(
 }
 
 #[group]
-#[commands(ping)]
+#[commands(ping, about)]
 struct General;
 
 #[group]
 #[commands(
-    deafen, join, leave, mute, play, resume, pause, queue, skip, stop, undeafen, unmute
+    deafen, join, leave, mute, play, resume, pause, queue, nowplaying, skip, stop, undeafen, unmute
 )]
 #[summary("Music controls")]
 struct Music;
@@ -118,5 +116,17 @@ async fn main() {
 async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     check_msg(msg.channel_id.say(&ctx.http, "Pong!").await);
 
+    Ok(())
+}
+
+#[command]
+async fn about(ctx: &Context, msg: &Message) -> CommandResult {
+    let about = MessageBuilder::new()
+        .push_bold_line("Ayaya")
+        .push_line("Author: SolemnAttic#9269")
+        .push_line("Github: https://github.com/luqmanishere/ayaya-discord-bot")
+        .build();
+
+    check_msg(msg.channel_id.say(&ctx.http, about).await);
     Ok(())
 }

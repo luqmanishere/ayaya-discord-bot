@@ -3,12 +3,7 @@ use std::{
     time::Duration,
 };
 
-use serenity::{
-    client::Context,
-    framework::standard::{macros::command, Args, CommandResult},
-    model::{channel::Message, id::ChannelId, misc::Mentionable},
-    prelude::*,
-};
+use serenity::{client::Context, framework::standard::{macros::command, Args, CommandResult}, model::{channel::Message, id::ChannelId, misc::Mentionable}, prelude::*, utils::MessageBuilder};
 
 use songbird::{
     input::{restartable::Restartable, Input},
@@ -362,21 +357,20 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
 
     // Check if in channel
     if let Some(handler_lock) = manager.get(guild_id) {
-        let _handler = handler_lock.lock().await;
-        let queue = _handler.queue();
+        let handler = handler_lock.lock().await;
+        let queue = handler.queue();
         let tracks = queue.current_queue();
-        let mut names = String::new();
+        let mut names = MessageBuilder::new();
         let mut i = 1;
         // TODO use message builder
         for track in tracks {
-            names.push_str(format!("{}. ", i).as_str());
-            names.push_str(track.metadata().title.as_ref().unwrap());
-            names.push('\n');
+            names.push(format!("{}. ", i).as_str());
+            names.push(format!("{} ({})\n", track.metadata().title.as_ref().unwrap(), track.metadata().channel.as_ref().unwrap()));
             i += 1;
         }
         check_msg(
             msg.channel_id
-                .say(&ctx.http, format!("In Queue:\n```fix\n{}```", names))
+                .say(&ctx.http, format!("In Queue:\n```prolog\n{}```", names))
                 .await,
         );
     } else {
@@ -555,6 +549,53 @@ async fn unmute(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
+#[command]
+#[aliases("np")]
+#[description(
+    "Shows what song is currently playing. Ayaya is really knows everything about herself."
+)]
+#[usage("")]
+#[example("")]
+#[only_in(guilds)]
+async fn nowplaying(ctx: &Context, msg: &Message) -> CommandResult {
+    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild_id = guild.id;
+
+    let manager = get_manager(ctx).await;
+
+    if let Some(handler) = manager.get(guild_id) {
+        let handler = handler.lock().await;
+        match handler.queue().current() {
+            Some(track) => {
+                let song_name = track.metadata().title.clone().unwrap();
+                let channel_name = track.metadata().channel.clone().unwrap();
+
+                check_msg(
+                    msg.channel_id
+                        .say(
+                            &ctx.http,
+                            format!("Now playing: `{} ({})`", song_name, channel_name),
+                        )
+                        .await,
+                );
+            }
+            None => check_msg(
+                msg.channel_id
+                    .say(&ctx.http, "```prolog\nNothing is queued```")
+                    .await,
+            ),
+        };
+    } else {
+        check_msg(
+            msg.channel_id
+                .say(&ctx.http, "Not in a voice channel to play in")
+                .await,
+        );
+    }
+
+    Ok(())
+}
+
 async fn insert_source_with_message(
     source: Restartable,
     handler_lock: Arc<Mutex<songbird::Call>>,
@@ -565,14 +606,16 @@ async fn insert_source_with_message(
 
     let song: Input = source.into();
     let song_name = song.metadata.title.clone().unwrap();
+    let channel_name = song.metadata.channel.clone().unwrap();
     handler.enqueue_source(song);
     check_msg(
         msg.channel_id
             .say(
                 &ctx.http,
                 format!(
-                    "> Added {} to queue: position {}",
+                    "Added `{} ({})` to queue: position {}",
                     song_name,
+                    &channel_name,
                     handler.queue().len()
                 ),
             )
