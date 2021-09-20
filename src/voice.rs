@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{atomic::AtomicUsize, Arc},
+    time::Duration,
+};
 
 use serenity::{
     client::Context,
@@ -110,11 +113,19 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
 
             let chan_id = msg.channel_id;
 
-            //let send_http = ctx.http.clone();
-
             let mut handle = handle_lock.lock().await;
 
             // TODO Add event to send message on track start
+            // TODO Add event to detect inactivity
+            handle.add_global_event(
+                Event::Periodic(Duration::from_secs(60), None),
+                SongAfter60 {
+                    channel_id: chan_id,
+                    counter: Arc::new(AtomicUsize::new(0)),
+                    guild_id: guild.id,
+                    ctx: ctx.clone(),
+                },
+            );
 
             let send_http = ctx.http.clone();
 

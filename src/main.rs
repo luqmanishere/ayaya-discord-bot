@@ -1,4 +1,7 @@
-use std::{collections::HashSet, env};
+use std::{
+    collections::HashSet,
+    env,
+};
 
 use serenity::{
     async_trait,
@@ -24,8 +27,8 @@ use crate::voice::*;
 mod utils;
 mod voice;
 mod voice_events;
-struct Handler;
 
+struct Handler;
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
@@ -77,7 +80,12 @@ async fn main() {
     // Configure the client with your Discord bot token in the environment.
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
 
+    #[cfg(debug_assertions)]
+    let prefix = "~";
+
+    #[cfg(not(debug_assertions))]
     let prefix = "aya";
+
     let framework = StandardFramework::new()
         .configure(|c| {
             c.prefix(prefix)
