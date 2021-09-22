@@ -64,7 +64,8 @@ struct General;
 
 #[group]
 #[commands(
-    deafen, join, leave, mute, play, resume, pause, queue, nowplaying, skip, stop, undeafen, unmute
+    deafen, join, leave, mute, play, resume, pause, queue, delete, nowplaying, skip, stop,
+    undeafen, unmute
 )]
 #[summary("Music controls")]
 struct Music;

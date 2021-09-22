@@ -3,7 +3,13 @@ use std::{
     time::Duration,
 };
 
-use serenity::{client::Context, framework::standard::{macros::command, Args, CommandResult}, model::{channel::Message, id::ChannelId, misc::Mentionable}, prelude::*, utils::MessageBuilder};
+use serenity::{
+    client::Context,
+    framework::standard::{macros::command, Args, CommandResult},
+    model::{channel::Message, id::ChannelId, misc::Mentionable},
+    prelude::*,
+    utils::MessageBuilder,
+};
 
 use songbird::{
     input::{restartable::Restartable, Input},
@@ -11,6 +17,7 @@ use songbird::{
 };
 use tracing::info;
 
+// Imports within the crate
 use crate::utils;
 use crate::utils::check_msg;
 use crate::{utils::get_manager, voice_events::*};
@@ -366,7 +373,11 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
         // TODO use message builder
         for track in tracks {
             names.push(format!("{}. ", i).as_str());
-            names.push(format!("{} ({})\n", track.metadata().title.as_ref().unwrap(), track.metadata().channel.as_ref().unwrap()));
+            names.push(format!(
+                "{} ({})\n",
+                track.metadata().title.as_ref().unwrap(),
+                track.metadata().channel.as_ref().unwrap()
+            ));
             i += 1;
         }
         check_msg(
@@ -478,6 +489,74 @@ async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
                 .say(&ctx.http, "Not in a voice channel to play in")
                 .await,
         );
+    }
+
+    Ok(())
+}
+
+#[command]
+#[aliases("d")]
+#[description("Delete song from queue. Being able to make things go *poof* makes you feel like a Kami-sama, right?")]
+async fn delete(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let guild = msg.guild(&ctx).await.unwrap();
+    let guild_id = guild.id;
+
+    let manager = get_manager(ctx).await;
+
+    if let Some(handler_lock) = manager.get(guild_id) {
+        // If not empty, remove the songs
+        if !args.is_empty() {
+            let handler = handler_lock.lock().await;
+            let queue = handler.queue();
+            if let Ok(index) = args.single::<usize>() {
+                if index != 1 {
+                    let index = index - 1;
+                    if let Some(track) = queue.current_queue().get(index) {
+                        let song_name = track.metadata().title.clone().unwrap();
+                        let channel_name = track.metadata().title.clone().unwrap();
+                        check_msg(
+                            msg.channel_id
+                                .say(
+                                    &ctx.http,
+                                    format!(
+                                        "Removing `{} ({})` from position {}",
+                                        song_name,
+                                        channel_name,
+                                        index + 1
+                                    ),
+                                )
+                                .await,
+                        );
+                        queue.dequeue(index);
+                    }
+                } else {
+                    check_msg(
+                        msg.channel_id
+                            .say(&ctx.http, "Sorry, Ayaya can't delete what she is playing.")
+                            .await,
+                    )
+                }
+            }
+        } else {
+            // Tell them to give arguments
+            check_msg(
+                msg.channel_id
+                    .say(
+                        &ctx.http,
+                        "Ayaya needs to know which song you want to delete, baka.",
+                    )
+                    .await,
+            )
+        }
+    } else {
+        check_msg(
+            msg.channel_id
+                .say(
+                    &ctx.http,
+                    "Ayaya is not in a voice channel, hence she has nothing to delete.",
+                )
+                .await,
+        )
     }
 
     Ok(())
