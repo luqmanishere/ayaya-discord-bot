@@ -346,6 +346,7 @@ async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 }
 
 #[command]
+#[aliases("q")]
 #[description("Shows the queue. The only kind of acceptable spoiler")]
 #[only_in(guilds)]
 async fn queue(ctx: &Context, msg: &Message) -> CommandResult {

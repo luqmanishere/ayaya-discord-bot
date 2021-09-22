@@ -87,7 +87,7 @@ async fn main() {
     let framework = StandardFramework::new()
         .configure(|c| {
             c.prefix(prefix)
-                .delimiter(prefix)
+                .delimiter("$")
                 .with_whitespace(WithWhiteSpace {
                     prefixes: true,
                     groups: true,
@@ -120,11 +120,13 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+#[description("Ayaya likes to talk about herself...")]
 async fn about(ctx: &Context, msg: &Message) -> CommandResult {
     let about = MessageBuilder::new()
         .push_bold_line("Ayaya")
         .push_line("Author: SolemnAttic#9269")
         .push_line("Github: https://github.com/luqmanishere/ayaya-discord-bot")
+        .push_line("\nConsider leaving a star on the Github page!")
         .build();
 
     check_msg(msg.channel_id.say(&ctx.http, about).await);
