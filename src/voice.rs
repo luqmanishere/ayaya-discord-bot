@@ -18,8 +18,8 @@ use songbird::{
 use tracing::info;
 
 // Imports within the crate
-use crate::utils;
 use crate::utils::check_msg;
+use crate::utils::{self, yt_9search};
 use crate::{utils::get_manager, voice_events::*};
 
 #[command]
@@ -154,7 +154,7 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
                     format!("Already in voice channel \"{}\"", call.mention()),
                 )
                 .await,
-        )
+        );
     }
 
     Ok(())
@@ -303,6 +303,39 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                 .await,
         );
     }
+
+    Ok(())
+}
+
+#[command]
+async fn search(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let guild = msg.guild(&ctx.cache).await.unwrap();
+
+    let term = match args.single::<String>() {
+        Ok(uuu) => uuu,
+        Err(_) => {
+            check_msg(
+                msg.channel_id
+                    .say(&ctx.http, "Must provide a YT URL or a search term")
+                    .await,
+            );
+
+            return Ok(());
+        }
+    };
+
+    let vec = yt_9search(&term).await.unwrap();
+    let mut list = MessageBuilder::new();
+    list.push_line("Pick an option to queue:")
+        .push_line("```prolog");
+    let mut i = 1;
+    for line in vec {
+        list.push(format!("{} : ", i));
+        list.push_line(line);
+        i += 1;
+    }
+    let list = list.push_line("```").build();
+    let msg = msg.channel_id.say(&ctx.http, list).await?;
 
     Ok(())
 }
@@ -532,7 +565,7 @@ async fn delete(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                         msg.channel_id
                             .say(&ctx.http, "Sorry, Ayaya can't delete what she is playing.")
                             .await,
-                    )
+                    );
                 }
             }
         } else {
@@ -544,7 +577,7 @@ async fn delete(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                         "Ayaya needs to know which song you want to delete, baka.",
                     )
                     .await,
-            )
+            );
         }
     } else {
         check_msg(
@@ -554,7 +587,7 @@ async fn delete(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                     "Ayaya is not in a voice channel, hence she has nothing to delete.",
                 )
                 .await,
-        )
+        );
     }
 
     Ok(())
@@ -657,11 +690,13 @@ async fn nowplaying(ctx: &Context, msg: &Message) -> CommandResult {
                         .await,
                 );
             }
-            None => check_msg(
-                msg.channel_id
-                    .say(&ctx.http, "```prolog\nNothing is queued```")
-                    .await,
-            ),
+            None => {
+                check_msg(
+                    msg.channel_id
+                        .say(&ctx.http, "```prolog\nNothing is queued```")
+                        .await,
+                );
+            }
         };
     } else {
         check_msg(

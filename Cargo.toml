@@ -9,6 +9,8 @@ edition = "2018"
 tracing = "0.1"
 tracing-subscriber = "0.2"
 tracing-futures = "0.2"
+eyre = "0.6"
+serde_json = "1"
 
 [dependencies.songbird]
 version = "0.2.0"
