@@ -55,11 +55,12 @@ pub async fn yt_9search(term: &str) -> Result<Vec<String>> {
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
-async fn yt_search() -> Result<YTMetadata> {
+pub async fn yt_search(term: &str) -> Result<songbird::input::Metadata> {
     let ytdl_args = ["--print-json", "--ignore-config", "--skip-download"];
 
     let mut youtube_dl = Command::new("youtube-dl")
         .args(&ytdl_args)
+        .arg(term)
         .stdin(Stdio::null())
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
@@ -141,7 +142,7 @@ async fn yt_search() -> Result<YTMetadata> {
         .and_then(Value::as_str)
         .map(str::to_string);
 
-    Ok(YTMetadata {
+    Ok(songbird::input::Metadata {
         track,
         artist,
         date,
