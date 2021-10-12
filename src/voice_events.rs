@@ -10,7 +10,9 @@ use serenity::{
     prelude::*,
 };
 
-use songbird::{tracks::PlayMode, Event, EventContext, EventHandler as VoiceEventHandler};
+use songbird::{
+    tracks::PlayMode, Event, EventContext, EventHandler as VoiceEventHandler, Songbird,
+};
 use tracing::{error, info};
 
 use crate::utils::check_msg;
@@ -68,23 +70,49 @@ impl VoiceEventHandler for SongFader {
     }
 }
 
-pub struct SongAfter60 {
+/// Bot inactive counter. Will start counting when song ends, is stopped or paused.
+/// The check is ran every 60 seconds, so the 5 minutes actually has a margin
+/// of 1 min.
+pub struct BotInactiveCounter {
     pub channel_id: ChannelId,
     pub guild_id: GuildId,
     pub ctx: Context,
+    pub manager: Arc<Songbird>,
     pub counter: Arc<AtomicUsize>,
 }
 
 #[async_trait]
 #[allow(unused_variables)]
-impl VoiceEventHandler for SongAfter60 {
+impl VoiceEventHandler for BotInactiveCounter {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
-        if let EventContext::Track(tracklist) = ctx {
-            if let Some((track_state, _)) = tracklist.first() {
-                if track_state.playing == PlayMode::End
-                    || track_state.playing == PlayMode::Pause
-                    || track_state.playing == PlayMode::Stop
-                {
+        if let Some(handler_lock) = self.manager.get(self.guild_id) {
+            let handler = handler_lock.lock().await;
+            let queue = handler.queue();
+            match queue.current() {
+                Some(track) => {
+                    let track_state = track.get_info().await.unwrap();
+                    if track_state.playing == PlayMode::End
+                        || track_state.playing == PlayMode::Pause
+                        || track_state.playing == PlayMode::Stop
+                    {
+                        let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
+                        info!(
+                            "Counter for channel {} in guild {} is {}/5",
+                            self.channel_id,
+                            self.guild_id,
+                            counter_before + 1
+                        );
+                    } else {
+                        self.counter.store(0, Ordering::Relaxed);
+                        info!(
+                            "Counter for channel {} in guild {} is reset to {}/5",
+                            self.channel_id,
+                            self.guild_id,
+                            self.counter.load(Ordering::Relaxed)
+                        );
+                    }
+                }
+                None => {
                     let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
                     info!(
                         "Counter for channel {} in guild {} is {}/5",
@@ -92,24 +120,10 @@ impl VoiceEventHandler for SongAfter60 {
                         self.guild_id,
                         counter_before + 1
                     );
-                } else {
-                    self.counter.store(0, Ordering::Relaxed);
-                    info!(
-                        "Counter for channel {} in guild {} is reset to {}/5",
-                        self.channel_id,
-                        self.guild_id,
-                        self.counter.load(Ordering::Relaxed)
-                    );
                 }
-            } else {
-                let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
-                info!(
-                    "Counter for channel {} in guild {} is {}/",
-                    self.channel_id,
-                    self.guild_id,
-                    counter_before + 1
-                );
             }
+        } else {
+            error!("Not in a voice channel?? TF????");
         }
 
         let counter = self.counter.load(Ordering::Relaxed);

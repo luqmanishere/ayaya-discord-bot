@@ -81,10 +81,7 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         }
     };
 
-    let manager = songbird::get(ctx)
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
+    let manager = get_manager(ctx).await;
 
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
@@ -121,10 +118,11 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
             // TODO Add event to detect inactivity
             handle.add_global_event(
                 Event::Periodic(Duration::from_secs(60), None),
-                SongAfter60 {
+                BotInactiveCounter {
                     channel_id: chan_id,
                     counter: Arc::new(AtomicUsize::new(0)),
                     guild_id: guild.id,
+                    manager: get_manager(ctx).await,
                     ctx: ctx.clone(),
                 },
             );
