@@ -357,7 +357,7 @@ async fn search(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                         .await?;
 
                     let selection: String = vec[(picked - 1)].clone();
-                    let metadata = utils::yt_search(&selection).await?;
+                    let _metadata = utils::yt_search(&selection).await?;
                     // TODO Display information beautifully
                 }
                 Err(_) => {

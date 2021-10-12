@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 use serenity::client::Context;
-use serenity::framework::standard::CommandResult;
+
 use serenity::model::channel::Message;
 use serenity::Result as SerenityResult;
 use songbird::Songbird;
@@ -13,7 +13,7 @@ use songbird::Songbird;
 use tokio::{process::Command as TokioCommand, task};
 
 use eyre::{eyre, Result, WrapErr};
-use tracing::{debug, info};
+use tracing::{debug};
 
 /// Checks that a message successfully sent; if not, then logs why to stdout.
 pub fn check_msg(result: SerenityResult<Message>) {
