@@ -13,7 +13,7 @@ use songbird::Songbird;
 use tokio::{process::Command as TokioCommand, task};
 
 use eyre::{eyre, Result, WrapErr};
-use tracing::{debug};
+use tracing::{debug, info};
 
 /// Checks that a message successfully sent; if not, then logs why to stdout.
 pub fn check_msg(result: SerenityResult<Message>) {
@@ -42,11 +42,13 @@ pub async fn yt_9search(term: &str) -> Result<Vec<String>> {
         .output()
         .await?;
 
-    let o_vec = String::from_utf8(youtube_dl.stdout)?;
+    info!("Done searching!");
+
+    let o_vec = std::str::from_utf8(&youtube_dl.stdout)?;
 
     let out: Vec<String> = o_vec
         .split_terminator('\n')
-        .map(|line| line.to_string())
+        .map(|line| line.to_owned())
         .collect();
 
     debug!("{} items: {:?}", &out.len(), &out);

@@ -311,7 +311,7 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 
 #[command]
 #[description("Search YT and get metadata")]
-#[usage("search term>")]
+#[usage("<search term>")]
 #[example("ayaya intensifies")]
 #[only_in(guilds)]
 async fn search(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
@@ -334,8 +334,7 @@ async fn search(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         .push_line("```prolog");
     let mut i = 1;
     for line in &vec {
-        list.push(format!("{} : ", i));
-        list.push_line(line);
+        list.push_line(format!("{} : {}", i, line));
         i += 1;
     }
     let list = list.push_line("```").build();
@@ -385,18 +384,25 @@ async fn search(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 }
 
 async fn _search(term: String, ctx: &Context, original_msg: &Message) -> EyreResult<String> {
-    let mut prompt = original_msg.channel_id.say(&ctx.http, "Searching...").await?;
+    let mut prompt = original_msg
+        .channel_id
+        .say(&ctx.http, "Searching...This takes quite a while")
+        .await?;
+
     let vec = yt_9search(&term).await.unwrap();
+
+    prompt.edit(ctx, |m| m.content("Compiling list")).await?;
+
     let mut list = MessageBuilder::new();
     list.push_line("Pick an option to queue:")
         .push_line("```prolog");
     let mut i = 1;
     for line in &vec {
-        list.push(format!("{} : ", i));
-        list.push_line(line);
+        list.push_line(format!("{} : {}", i, line));
         i += 1;
     }
     let list = list.push_line("```").build();
+
     prompt.edit(ctx, |m| m.content(list)).await?;
     let wait = original_msg
         .channel_id
