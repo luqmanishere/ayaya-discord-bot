@@ -18,7 +18,7 @@ features = ["builtin-queue"]
 
 [dependencies.serenity]
 version = "0.10"
-features = ["cache", "framework", "standard_framework", "voice", "http", "rustls_backend"]
+features = ["cache", "framework", "standard_framework", "voice", "http", "rustls_backend", "collector"]
 
 [dependencies.tokio]
 version = "1.0"

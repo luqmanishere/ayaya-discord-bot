@@ -15,8 +15,9 @@ use songbird::{
     input::{restartable::Restartable, Input},
     Event,
 };
-use tracing::info;
+use tracing::{info, log::warn};
 
+use eyre::{eyre, Result as EyreResult};
 // Imports within the crate
 use crate::utils::check_msg;
 use crate::utils::{self, yt_9search};
@@ -281,7 +282,8 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 
             insert_source_with_message(source, handler_lock, msg, ctx).await;
         } else {
-            let source = match Restartable::ytdl_search(url, true).await {
+            let selection = _search(url, ctx, msg).await?;
+            let source = match Restartable::ytdl_search(selection, true).await {
                 Ok(source) => source,
                 Err(why) => {
                     println!("Err starting source: {:?}", why);
@@ -308,9 +310,11 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 }
 
 #[command]
+#[description("Search YT and get metadata")]
+#[usage("search term>")]
+#[example("ayaya intensifies")]
+#[only_in(guilds)]
 async fn search(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
-
     let term = match args.single::<String>() {
         Ok(uuu) => uuu,
         Err(_) => {
@@ -329,15 +333,109 @@ async fn search(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     list.push_line("Pick an option to queue:")
         .push_line("```prolog");
     let mut i = 1;
-    for line in vec {
+    for line in &vec {
         list.push(format!("{} : ", i));
         list.push_line(line);
         i += 1;
     }
     let list = list.push_line("```").build();
-    let msg = msg.channel_id.say(&ctx.http, list).await?;
+    let mut prompt = msg.channel_id.say(&ctx.http, list).await?;
+    let wait = msg
+        .channel_id
+        .await_reply(ctx)
+        .author_id(msg.author.id.0)
+        .timeout(std::time::Duration::from_secs(15))
+        .await;
+
+    match wait {
+        Some(msg) => {
+            match msg.content.parse::<usize>() {
+                Ok(picked) => {
+                    info!("Option picked: {}", msg.content);
+                    prompt
+                        .edit(ctx, |m| m.content(format!("Option picked: {}", picked)))
+                        .await?;
+
+                    let selection: String = vec[(picked - 1)].clone();
+                    let metadata = utils::yt_search(&selection).await?;
+                    // TODO Display information beautifully
+                }
+                Err(_) => {
+                    warn!("Input can't be parsed into numbers: {}", msg.content);
+                    prompt
+                        .edit(ctx, |m| {
+                            m.content(
+                                "Ayaya told you to give her a number...not whatever you just gave.",
+                            )
+                        })
+                        .await?;
+                }
+            };
+        }
+        None => {
+            prompt
+                .edit(ctx, |m| {
+                    m.content("Timeout! Ayaya wants you to decide in 10 seconds, not 10 minutes")
+                })
+                .await?;
+        }
+    }
 
     Ok(())
+}
+
+async fn _search(term: String, ctx: &Context, original_msg: &Message) -> EyreResult<String> {
+    let mut prompt = original_msg.channel_id.say(&ctx.http, "Searching...").await?;
+    let vec = yt_9search(&term).await.unwrap();
+    let mut list = MessageBuilder::new();
+    list.push_line("Pick an option to queue:")
+        .push_line("```prolog");
+    let mut i = 1;
+    for line in &vec {
+        list.push(format!("{} : ", i));
+        list.push_line(line);
+        i += 1;
+    }
+    let list = list.push_line("```").build();
+    prompt.edit(ctx, |m| m.content(list)).await?;
+    let wait = original_msg
+        .channel_id
+        .await_reply(ctx)
+        .author_id(original_msg.author.id.0)
+        .timeout(std::time::Duration::from_secs(15))
+        .await;
+
+    match wait {
+        Some(msg) => match msg.content.parse::<usize>() {
+            Ok(picked) => {
+                info!("Option picked: {}", msg.content);
+                prompt
+                    .edit(ctx, |m| m.content(format!("Option picked: {}", picked)))
+                    .await?;
+
+                Ok(vec[(picked - 1)].clone())
+            }
+            Err(_) => {
+                warn!("Input can't be parsed into numbers: {}", msg.content);
+                prompt
+                    .edit(ctx, |m| {
+                        m.content(
+                            "Ayaya told you to give her a number...not whatever you just gave.",
+                        )
+                    })
+                    .await?;
+                Err(eyre!("Can't convert into an index"))
+            }
+        },
+        None => {
+            prompt
+                .edit(ctx, |m| {
+                    m.content("Timeout! Ayaya wants you to decide in 10 seconds, not 10 minutes")
+                })
+                .await?;
+            Err(eyre!("No answer was received"))
+        }
+    }
 }
 
 #[command]
