@@ -18,6 +18,8 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+      - name: Mold
+        run: apt install mold
       - name: Release Build
         run: cargo build --release
       - name: "Upload Artifact"
