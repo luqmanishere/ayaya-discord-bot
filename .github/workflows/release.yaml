@@ -19,7 +19,7 @@ jobs:
           toolchain: stable
           override: true
       - name: Mold
-        run: apt install mold
+        run: sudo apt install -y mold
       - name: Release Build
         run: cargo build --release
       - name: "Upload Artifact"
