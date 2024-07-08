@@ -1,1 +1,6 @@
 /target
+/result
+/.direnv
+/.stignore
+/.st*
+/.env

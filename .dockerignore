@@ -1,0 +1,13 @@
+/target
+/.direnv
+/.env
+/.git
+/.stfolder
+/.stignore
+/.github
+/.flake.*
+/.cargo
+/.envrc
+/README.md
+/*.wav
+/.vscode
