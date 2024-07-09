@@ -1,10 +1,9 @@
-use std::fmt::{self as fmt, Write};
+use std::fmt::{self as fmt};
 use std::io::{BufRead, BufReader, Read};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
 
-use ::serenity::all::Mentionable;
 use eyre::{eyre, Result, WrapErr};
 use poise::serenity_prelude as serenity;
 use serde_json::Value;
@@ -36,7 +35,7 @@ pub async fn yt_9search(term: &str) -> Result<Vec<String>> {
     let ytdl_args = ["--get-title", "--ignore-config", "--skip-download"];
 
     let youtube_dl = TokioCommand::new("youtube-dl")
-        .args(&ytdl_args)
+        .args(ytdl_args)
         .arg(format!("ytsearch9:{}", term))
         .stdin(Stdio::null())
         .stderr(Stdio::piped())
@@ -63,7 +62,7 @@ pub async fn yt_search(term: &str) -> Result<songbird::input::AuxMetadata> {
     let ytdl_args = ["--print-json", "--ignore-config", "--skip-download"];
 
     let mut youtube_dl = Command::new("youtube-dl")
-        .args(&ytdl_args)
+        .args(ytdl_args)
         .arg(term)
         .stdin(Stdio::null())
         .stderr(Stdio::piped())
@@ -184,6 +183,7 @@ impl OptionExt<String> for Option<String> {
     }
 }
 
+#[allow(dead_code)]
 pub async fn paginate(ctx: Context<'_>, pages: &[&str]) -> Result<(), serenity::Error> {
     // Define some unique identifiers for the navigation buttons
     let ctx_id = ctx.id();
@@ -264,7 +264,6 @@ pub fn metadata_to_embed(
     operation: EmbedOperation,
     metadata: &songbird::input::AuxMetadata,
 ) -> serenity::CreateEmbed {
-    // TODO: decide what to do with this unwrap
     serenity::CreateEmbed::default()
         .author(
             serenity::CreateEmbedAuthor::new(format!("{} | Youtube Video", operation)).icon_url(
@@ -287,6 +286,7 @@ pub fn metadata_to_embed(
             ),
             (
                 "Duration",
+                // TODO: decide what to do with this unwrap
                 humantime::format_duration(metadata.duration.unwrap()).to_string(),
                 true,
             ),

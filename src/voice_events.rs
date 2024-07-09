@@ -3,6 +3,8 @@ use std::sync::{
     Arc,
 };
 
+use poise::serenity_prelude as serenity;
+
 use serenity::{
     async_trait,
     http::Http,
@@ -16,34 +18,6 @@ use songbird::{
 use tracing::{error, info};
 
 use crate::utils::check_msg;
-
-pub struct ChannelDurationNotifier {
-    pub chan_id: ChannelId,
-    pub count: Arc<AtomicUsize>,
-    pub http: Arc<Http>,
-}
-
-#[async_trait]
-impl VoiceEventHandler for ChannelDurationNotifier {
-    async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
-        /*
-        let count_before = self.count.fetch_add(1, Ordering::Relaxed);
-        check_msg(
-            self.chan_id
-                .say(
-                    &self.http,
-                    &format!(
-                        "I've been in this channel for {} minutes!",
-                        count_before + 1
-                    ),
-                )
-                .await,
-        );
-        */
-
-        None
-    }
-}
 
 pub struct SongFader {
     pub chan_id: ChannelId,
@@ -82,11 +56,18 @@ pub struct BotInactiveCounter {
 }
 
 #[async_trait]
-#[allow(unused_variables)]
 impl VoiceEventHandler for BotInactiveCounter {
-    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+    async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
         if let Some(handler_lock) = self.manager.get(self.guild_id) {
             let handler = handler_lock.lock().await;
+            // TODO: leave if noone in channel for 5 minutes
+            let current_channel = handler
+                .current_channel()
+                .expect("a channelid is always present");
+
+            let _channel_id: serenity::ChannelId =
+                serenity::ChannelId::new(current_channel.0.into());
+
             let queue = handler.queue();
             match queue.current() {
                 Some(track) => {

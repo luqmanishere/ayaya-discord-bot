@@ -163,6 +163,11 @@ async fn main() -> Result<()> {
                         poise::FrameworkError::Command { error, ctx, .. } => {
                             let cmd = ctx.command().name.clone();
                             error!("Error in command ({}): {}", cmd, error);
+                            // TODO: flesh out user facing error message
+                            ctx.channel_id()
+                                .say(ctx, "Error running whatever you did")
+                                .await
+                                .expect("works");
                         }
                         other => {
                             if let Err(e) = poise::builtins::on_error(other).await {
@@ -220,15 +225,15 @@ async fn ping(ctx: Context<'_>) -> Result<()> {
 #[poise::command(slash_command, prefix_command)]
 async fn about(ctx: Context<'_>) -> Result<()> {
     let about = poise::CreateReply::default()
-        .content(format!(
+        .content(
             r"
 _*Ayaya*_, a random bot
 Author: SolemnAttic#9269
 Github: https://github.com/luqmanishere/ayaya-discord-bot
 
 Consider leaving a star on the Github page!
-    "
-        ))
+    ",
+        )
         .reply(true);
 
     ctx.send(about).await?;

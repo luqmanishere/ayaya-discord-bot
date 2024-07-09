@@ -10,7 +10,7 @@ use songbird::{
     input::{Compose, YoutubeDl},
     Event,
 };
-use tracing::{error, info, log::warn, trace};
+use tracing::{error, info, log::warn};
 
 // Imports within the crate
 use crate::{
@@ -36,7 +36,8 @@ use crate::{
         "resume",
         "stop",
         "undeafen",
-        "deafen"
+        "seek",
+        "deafen",
     ),
     aliases("m")
 )]
@@ -166,8 +167,10 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                         .await?;
                 }
 
-                // TODO Add event to send message on track start
-                // TODO Add event to detect inactivity
+                // TODO: Add event to send message on track start
+                // TODO: Add event to detect inactivity
+
+                // inactive counter bot
                 call.add_global_event(
                     Event::Periodic(Duration::from_secs(60), None),
                     BotInactiveCounter {
@@ -176,17 +179,6 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                         guild_id,
                         manager: get_manager(ctx.serenity_context()).await,
                         ctx: ctx.serenity_context().to_owned(),
-                    },
-                );
-
-                let send_http = ctx.serenity_context().http.clone();
-
-                call.add_global_event(
-                    Event::Periodic(Duration::from_secs(60), None),
-                    ChannelDurationNotifier {
-                        chan_id: channel_id,
-                        count: Default::default(),
-                        http: send_http,
                     },
                 );
             }
@@ -216,7 +208,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
 /// Leaves the current voice channel. Ever wonder what happens to Ayaya then?
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn leave(ctx: Context<'_>) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("gettign guild id from context")?;
+    let guild_id = ctx.guild_id().wrap_err("getting guild id from context")?;
 
     let manager = songbird::get(ctx.serenity_context())
         .await
@@ -354,7 +346,7 @@ async fn search(ctx: Context<'_>, args: Vec<String>) -> Result<()> {
                 .await?;
         }
     }
-    ctx.defer_or_broadcast().await?;
+    ctx.defer_ephemeral().await?;
 
     // let songbird do the searching
     let yt_search = YoutubeDl::new_search(ctx.data().http.clone(), term.clone())
@@ -375,7 +367,7 @@ async fn search(ctx: Context<'_>, args: Vec<String>) -> Result<()> {
     }
 
     let list = results_msg.build();
-    let mut prompt = ctx.channel_id().say(ctx, list).await?;
+    let _prompt = ctx.channel_id().say(ctx, list).await?;
 
     // let wait = msg
     //     .channel_id
@@ -484,7 +476,7 @@ async fn search(ctx: Context<'_>, args: Vec<String>) -> Result<()> {
 
 /// Skips the currently playing song. Ayaya wonders why you abandoned your summon so easily.
 #[poise::command(slash_command, prefix_command, guild_only)]
-async fn skip(ctx: Context<'_>, _args: i32) -> Result<()> {
+async fn skip(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
 
     let manager = songbird::get(ctx.serenity_context())
@@ -609,7 +601,7 @@ async fn pause(ctx: Context<'_>, _args: String) -> Result<()> {
                 .clone()
                 .unwrap_or_unknown()
         };
-        let _ = queue.pause();
+        queue.pause()?;
 
         check_msg(
             ctx.channel_id()
@@ -647,7 +639,7 @@ async fn resume(ctx: Context<'_>) -> Result<()> {
                 .clone()
                 .unwrap_or_unknown()
         };
-        let _ = queue.resume();
+        queue.resume()?;
 
         check_msg(
             ctx.channel_id()
@@ -675,7 +667,7 @@ async fn stop(ctx: Context<'_>) -> Result<()> {
     if let Some(handler_lock) = manager.get(guild_id) {
         let handler = handler_lock.lock().await;
         let queue = handler.queue();
-        let _ = queue.stop();
+        queue.stop();
 
         check_msg(ctx.channel_id().say(ctx, "Queue cleared.").await);
     } else {
@@ -859,6 +851,59 @@ async fn nowplaying(ctx: Context<'_>) -> Result<()> {
     Ok(())
 }
 
+#[poise::command(slash_command, prefix_command, guild_only)]
+async fn seek(ctx: Context<'_>, secs: u64) -> Result<()> {
+    let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
+
+    let manager = get_manager(ctx.serenity_context()).await;
+
+    if let Some(handler) = manager.get(guild_id) {
+        let handler = handler.lock().await;
+        match handler.queue().current() {
+            Some(track) => {
+                let data = ctx.data();
+                let track_uuid = track.uuid();
+                let metadata = {
+                    let lock = data.track_metadata.lock().unwrap();
+                    lock.get(&track_uuid)
+                        .wrap_err("expect track to exist")?
+                        .clone()
+                };
+                track
+                    .seek(std::time::Duration::from_secs(secs))
+                    .result()
+                    // .wrap_err("seeking track")
+                 ?;
+                let song_name = metadata.title.clone().unwrap();
+                let channel_name = metadata.channel.clone().unwrap();
+
+                check_msg(
+                    ctx.channel_id()
+                        .say(
+                            ctx,
+                            format!(
+                                "Seek track: `{} ({})` to {} seconds",
+                                song_name, channel_name, secs
+                            ),
+                        )
+                        .await,
+                );
+            }
+            None => {
+                check_msg(
+                    ctx.channel_id()
+                        .say(ctx, "```prolog\nNothing is playing```")
+                        .await,
+                );
+            }
+        };
+    } else {
+        check_msg(ctx.channel_id().say(ctx, "Not in a voice channel.").await);
+    }
+
+    Ok(())
+}
+
 async fn insert_source_with_message(
     mut source: YoutubeDl,
     handler_lock: Arc<Mutex<songbird::Call>>,
@@ -871,14 +916,6 @@ async fn insert_source_with_message(
         .aux_metadata()
         .await
         .wrap_err("get metadata from the net")?;
-    let song_name = metadata
-        .title
-        .clone()
-        .wrap_err("getting title from metadata")?;
-    let channel_name = metadata
-        .channel
-        .clone()
-        .wrap_err("getting channel name from metadata")?;
 
     let track: songbird::tracks::Track = source.into();
     let track_uuid = track.uuid;
@@ -890,14 +927,7 @@ async fn insert_source_with_message(
 
     handler.enqueue(track).await;
     let embed = metadata_to_embed(utils::EmbedOperation::AddToQueue, &metadata);
-    check_msg(
-        ctx.channel_id()
-            .send_message(
-                &ctx.http(),
-                serenity::CreateMessage::default().add_embed(embed),
-            )
-            .await,
-    );
+    ctx.send(poise::CreateReply::default().embed(embed)).await?;
 
     Ok(())
 }
