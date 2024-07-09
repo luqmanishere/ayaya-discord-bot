@@ -242,6 +242,7 @@ pub async fn paginate(ctx: Context<'_>, pages: &[&str]) -> Result<(), serenity::
     Ok(())
 }
 
+#[allow(dead_code)]
 pub enum EmbedOperation {
     YoutubeSearch,
     AddToQueue,
