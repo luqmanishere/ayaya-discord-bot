@@ -45,17 +45,6 @@ async fn event_handler(
     Ok(())
 }
 
-// #[hook]
-// #[instrument]
-// async fn before(_: &Context, msg: &Message, command_name: &str) -> bool {
-//     info!(
-//         "Got command '{}' by user '{}'",
-//         command_name, msg.author.name
-//     );
-
-//     true
-// }
-
 // #[help]
 // async fn my_help(
 //     context: &Context,
@@ -68,18 +57,6 @@ async fn event_handler(
 //     let _ = help_commands::with_embeds(context, msg, args, help_options, groups, owners).await;
 //     Ok(())
 // }
-
-// #[group]
-// #[commands(ping, about)]
-// struct General;
-
-// #[group]
-// #[commands(
-//     deafen, join, leave, mute, play, search, resume, pause, queue, delete, nowplaying, skip, stop,
-//     undeafen, unmute
-// )]
-// #[summary("Music controls")]
-// struct Music;
 
 pub type Context<'a> = poise::Context<'a, Data, eyre::ErrReport>;
 // User data, which is stored and accessible in all command invocations
@@ -137,6 +114,14 @@ async fn main() -> Result<()> {
                 mention_as_prefix: true,
                 case_insensitive_commands: true,
                 ..Default::default()
+            },
+            pre_command: |ctx: Context<'_>| {
+                Box::pin(async move {
+                    let command_name = ctx.command().qualified_name.clone();
+                    let channel_id = ctx.channel_id();
+                    let guild_id = ctx.guild_id();
+                    info!("Command \"{command_name}\" called from channel {channel_id} in guild {guild_id:?}");
+                })
             },
             on_error: |error: FrameworkError<'_, Data, eyre::ErrReport>| {
                 Box::pin(async move {
@@ -241,7 +226,10 @@ Consider leaving a star on the Github page!
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub async fn help(ctx: Context<'_>, command: Option<String>) -> Result<()> {
+pub async fn help(
+    ctx: Context<'_>,
+    #[description = "Specific command to show help about"] command: Option<String>,
+) -> Result<()> {
     let configuration = poise::builtins::HelpConfiguration {
         // [configure aspects about the help message here]
         ..Default::default()

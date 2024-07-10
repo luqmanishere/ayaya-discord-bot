@@ -21,7 +21,7 @@ humantime = {version  = "2"}
 youtube_dl = {version = "0.10"}
 
 [dependencies.songbird]
-version = "0.4"
+version = "0.4.1"
 features = ["builtin-queue", "driver", "serenity"]
 
 [dependencies.serenity]

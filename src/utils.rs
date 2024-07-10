@@ -1,18 +1,15 @@
 use std::fmt::{self as fmt};
-use std::io::{BufRead, BufReader, Read};
-use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
 
-use eyre::{eyre, Result, WrapErr};
+use eyre::{eyre, ContextCompat, Result};
 use poise::serenity_prelude as serenity;
-use serde_json::Value;
 use serenity::client::Context as SerenityContext;
 use serenity::model::channel::Message;
 use serenity::Result as SerenityResult;
 use songbird::Songbird;
-use tokio::{process::Command as TokioCommand, task};
-use tracing::{debug, error, info};
+use tracing::error;
+use youtube_dl::{SearchOptions, SingleVideo, YoutubeDlOutput};
 
 use crate::Context;
 
@@ -29,148 +26,89 @@ pub async fn get_manager(ctx: &SerenityContext) -> Arc<Songbird> {
         .expect("Songbird Voice client placed in at initialisation.")
 }
 
-#[allow(unused_variables)]
-#[allow(dead_code)]
-pub async fn yt_9search(term: &str) -> Result<Vec<String>> {
-    let ytdl_args = ["--get-title", "--ignore-config", "--skip-download"];
-
-    let youtube_dl = TokioCommand::new("youtube-dl")
-        .args(ytdl_args)
-        .arg(format!("ytsearch9:{}", term))
-        .stdin(Stdio::null())
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .output()
-        .await?;
-
-    info!("Done searching!");
-
-    let o_vec = std::str::from_utf8(&youtube_dl.stdout)?;
-
-    let out: Vec<String> = o_vec
-        .split_terminator('\n')
-        .map(|line| line.to_owned())
-        .collect();
-
-    debug!("{} items: {:?}", &out.len(), &out);
-    Ok(out)
-}
-
-#[allow(dead_code)]
-#[allow(unused_variables)]
-pub async fn yt_search(term: &str) -> Result<songbird::input::AuxMetadata> {
-    let ytdl_args = ["--print-json", "--ignore-config", "--skip-download"];
-
-    let mut youtube_dl = Command::new("youtube-dl")
-        .args(ytdl_args)
-        .arg(term)
-        .stdin(Stdio::null())
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
-
-    let stdout = youtube_dl.stdout.take();
-    let (returned_stdout, value) = task::spawn_blocking(move || {
-        let mut s = stdout.unwrap();
-
-        let out: Result<Value> = {
-            let mut o_vec = vec![];
-            let mut serde_read = BufReader::new(s.by_ref());
-            // Newline...
-            if let Ok(len) = serde_read.read_until(0xA, &mut o_vec) {
-                serde_json::from_slice(&o_vec[..len])
-                    .wrap_err_with(|| std::str::from_utf8(&o_vec).unwrap_or_default().to_string())
-            } else {
-                Result::Err(eyre!("Metadata error (1)"))
-            }
-        };
-
-        (s, out)
-    })
-    .await
-    .map_err(|_| eyre!("Metadata error (2)"))?;
-
-    let value = value?;
-    let obj = value.as_object();
-
-    let track = obj
-        .and_then(|m| m.get("track"))
-        .and_then(Value::as_str)
-        .map(str::to_string);
-
-    let true_artist = obj
-        .and_then(|m| m.get("artist"))
-        .and_then(Value::as_str)
-        .map(str::to_string);
-
-    let artist = true_artist.or_else(|| {
-        obj.and_then(|m| m.get("uploader"))
-            .and_then(Value::as_str)
-            .map(str::to_string)
-    });
-
-    let r_date = obj
-        .and_then(|m| m.get("release_date"))
-        .and_then(Value::as_str)
-        .map(str::to_string);
-
-    let date = r_date.or_else(|| {
-        obj.and_then(|m| m.get("upload_date"))
-            .and_then(Value::as_str)
-            .map(str::to_string)
-    });
-
-    let channel = obj
-        .and_then(|m| m.get("channel"))
-        .and_then(Value::as_str)
-        .map(str::to_string);
-
-    let duration = obj
-        .and_then(|m| m.get("duration"))
-        .and_then(Value::as_f64)
-        .map(Duration::from_secs_f64);
-
-    let source_url = obj
-        .and_then(|m| m.get("webpage_url"))
-        .and_then(Value::as_str)
-        .map(str::to_string);
-
-    let title = obj
-        .and_then(|m| m.get("title"))
-        .and_then(Value::as_str)
-        .map(str::to_string);
-
-    let thumbnail = obj
-        .and_then(|m| m.get("thumbnail"))
-        .and_then(Value::as_str)
-        .map(str::to_string);
-
-    Ok(songbird::input::AuxMetadata {
-        track,
-        artist,
-        date,
-
-        channel,
-        duration,
-        source_url,
-        title,
-        thumbnail,
-
-        ..Default::default()
-    })
-}
-
-#[derive(Default, Clone, PartialEq, Eq, Debug)]
-pub struct YTMetadata {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct YoutubeMetadata {
     pub track: Option<String>,
     pub artist: Option<String>,
+    pub album: Option<String>,
     pub date: Option<String>,
+    pub channels: Option<u8>,
     pub channel: Option<String>,
     pub start_time: Option<Duration>,
     pub duration: Option<Duration>,
+    pub sample_rate: Option<u32>,
     pub source_url: Option<String>,
     pub title: Option<String>,
     pub thumbnail: Option<String>,
+    pub youtube_id: String,
+}
+
+impl YoutubeMetadata {
+    pub fn aux_metadata(&self) -> songbird::input::AuxMetadata {
+        Into::<AuxMetadataWrap>::into(self.clone()).0
+    }
+}
+
+pub struct AuxMetadataWrap(songbird::input::AuxMetadata);
+
+impl From<YoutubeMetadata> for AuxMetadataWrap {
+    fn from(value: YoutubeMetadata) -> Self {
+        AuxMetadataWrap(songbird::input::AuxMetadata {
+            track: value.track,
+            artist: value.artist,
+            album: value.album,
+            date: value.date,
+            channels: value.channels,
+            channel: value.channel,
+            start_time: value.start_time,
+            duration: value.duration,
+            sample_rate: value.sample_rate,
+            source_url: value.source_url,
+            title: value.title,
+            thumbnail: value.thumbnail,
+        })
+    }
+}
+
+impl From<SingleVideo> for YoutubeMetadata {
+    fn from(value: SingleVideo) -> Self {
+        Self {
+            track: value.track,
+            artist: value.artist,
+            album: value.album,
+            date: value.upload_date,
+            channels: None,
+            channel: value.channel,
+            start_time: None,
+            duration: value
+                .duration
+                .map(|e| std::time::Duration::from_secs(e.as_u64().expect("duration is integer"))),
+            sample_rate: None,
+            source_url: value.url,
+            title: value.title,
+            thumbnail: value.thumbnail,
+            youtube_id: value.id,
+        }
+    }
+}
+
+pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMetadata>> {
+    let search_options = SearchOptions::youtube(term).with_count(count.unwrap_or(10));
+    let youtube_search = youtube_dl::YoutubeDl::search_for(&search_options).run()?;
+
+    let videos = match youtube_search {
+        YoutubeDlOutput::Playlist(playlist) => {
+            playlist.entries.wrap_err("expect playlist has entries")?
+        }
+        YoutubeDlOutput::SingleVideo(video) => vec![*video],
+    };
+
+    let metadata_vec = videos
+        .iter()
+        .map(|e| Into::<YoutubeMetadata>::into(e.clone()))
+        .collect::<Vec<_>>();
+
+    Ok(metadata_vec)
 }
 
 pub trait OptionExt<String> {
@@ -242,7 +180,6 @@ pub async fn paginate(ctx: Context<'_>, pages: &[&str]) -> Result<(), serenity::
     Ok(())
 }
 
-#[allow(dead_code)]
 pub enum EmbedOperation {
     YoutubeSearch,
     AddToQueue,
@@ -305,4 +242,106 @@ pub fn metadata_to_embed(
             EmbedOperation::YoutubeSearch => serenity::Color::RED,
             EmbedOperation::AddToQueue => serenity::Color::MEIBE_PINK,
         })
+}
+
+/// Create an interaction for the search command. Returns the selected video id if any
+pub async fn create_search_interaction(
+    ctx: Context<'_>,
+    metadata_vec: Vec<YoutubeMetadata>,
+) -> Result<String> {
+    // Define some unique identifiers for the navigation buttons
+    let ctx_id = ctx.id();
+    let prev_button_id = format!("{}prev", ctx_id);
+    let next_button_id = format!("{}next", ctx_id);
+
+    let button_id_gen = |count: usize| format!("{ctx_id}-search-{count}");
+
+    // TODO: optimize?
+    let metadata_embeds = metadata_vec
+        .iter()
+        .map(|e| metadata_to_embed(EmbedOperation::YoutubeSearch, &e.aux_metadata()))
+        .collect::<Vec<_>>();
+    let metadata_embed_chunks = metadata_embeds.chunks(3).collect::<Vec<_>>();
+
+    let metadata_chunks = metadata_vec.chunks(3).collect::<Vec<_>>();
+
+    // Send the embed with the first page as content
+    let reply = {
+        let mut buttons = vec![serenity::CreateButton::new(&prev_button_id).emoji('◀')];
+        let mut reply = poise::CreateReply::default();
+
+        for (i, embed) in metadata_embed_chunks[0].iter().enumerate() {
+            reply = reply.embed(embed.to_owned());
+            buttons.push(
+                serenity::CreateButton::new(button_id_gen(i + 1)).label(format!("{}", i + 1)),
+            );
+        }
+        buttons.push(serenity::CreateButton::new(&next_button_id).emoji('▶'));
+
+        let components = serenity::CreateActionRow::Buttons(buttons);
+        reply.components(vec![components])
+    };
+
+    ctx.send(reply).await?;
+
+    // Loop through incoming interactions with the navigation buttons
+    let mut current_page = 0;
+    while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
+        // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
+        // button was pressed
+        .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+        // Timeout when no navigation button has been pressed for 1 minute
+        .timeout(std::time::Duration::from_secs(60))
+        .await
+    {
+        // Depending on which button was pressed, go to next or previous page
+        if press.data.custom_id == next_button_id {
+            current_page += 1;
+            if current_page >= metadata_embed_chunks.len() {
+                current_page = 0;
+            }
+        } else if press.data.custom_id == prev_button_id {
+            current_page = current_page
+                .checked_sub(1)
+                .unwrap_or(metadata_embed_chunks.len() - 1);
+        } else if press.data.custom_id == button_id_gen(1) {
+            // TODO: simplify
+            let metadata = metadata_chunks[current_page][0].clone();
+            return Ok(metadata.youtube_id);
+        } else if press.data.custom_id == button_id_gen(2) {
+            let metadata = metadata_chunks[current_page][1].clone();
+            return Ok(metadata.youtube_id);
+        } else if press.data.custom_id == button_id_gen(3) {
+            let metadata = metadata_chunks[current_page][2].clone();
+            return Ok(metadata.youtube_id);
+        } else {
+            // This is an unrelated button interaction
+            continue;
+        }
+
+        let response = {
+            let mut buttons = vec![serenity::CreateButton::new(&prev_button_id).emoji('◀')];
+            let mut response = serenity::CreateInteractionResponseMessage::new();
+
+            for (i, embed) in metadata_embed_chunks[current_page].iter().enumerate() {
+                response = response.add_embed(embed.to_owned());
+                buttons.push(
+                    serenity::CreateButton::new(button_id_gen(i + 1)).label(format!("{}", i + 1)),
+                );
+            }
+            buttons.push(serenity::CreateButton::new(&next_button_id).emoji('▶'));
+
+            let components = serenity::CreateActionRow::Buttons(buttons);
+            response.components(vec![components])
+        };
+
+        // Update the message with the new page contents
+        press
+            .create_response(
+                ctx.serenity_context(),
+                serenity::CreateInteractionResponse::UpdateMessage(response),
+            )
+            .await?;
+    }
+    Err(eyre!("No selection made before timeout"))
 }

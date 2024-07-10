@@ -14,7 +14,10 @@ use tracing::{error, info, log::warn};
 
 // Imports within the crate
 use crate::{
-    utils::{self, check_msg, get_manager, metadata_to_embed, OptionExt},
+    utils::{
+        self, check_msg, create_search_interaction, get_manager, metadata_to_embed, yt_search,
+        OptionExt,
+    },
     voice_events::*,
     Context,
 };
@@ -39,7 +42,8 @@ use crate::{
         "seek",
         "deafen",
     ),
-    aliases("m")
+    aliases("m"),
+    subcommand_required
 )]
 pub async fn music(ctx: Context<'_>) -> Result<()> {
     info!("called by {}", ctx.author());
@@ -271,11 +275,16 @@ async fn play(
     #[min_length = 1]
     url: Vec<String>,
 ) -> Result<()> {
-    // join a channel first
-    join_helper(ctx, false).await?;
-
     // convert vec to a string
     let url = url.join(" ").trim().to_string();
+
+    play_inner(ctx, url).await?;
+    Ok(())
+}
+
+async fn play_inner(ctx: Context<'_>, url: String) -> Result<()> {
+    // join a channel first
+    join_helper(ctx, false).await?;
 
     let search_yt = if !url.starts_with("http") {
         // ctx.channel_id()
@@ -291,7 +300,7 @@ async fn play(
         false
     };
 
-    ctx.defer_ephemeral().await?;
+    ctx.defer().await?;
 
     let guild_id = ctx.guild_id().wrap_err("get guild id from context")?;
 
@@ -306,16 +315,12 @@ async fn play(
         // the above comment is preserved for history. currently youtube playback is handled
         // by songbird's struct
 
-        if !search_yt {
-            let source = YoutubeDl::new(ctx.data().http.clone(), url);
-            insert_source_with_message(source, handler_lock, ctx).await?;
+        let source = if !search_yt {
+            YoutubeDl::new(ctx.data().http.clone(), url)
         } else {
-            // TODO: implement search
-            let source = YoutubeDl::new_search(ctx.data().http.clone(), url);
-            insert_source_with_message(source, handler_lock, ctx).await?;
-        }
-
-        // Queue the sources
+            YoutubeDl::new_search(ctx.data().http.clone(), url)
+        };
+        insert_source_with_message(source, handler_lock, ctx).await?;
     } else {
         check_msg(
             ctx.channel_id()
@@ -331,9 +336,8 @@ async fn play(
 #[poise::command(slash_command, prefix_command)]
 // #[usage("<search term>")]
 // #[example("ayaya intensifies")]
-// #[only_in(guilds)]
-async fn search(ctx: Context<'_>, args: Vec<String>) -> Result<()> {
-    let term = args.join(" ");
+async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<()> {
+    let term = search_term.join(" ");
 
     // reply or say in channel depending on command type
     match ctx {
@@ -346,28 +350,24 @@ async fn search(ctx: Context<'_>, args: Vec<String>) -> Result<()> {
                 .await?;
         }
     }
-    ctx.defer_ephemeral().await?;
+    ctx.defer().await?;
 
     // let songbird do the searching
-    let yt_search = YoutubeDl::new_search(ctx.data().http.clone(), term.clone())
-        .search(Some(10))
+    let search = yt_search(&term, Some(10))
         .await
         .wrap_err_with(|| eyre!("searching youtube for term: {}", &term))?;
 
-    let mut results_msg = serenity::MessageBuilder::new();
-    results_msg.push_line("# Youtube search results:");
+    match create_search_interaction(ctx, search).await {
+        Ok(youtube_id) => {
+            play_inner(ctx, youtube_id).await?;
+        }
+        Err(e) => {
+            error!("Error from interaction: {e}");
+        }
+    };
 
-    for (i, metadata) in yt_search.iter().enumerate() {
-        results_msg.push_line(format!(
-            "{} : {} | Channel: {}",
-            i,
-            metadata.title.clone().unwrap_or_unknown(),
-            metadata.channel.clone().unwrap_or_unknown()
-        ));
-    }
-
-    let list = results_msg.build();
-    let _prompt = ctx.channel_id().say(ctx, list).await?;
+    // let list = results_msg.build();
+    // let _prompt = ctx.channel_id().say(ctx, list).await?;
 
     // let wait = msg
     //     .channel_id
@@ -576,8 +576,6 @@ async fn queue(ctx: Context<'_>) -> Result<()> {
     Ok(())
 }
 
-// TODO: implement skipping a certain track
-
 /// Pause the party. Time is frozen in this bubble universe."
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn pause(ctx: Context<'_>, _args: String) -> Result<()> {
@@ -680,6 +678,8 @@ async fn stop(ctx: Context<'_>) -> Result<()> {
 
     Ok(())
 }
+
+// TODO: implement skipping a certain track
 
 // #[command]
 // #[aliases("d")]
@@ -926,6 +926,7 @@ async fn insert_source_with_message(
     }
 
     handler.enqueue(track).await;
+    // TODO: log added track
     let embed = metadata_to_embed(utils::EmbedOperation::AddToQueue, &metadata);
     ctx.send(poise::CreateReply::default().embed(embed)).await?;
 
