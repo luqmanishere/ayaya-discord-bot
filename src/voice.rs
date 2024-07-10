@@ -95,6 +95,7 @@ async fn join(ctx: Context<'_>) -> Result<()> {
 
 async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
     let guild: serenity::Guild = ctx.guild().wrap_err("getting guild from context")?.clone();
+    let chat_channel_id = ctx.channel_id();
     let user_voice_state: Option<&serenity::VoiceState> = guild.voice_states.get(&ctx.author().id);
 
     let connect_to = {
@@ -136,9 +137,9 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
     let manager = get_manager(ctx.serenity_context()).await;
 
     let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
-    #[allow(unused_assignments)]
-    let mut joined = false;
-    let channel_id = match manager.get(guild_id) {
+
+    let joined;
+    let voice_channel_id = match manager.get(guild_id) {
         Some(handle_lock) => {
             joined = true;
             let handler = handle_lock.lock().await;
@@ -165,9 +166,9 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
         match call_res {
             Ok(call) => {
                 let mut call = call.lock().await;
-                info!("joined channel id: {channel_id} in guild {guild_id}",);
+                info!("joined channel id: {voice_channel_id} in guild {guild_id}",);
                 if play_notify_flag {
-                    ctx.reply(format!("Joined {}", channel_id.mention()))
+                    ctx.reply(format!("Joined {}", voice_channel_id.mention()))
                         .await?;
                 }
 
@@ -178,7 +179,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                 call.add_global_event(
                     Event::Periodic(Duration::from_secs(60), None),
                     BotInactiveCounter {
-                        channel_id,
+                        channel_id: chat_channel_id,
                         counter: Arc::new(AtomicUsize::new(0)),
                         guild_id,
                         manager: get_manager(ctx.serenity_context()).await,
@@ -192,7 +193,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
             }
         }
     } else {
-        let channel_name = channel_id
+        let channel_name = voice_channel_id
             .name(ctx)
             .await
             .wrap_err("getting channel name from id")?;
@@ -201,7 +202,10 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
             ctx.channel_id()
                 .say(
                     ctx,
-                    format!("Already in voice channel \"{}\"", channel_id.mention()),
+                    format!(
+                        "Already in voice channel \"{}\"",
+                        voice_channel_id.mention()
+                    ),
                 )
                 .await?;
         }
@@ -925,7 +929,15 @@ async fn insert_source_with_message(
         metadata_lock.insert(track_uuid, metadata.clone());
     }
 
-    handler.enqueue(track).await;
+    let track_handle = handler.enqueue(track).await;
+    track_handle.add_event(
+        Event::Track(songbird::TrackEvent::Play),
+        TrackPlayNotifier {
+            channel_id: ctx.channel_id(),
+            metadata: metadata.clone(),
+            http: ctx.serenity_context().http.clone(),
+        },
+    )?;
     // TODO: log added track
     let embed = metadata_to_embed(utils::EmbedOperation::AddToQueue, &metadata);
     ctx.send(poise::CreateReply::default().embed(embed)).await?;

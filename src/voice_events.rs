@@ -4,20 +4,19 @@ use std::sync::{
 };
 
 use poise::serenity_prelude as serenity;
-
 use serenity::{
     async_trait,
     http::Http,
     model::{id::GuildId, prelude::ChannelId},
-    prelude::*,
+    Context as SerenityContext,
 };
-
 use songbird::{
-    tracks::PlayMode, Event, EventContext, EventHandler as VoiceEventHandler, Songbird,
+    input::AuxMetadata, tracks::PlayMode, Event, EventContext, EventHandler as VoiceEventHandler,
+    Songbird,
 };
 use tracing::{error, info};
 
-use crate::utils::check_msg;
+use crate::utils::{check_msg, metadata_to_embed};
 
 pub struct SongFader {
     pub chan_id: ChannelId,
@@ -50,7 +49,7 @@ impl VoiceEventHandler for SongFader {
 pub struct BotInactiveCounter {
     pub channel_id: ChannelId,
     pub guild_id: GuildId,
-    pub ctx: Context,
+    pub ctx: SerenityContext,
     pub manager: Arc<Songbird>,
     pub counter: Arc<AtomicUsize>,
 }
@@ -137,5 +136,37 @@ impl VoiceEventHandler for BotInactiveCounter {
         }
 
         None
+    }
+}
+
+pub struct TrackPlayNotifier {
+    pub channel_id: ChannelId,
+    pub metadata: AuxMetadata,
+    pub http: Arc<Http>, // pub ctx: Context<'a>,
+                         // pub manager: Arc<Songbird>,
+}
+
+#[async_trait]
+impl VoiceEventHandler for TrackPlayNotifier {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        if let EventContext::Track(tracks) = ctx {
+            let tracks = tracks.to_vec();
+            for (track_state, _) in tracks {
+                if track_state.playing == PlayMode::Play {
+                    self.channel_id
+                        .send_message(
+                            self.http.clone(),
+                            serenity::CreateMessage::default().embed(metadata_to_embed(
+                                crate::utils::EmbedOperation::NowPlayingNotification,
+                                &self.metadata,
+                            )),
+                        )
+                        .await
+                        .expect("message sent");
+                    return None;
+                }
+            }
+        }
+        Some(Event::Track(songbird::TrackEvent::Play))
     }
 }

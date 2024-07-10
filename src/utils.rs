@@ -180,9 +180,11 @@ pub async fn paginate(ctx: Context<'_>, pages: &[&str]) -> Result<(), serenity::
     Ok(())
 }
 
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum EmbedOperation {
     YoutubeSearch,
     AddToQueue,
+    NowPlayingNotification,
 }
 
 impl std::fmt::Display for EmbedOperation {
@@ -190,6 +192,7 @@ impl std::fmt::Display for EmbedOperation {
         let out = match self {
             EmbedOperation::YoutubeSearch => "Search Result",
             EmbedOperation::AddToQueue => "Added to Queue",
+            EmbedOperation::NowPlayingNotification => "Now Playing",
         };
         write!(f, "{out}")
     }
@@ -241,6 +244,7 @@ pub fn metadata_to_embed(
         .color(match operation {
             EmbedOperation::YoutubeSearch => serenity::Color::RED,
             EmbedOperation::AddToQueue => serenity::Color::MEIBE_PINK,
+            EmbedOperation::NowPlayingNotification => serenity::Color::DARK_GREEN,
         })
 }
 
