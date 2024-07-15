@@ -15,8 +15,8 @@ use tracing::{error, info, log::warn};
 // Imports within the crate
 use crate::{
     utils::{
-        self, check_msg, create_search_interaction, get_manager, metadata_to_embed, yt_search,
-        OptionExt,
+        self, check_msg, create_search_interaction, error_embed, get_manager, metadata_to_embed,
+        yt_search, OptionExt,
     },
     voice_events::*,
     Context,
@@ -102,7 +102,11 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
         let user_voice_state = match user_voice_state {
             Some(voice_state) => voice_state,
             None => {
-                ctx.reply("You are not in a voice channel").await?;
+                ctx.send(
+                    poise::CreateReply::default()
+                        .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
+                )
+                .await?;
 
                 return Ok(());
             }
@@ -112,12 +116,17 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                 match user_voice_state.channel_id {
                     Some(channel_id) => channel_id,
                     None => {
-                        ctx.reply("You are not in a voice channel").await?;
+                        ctx.send(
+                            poise::CreateReply::default()
+                                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
+                        )
+                        .await?;
 
                         return Ok(());
                     }
                 }
             } else {
+                // TODO: replace with embed
                 ctx.reply("You are not messaging from the right guild")
                     .await?;
 
@@ -128,6 +137,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                 "Not in a guild, expected guild id {}",
                 ctx.guild_id().wrap_err("getting guild id from ctx")?
             );
+            // TODO: replace with embed
             ctx.reply("Cache error. Please rejoin the channel").await?;
 
             return Err(eyre!("Error in the cache: voice state guild_id is None"));
@@ -168,6 +178,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                 let mut call = call.lock().await;
                 info!("joined channel id: {voice_channel_id} in guild {guild_id}",);
                 if play_notify_flag {
+                    // TODO: replace with embed
                     ctx.reply(format!("Joined {}", voice_channel_id.mention()))
                         .await?;
                 }
@@ -189,6 +200,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
             }
             Err(e) => {
                 error!("Error joining channel: {}", e);
+                // TODO: replace with embed
                 ctx.say("Unable to join voice channel").await?;
             }
         }
@@ -199,6 +211,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
             .wrap_err("getting channel name from id")?;
         warn!("Already in a channel {}, not joining", channel_name);
         if play_notify_flag {
+            // TODO: replace with embed
             ctx.channel_id()
                 .say(
                     ctx,
@@ -226,12 +239,18 @@ async fn leave(ctx: Context<'_>) -> Result<()> {
 
     if has_handler {
         if let Err(e) = manager.remove(guild_id).await {
+            // FIXME: wtf is this
             check_msg(ctx.channel_id().say(ctx, format!("Failed: {:?}", e)).await);
         }
 
+        // TODO: replace with embeds
         check_msg(ctx.channel_id().say(ctx, "Left voice channel").await);
     } else {
-        ctx.reply("Not in a voice channel").await?;
+        ctx.send(
+            poise::CreateReply::default()
+                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
+        )
+        .await?;
     }
 
     Ok(())
@@ -291,15 +310,9 @@ async fn play_inner(ctx: Context<'_>, url: String) -> Result<()> {
     join_helper(ctx, false).await?;
 
     let search_yt = if !url.starts_with("http") {
-        // ctx.channel_id()
-        //     .say(ctx, format!("Searching Youtube for :{}", url))
-        //     .await?;
         info!("searching youtube for: {}", url);
         true
     } else {
-        // ctx.channel_id()
-        //     .say(ctx, format!("Playing the link: {}", url))
-        //     .await?;
         info!("got link: {}", url);
         false
     };
@@ -310,7 +323,7 @@ async fn play_inner(ctx: Context<'_>, url: String) -> Result<()> {
 
     let manager = utils::get_manager(ctx.serenity_context()).await;
 
-    // Lock the manager to insert the audio into the queue if in voice channel
+    // Lock the call to insert the audio into the queue if in voice channel
     if let Some(handler_lock) = manager.get(guild_id) {
         // Here, we use lazy restartable sources to make sure that we don't pay
         // for decoding, playback on tracks which aren't actually live yet.
@@ -326,11 +339,11 @@ async fn play_inner(ctx: Context<'_>, url: String) -> Result<()> {
         };
         insert_source_with_message(source, handler_lock, ctx).await?;
     } else {
-        check_msg(
-            ctx.channel_id()
-                .say(ctx, "Not in a voice channel to play in")
-                .await,
-        );
+        ctx.send(
+            poise::CreateReply::default()
+                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
+        )
+        .await?;
     }
 
     Ok(())
@@ -492,31 +505,21 @@ async fn skip(ctx: Context<'_>) -> Result<()> {
         let handler = handler_lock.lock().await;
         let queue = handler.queue();
         let track_uuid = queue.current().unwrap().uuid();
-        let song_name = {
+        let song_metadata = {
             let metadata_lock = ctx.data().track_metadata.lock().unwrap();
             metadata_lock
                 .get(&track_uuid)
                 .wrap_err_with(|| eyre!("getting metadata for uuid: {}", track_uuid))?
-                .title
                 .clone()
-                .unwrap_or_unknown()
         };
-        let _ = queue.skip();
+        queue.skip()?;
 
-        check_msg(
-            ctx.channel_id()
-                .say(
-                    ctx,
-                    format!(
-                        "Skipped `{}` - {} left in queue.",
-                        song_name,
-                        queue.len() - 1
-                    ),
-                )
-                .await,
-        );
+        let embed = metadata_to_embed(utils::EmbedOperation::SkipSong, &song_metadata, None);
+
+        ctx.send(poise::CreateReply::default().embed(embed)).await?;
     } else {
-        check_msg(ctx.channel_id().say(ctx, "Not in a voice channel.").await);
+        ctx.say("Not in a voice channel, Ayaya can't skip air bruh.")
+            .await?;
     }
 
     Ok(())
@@ -541,6 +544,7 @@ async fn queue(ctx: Context<'_>) -> Result<()> {
             let data = ctx.data();
             let metadata_lock = data.track_metadata.lock().unwrap();
 
+            // TODO: replace with embed
             if tracks.is_empty() {
                 lines.push_line("# Nothing in queue");
             } else {
@@ -805,7 +809,7 @@ async fn unmute(ctx: Context<'_>) -> Result<()> {
     Ok(())
 }
 
-/// "Shows what song is currently playing. Ayaya is really knows everything about herself."
+/// "Shows what song is currently playing. Ayaya really knows everything about herself."
 #[poise::command(slash_command, prefix_command, aliases("np"), guild_only)]
 async fn nowplaying(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
@@ -818,38 +822,36 @@ async fn nowplaying(ctx: Context<'_>) -> Result<()> {
             Some(track) => {
                 let data = ctx.data();
                 let track_uuid = track.uuid();
+                let track_state = track.get_info().await?;
                 let metadata = {
                     let lock = data.track_metadata.lock().unwrap();
                     lock.get(&track_uuid)
                         .wrap_err("expect track to exist")?
                         .clone()
                 };
-                let song_name = metadata.title.clone().unwrap();
-                let channel_name = metadata.channel.clone().unwrap();
 
-                check_msg(
-                    ctx.channel_id()
-                        .say(
-                            ctx,
-                            format!("Now playing: `{} ({})`", song_name, channel_name),
-                        )
-                        .await,
-                );
+                ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
+                    utils::EmbedOperation::NowPlaying,
+                    &metadata,
+                    Some(&track_state),
+                )))
+                .await?;
             }
             None => {
-                check_msg(
-                    ctx.channel_id()
-                        .say(ctx, "```prolog\nNothing is playing```")
-                        .await,
-                );
+                ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
+                    utils::EmbedOperation::NowPlaying,
+                    &songbird::input::AuxMetadata::default(),
+                    None,
+                )))
+                .await?;
             }
         };
     } else {
-        check_msg(
-            ctx.channel_id()
-                .say(ctx, "Not in a voice channel to play in")
-                .await,
-        );
+        ctx.send(
+            poise::CreateReply::default()
+                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
+        )
+        .await?;
     }
 
     Ok(())
@@ -881,6 +883,7 @@ async fn seek(ctx: Context<'_>, secs: u64) -> Result<()> {
                 let song_name = metadata.title.clone().unwrap();
                 let channel_name = metadata.channel.clone().unwrap();
 
+                // TODO: express in embed
                 check_msg(
                     ctx.channel_id()
                         .say(
@@ -894,20 +897,25 @@ async fn seek(ctx: Context<'_>, secs: u64) -> Result<()> {
                 );
             }
             None => {
-                check_msg(
-                    ctx.channel_id()
-                        .say(ctx, "```prolog\nNothing is playing```")
-                        .await,
-                );
+                ctx.send(
+                    poise::CreateReply::default()
+                        .embed(error_embed(utils::EmbedOperation::ErrorNotPlaying)),
+                )
+                .await?;
             }
         };
     } else {
-        check_msg(ctx.channel_id().say(ctx, "Not in a voice channel.").await);
+        ctx.send(
+            poise::CreateReply::default()
+                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
+        )
+        .await?;
     }
 
     Ok(())
 }
 
+/// Inserts a youtube source, sets events and notifies the calling channel
 async fn insert_source_with_message(
     mut source: YoutubeDl,
     handler_lock: Arc<Mutex<songbird::Call>>,
@@ -939,7 +947,7 @@ async fn insert_source_with_message(
         },
     )?;
     // TODO: log added track
-    let embed = metadata_to_embed(utils::EmbedOperation::AddToQueue, &metadata);
+    let embed = metadata_to_embed(utils::EmbedOperation::AddToQueue, &metadata, None);
     ctx.send(poise::CreateReply::default().embed(embed)).await?;
 
     Ok(())

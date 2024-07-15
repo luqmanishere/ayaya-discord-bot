@@ -36,6 +36,7 @@
           [
             libGL
             libxkbcommon
+              openssl.dev
             wayland
             xorg.libX11
             xorg.libXcursor
@@ -62,7 +63,7 @@
             drvConfig = {
               mkDerivation = {
                 nativeBuildInputs = [pkgs.wayland-protocols pkgs.makeWrapper pkgs.libxkbcommon];
-                buildInputs = [pkgs.pkg-config pkgs.openssl.dev pkgs.openssl pkgs.perl pkgs.libopus pkgs.openssl];
+                buildInputs = [pkgs.pkg-config pkgs.openssl.dev pkgs.openssl pkgs.perl pkgs.libopus pkgs.openssl pkgs.clang pkgs.mold];
               };
             };
 
@@ -70,12 +71,13 @@
             depsDrvConfig = {
               mkDerivation = {
                 nativeBuildInputs = [pkgs.wayland-protocols pkgs.libxkbcommon];
-                buildInputs = [pkgs.pkg-config pkgs.openssl.dev pkgs.openssl pkgs.perl pkgs.cmake pkgs.libopus pkgs.openssl];
+                buildInputs = [pkgs.pkg-config pkgs.openssl.dev pkgs.openssl pkgs.perl pkgs.cmake pkgs.libopus pkgs.openssl pkgs.clang pkgs.mold];
               };
             };
             runtimeLibs = with pkgs; [
               libGL
               libxkbcommon
+                openssl.dev
               wayland
               xorg.libX11
               xorg.libXcursor
@@ -163,6 +165,8 @@
           */
         };
         packages.ayaya-discord-bot = crateOutputs.packages.release;
+        packages.ayaya-discord-bot-release = crateOutputs.packages.release;
+        packages.ayaya-discord-bot-debug = crateOutputs.packages.release;
       };
       flake = {
         homeManagerModules = {

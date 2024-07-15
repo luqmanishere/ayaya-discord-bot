@@ -15,9 +15,6 @@ use uuid::Uuid;
 
 use crate::voice::music;
 
-// use crate::utils::check_msg;
-// use crate::voice::*;
-
 mod utils;
 mod voice;
 mod voice_events;
@@ -45,20 +42,8 @@ async fn event_handler(
     Ok(())
 }
 
-// #[help]
-// async fn my_help(
-//     context: &Context,
-//     msg: &Message,
-//     args: Args,
-//     help_options: &'static HelpOptions,
-//     groups: &[&'static CommandGroup],
-//     owners: HashSet<UserId>,
-// ) -> CommandResult {
-//     let _ = help_commands::with_embeds(context, msg, args, help_options, groups, owners).await;
-//     Ok(())
-// }
-
 pub type Context<'a> = poise::Context<'a, Data, eyre::ErrReport>;
+
 // User data, which is stored and accessible in all command invocations
 pub struct Data {
     http: HttpClient,
@@ -118,9 +103,10 @@ async fn main() -> Result<()> {
             pre_command: |ctx: Context<'_>| {
                 Box::pin(async move {
                     let command_name = ctx.command().qualified_name.clone();
+                    let author = ctx.author(); 
                     let channel_id = ctx.channel_id();
                     let guild_id = ctx.guild_id();
-                    info!("Command \"{command_name}\" called from channel {channel_id} in guild {guild_id:?}");
+                    info!("Command \"{command_name}\" called from channel {channel_id} in guild {guild_id:?} by {} ({})", author.name, author);
                 })
             },
             on_error: |error: FrameworkError<'_, Data, eyre::ErrReport>| {

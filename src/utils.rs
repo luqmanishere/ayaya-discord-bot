@@ -1,4 +1,5 @@
 use std::fmt::{self as fmt};
+use std::ops::Sub;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -185,6 +186,10 @@ pub enum EmbedOperation {
     YoutubeSearch,
     AddToQueue,
     NowPlayingNotification,
+    NowPlaying,
+    SkipSong,
+    ErrorNotPlaying,
+    ErrorNotInVoiceChannel,
 }
 
 impl std::fmt::Display for EmbedOperation {
@@ -192,7 +197,10 @@ impl std::fmt::Display for EmbedOperation {
         let out = match self {
             EmbedOperation::YoutubeSearch => "Search Result",
             EmbedOperation::AddToQueue => "Added to Queue",
-            EmbedOperation::NowPlayingNotification => "Now Playing",
+            EmbedOperation::NowPlayingNotification | EmbedOperation::NowPlaying => "Now Playing",
+            EmbedOperation::SkipSong => "Skipping Song",
+            EmbedOperation::ErrorNotPlaying => "No Songs Playing",
+            Self::ErrorNotInVoiceChannel => "Not in Voice Channel",
         };
         write!(f, "{out}")
     }
@@ -204,8 +212,9 @@ impl std::fmt::Display for EmbedOperation {
 pub fn metadata_to_embed(
     operation: EmbedOperation,
     metadata: &songbird::input::AuxMetadata,
+    track_state: Option<&songbird::tracks::TrackState>,
 ) -> serenity::CreateEmbed {
-    serenity::CreateEmbed::default()
+    let mut embed = serenity::CreateEmbed::default()
         .author(
             serenity::CreateEmbedAuthor::new(format!("{} | Youtube Video", operation)).icon_url(
                 "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
@@ -218,20 +227,59 @@ pub fn metadata_to_embed(
                     metadata.title.clone().unwrap_or_unknown()
                 ))
                 .to_string(),
-        )
-        .fields([
-            (
-                "Channel",
-                metadata.channel.clone().unwrap_or_unknown(),
-                true,
-            ),
-            (
-                "Duration",
-                // TODO: decide what to do with this unwrap
-                humantime::format_duration(metadata.duration.unwrap()).to_string(),
-                true,
-            ),
-        ])
+        );
+
+    embed = embed.fields([
+        (
+            "Channel",
+            metadata.channel.clone().unwrap_or_unknown(),
+            true,
+        ),
+        (
+            "Duration",
+            // TODO: decide what to do with this unwrap
+            humantime::format_duration(metadata.duration.unwrap_or_default()).to_string(),
+            true,
+        ),
+    ]);
+
+    // extra conditional fields
+    if let Some(track_state) = track_state {
+        match operation {
+            EmbedOperation::SkipSong => {
+                let current_pos = track_state.position;
+                let duration = metadata.duration.unwrap_or_default();
+                let time_remaining = duration.sub(current_pos);
+
+                embed = embed.field(
+                    "Time Remaining",
+                    humantime::format_duration(time_remaining).to_string(),
+                    true,
+                );
+            }
+            EmbedOperation::NowPlaying => {
+                let current_pos = track_state.position;
+                let duration = metadata.duration.unwrap_or_default();
+                let time_remaining = duration.sub(current_pos);
+
+                embed = embed.fields([
+                    (
+                        "Current Time",
+                        humantime::format_duration(current_pos).to_string(),
+                        true,
+                    ),
+                    (
+                        "Time Remaining",
+                        humantime::format_duration(time_remaining).to_string(),
+                        true,
+                    ),
+                ]);
+            }
+            _ => {}
+        }
+    }
+
+    embed = embed
         .thumbnail(
             metadata
                 .thumbnail
@@ -244,8 +292,38 @@ pub fn metadata_to_embed(
         .color(match operation {
             EmbedOperation::YoutubeSearch => serenity::Color::RED,
             EmbedOperation::AddToQueue => serenity::Color::MEIBE_PINK,
-            EmbedOperation::NowPlayingNotification => serenity::Color::DARK_GREEN,
-        })
+            EmbedOperation::NowPlayingNotification | EmbedOperation::NowPlaying => {
+                serenity::Color::DARK_GREEN
+            }
+            EmbedOperation::SkipSong => serenity::Color::ORANGE,
+            _ => serenity::Color::MEIBE_PINK,
+        });
+
+    embed
+}
+
+pub fn error_embed(operation: EmbedOperation) -> serenity::CreateEmbed {
+    serenity::CreateEmbed::default()
+        .color(serenity::Color::RED)
+        .author(
+            serenity::CreateEmbedAuthor::new(format!("Error | {}", operation)).icon_url(
+                "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
+            ),
+        )
+        .description(
+            serenity::MessageBuilder::default()
+                .push_line(format!("### {}: {}", "Error", operation))
+                .push_line(match operation {
+                    EmbedOperation::ErrorNotInVoiceChannel => {
+                        "Please join a voice channel to run this command."
+                    }
+                    EmbedOperation::ErrorNotPlaying => "No songs are being played in the server.",
+                    _ => "Undefined error",
+                })
+                .to_string(),
+        )
+        .timestamp(serenity::Timestamp::now())
+        .footer(serenity::CreateEmbedFooter::new("Ayaya Discord Bot"))
 }
 
 /// Create an interaction for the search command. Returns the selected video id if any
@@ -263,7 +341,7 @@ pub async fn create_search_interaction(
     // TODO: optimize?
     let metadata_embeds = metadata_vec
         .iter()
-        .map(|e| metadata_to_embed(EmbedOperation::YoutubeSearch, &e.aux_metadata()))
+        .map(|e| metadata_to_embed(EmbedOperation::YoutubeSearch, &e.aux_metadata(), None))
         .collect::<Vec<_>>();
     let metadata_embed_chunks = metadata_embeds.chunks(3).collect::<Vec<_>>();
 

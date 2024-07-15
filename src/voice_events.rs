@@ -159,6 +159,7 @@ impl VoiceEventHandler for TrackPlayNotifier {
                             serenity::CreateMessage::default().embed(metadata_to_embed(
                                 crate::utils::EmbedOperation::NowPlayingNotification,
                                 &self.metadata,
+                                None,
                             )),
                         )
                         .await
