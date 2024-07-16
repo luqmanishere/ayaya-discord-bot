@@ -17,19 +17,21 @@ poise = { version = "0.6" }
 dotenv = { version = "0.15" }
 reqwest = { version = "0.11" }
 uuid = { version = "*" }
-humantime = {version  = "2"}
-youtube_dl = {version = "0.10"}
+humantime = { version = "2" }
+youtube_dl = { version = "0.10", features = ["tokio"] }
 
 [dependencies.songbird]
-version = "0.4.1"
+version = "0.4.2"
 features = ["builtin-queue", "driver", "serenity"]
 
 [dependencies.serenity]
-version = "0.12"
+# version = "0.12"
+git = "https://github.com/serenity-rs/serenity.git"
+# branch = "next"
+rev = "adf4673ab39e34e92578c6961c2612949ee23bcc"
 features = [
   "cache",
   "framework",
-  "standard_framework",
   "voice",
   "http",
   "rustls_backend",

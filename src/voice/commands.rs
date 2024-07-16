@@ -13,12 +13,12 @@ use songbird::{
 use tracing::{error, info, log::warn};
 
 // Imports within the crate
+use super::events::*;
 use crate::{
     utils::{
         self, check_msg, create_search_interaction, error_embed, get_manager, metadata_to_embed,
         yt_search, OptionExt,
     },
-    voice_events::*,
     Context,
 };
 
@@ -57,10 +57,7 @@ pub async fn music(ctx: Context<'_>) -> Result<()> {
 async fn deafen(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("command ran in guild")?;
 
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .wrap_err("Songbird Voice client placed in at initialisation.")?
-        .clone();
+    let manager = &ctx.data().songbird;
 
     let handler_lock = match manager.get(guild_id) {
         Some(handler) => handler,
@@ -144,7 +141,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
         }
     };
 
-    let manager = get_manager(ctx.serenity_context()).await;
+    let manager = &ctx.data().songbird;
 
     let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
 
@@ -183,7 +180,10 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                         .await?;
                 }
 
-                // TODO: Add event to send message on track start
+                // bot should be unmuted and deafened
+                call.mute(false).await?;
+                call.deafen(true).await?;
+
                 // TODO: Add event to detect inactivity
 
                 // inactive counter bot
@@ -193,7 +193,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                         channel_id: chat_channel_id,
                         counter: Arc::new(AtomicUsize::new(0)),
                         guild_id,
-                        manager: get_manager(ctx.serenity_context()).await,
+                        manager: ctx.data().songbird.clone(),
                         ctx: ctx.serenity_context().to_owned(),
                     },
                 );
@@ -231,10 +231,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
 async fn leave(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("getting guild id from context")?;
 
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .wrap_err("Songbird Voice client placed in at initialisation.")?
-        .clone();
+    let manager = &ctx.data().songbird;
     let has_handler = manager.get(guild_id).is_some();
 
     if has_handler {
@@ -261,10 +258,7 @@ async fn leave(ctx: Context<'_>) -> Result<()> {
 async fn mute(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from context")?;
 
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .wrap_err("Songbird Voice client placed in at initialisation.")?
-        .clone();
+    let manager = &ctx.data().songbird;
 
     let handler_lock = match manager.get(guild_id) {
         Some(handler) => handler,
@@ -321,7 +315,7 @@ async fn play_inner(ctx: Context<'_>, url: String) -> Result<()> {
 
     let guild_id = ctx.guild_id().wrap_err("get guild id from context")?;
 
-    let manager = utils::get_manager(ctx.serenity_context()).await;
+    let manager = &ctx.data().songbird;
 
     // Lock the call to insert the audio into the queue if in voice channel
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -383,123 +377,15 @@ async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<()> {
         }
     };
 
-    // let list = results_msg.build();
-    // let _prompt = ctx.channel_id().say(ctx, list).await?;
-
-    // let wait = msg
-    //     .channel_id
-    //     .await_reply(ctx)
-    //     .author_id(msg.author.id.0)
-    //     .timeout(std::time::Duration::from_secs(15))
-    //     .await;
-
-    // match wait {
-    //     Some(msg) => {
-    //         match msg.content.parse::<usize>() {
-    //             Ok(picked) => {
-    //                 info!("Option picked: {}", msg.content);
-    //                 prompt
-    //                     .edit(ctx, |m| m.content(format!("Option picked: {}", picked)))
-    //                     .await?;
-
-    //                 let selection: String = res_vec[(picked - 1)].clone();
-    //                 let _metadata = utils::yt_search(&selection).await?;
-    //                 // TODO Display information beautifully
-    //             }
-    //             Err(_) => {
-    //                 warn!("Input can't be parsed into numbers: {}", msg.content);
-    //                 prompt
-    //                     .edit(ctx, |m| {
-    //                         m.content(
-    //                             "Ayaya told you to give her a number...not whatever you just gave.",
-    //                         )
-    //                     })
-    //                     .await?;
-    //             }
-    //         };
-    //     }
-    //     None => {
-    //         prompt
-    //             .edit(ctx, |m| {
-    //                 m.content("Timeout! Ayaya wants you to decide in 10 seconds, not 10 minutes")
-    //             })
-    //             .await?;
-    //     }
-    // }
-
     Ok(())
 }
-
-// async fn _search(term: String, ctx: &Context, original_msg: &Message) -> EyreResult<String> {
-//     let mut prompt = original_msg
-//         .channel_id
-//         .say(&ctx.http, "Searching...This takes quite a while")
-//         .await?;
-
-//     let vec = yt_9search(&term).await.unwrap();
-
-//     prompt.edit(ctx, |m| m.content("Compiling list")).await?;
-
-//     let mut list = MessageBuilder::new();
-//     list.push_line("Pick an option to queue:")
-//         .push_line("```prolog");
-//     let mut i = 1;
-//     for line in &vec {
-//         list.push_line(format!("{} : {}", i, line));
-//         i += 1;
-//     }
-//     let list = list.push_line("```").build();
-
-//     prompt.edit(ctx, |m| m.content(list)).await?;
-//     let wait = original_msg
-//         .channel_id
-//         .await_reply(ctx)
-//         .author_id(original_msg.author.id.0)
-//         .timeout(std::time::Duration::from_secs(15))
-//         .await;
-
-//     match wait {
-//         Some(msg) => match msg.content.parse::<usize>() {
-//             Ok(picked) => {
-//                 info!("Option picked: {}", msg.content);
-//                 prompt
-//                     .edit(ctx, |m| m.content(format!("Option picked: {}", picked)))
-//                     .await?;
-
-//                 Ok(vec[(picked - 1)].clone())
-//             }
-//             Err(_) => {
-//                 warn!("Input can't be parsed into numbers: {}", msg.content);
-//                 prompt
-//                     .edit(ctx, |m| {
-//                         m.content(
-//                             "Ayaya told you to give her a number...not whatever you just gave.",
-//                         )
-//                     })
-//                     .await?;
-//                 Err(eyre!("Can't convert into an index"))
-//             }
-//         },
-//         None => {
-//             prompt
-//                 .edit(ctx, |m| {
-//                     m.content("Timeout! Ayaya wants you to decide in 10 seconds, not 10 minutes")
-//                 })
-//                 .await?;
-//             Err(eyre!("No answer was received"))
-//         }
-//     }
-// }
 
 /// Skips the currently playing song. Ayaya wonders why you abandoned your summon so easily.
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn skip(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
 
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .wrap_err("Songbird Voice client placed in at initialisation.")?
-        .clone();
+    let manager = &ctx.data().songbird;
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let handler = handler_lock.lock().await;
@@ -532,7 +418,7 @@ async fn queue(ctx: Context<'_>) -> Result<()> {
     // let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = ctx.guild_id().wrap_err("getting guild id")?;
 
-    let manager = get_manager(ctx.serenity_context()).await;
+    let manager = &ctx.data().songbird;
 
     // Check if in channel
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -589,10 +475,7 @@ async fn queue(ctx: Context<'_>) -> Result<()> {
 async fn pause(ctx: Context<'_>, _args: String) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
 
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .wrap_err("Songbird Voice client placed in at initialisation.")?
-        .clone();
+    let manager = &ctx.data().songbird;
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let handler = handler_lock.lock().await;
@@ -630,7 +513,7 @@ async fn pause(ctx: Context<'_>, _args: String) -> Result<()> {
 async fn resume(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
 
-    let manager = get_manager(ctx.serenity_context()).await.clone();
+    let manager = &ctx.data().songbird;
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let handler = handler_lock.lock().await;
@@ -668,7 +551,7 @@ async fn resume(ctx: Context<'_>) -> Result<()> {
 async fn stop(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
 
-    let manager = get_manager(ctx.serenity_context()).await.clone();
+    let manager = &ctx.data().songbird;
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let handler = handler_lock.lock().await;
@@ -762,7 +645,7 @@ async fn stop(ctx: Context<'_>) -> Result<()> {
 async fn undeafen(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
 
-    let manager = get_manager(ctx.serenity_context()).await.clone();
+    let manager = &ctx.data().songbird;
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
@@ -786,10 +669,7 @@ async fn undeafen(ctx: Context<'_>) -> Result<()> {
 #[poise::command(slash_command, prefix_command, guild_only, aliases("um"))]
 async fn unmute(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .wrap_err("Songbird Voice client placed in at initialisation.")?
-        .clone();
+    let manager = &ctx.data().songbird;
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
@@ -814,7 +694,7 @@ async fn unmute(ctx: Context<'_>) -> Result<()> {
 async fn nowplaying(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
 
-    let manager = get_manager(ctx.serenity_context()).await;
+    let manager = &ctx.data().songbird;
 
     if let Some(handler) = manager.get(guild_id) {
         let handler = handler.lock().await;
@@ -861,7 +741,7 @@ async fn nowplaying(ctx: Context<'_>) -> Result<()> {
 async fn seek(ctx: Context<'_>, secs: u64) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
 
-    let manager = get_manager(ctx.serenity_context()).await;
+    let manager = &ctx.data().songbird;
 
     if let Some(handler) = manager.get(guild_id) {
         let handler = handler.lock().await;
@@ -937,7 +817,14 @@ async fn insert_source_with_message(
         metadata_lock.insert(track_uuid, metadata.clone());
     }
 
-    let track_handle = handler.enqueue(track).await;
+    // queue the next song few seconds before current song ends
+    let preload_time = if let Some(duration) = metadata.duration {
+        duration.checked_sub(std::time::Duration::from_secs(8))
+    } else {
+        None
+    };
+    let track_handle = handler.enqueue_with_preload(track, preload_time);
+
     track_handle.add_event(
         Event::Track(songbird::TrackEvent::Play),
         TrackPlayNotifier {

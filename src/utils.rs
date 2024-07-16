@@ -95,7 +95,9 @@ impl From<SingleVideo> for YoutubeMetadata {
 
 pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMetadata>> {
     let search_options = SearchOptions::youtube(term).with_count(count.unwrap_or(10));
-    let youtube_search = youtube_dl::YoutubeDl::search_for(&search_options).run()?;
+    let youtube_search = youtube_dl::YoutubeDl::search_for(&search_options)
+        .run_async()
+        .await?;
 
     let videos = match youtube_search {
         YoutubeDlOutput::Playlist(playlist) => {

@@ -1,23 +1,19 @@
-use std::env;
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, env, sync::{Arc, Mutex}};
 
 use eyre::{Context as EyreContext, Result};
 use poise::{serenity_prelude as serenity, FrameworkError};
 use reqwest::Client as HttpClient;
-use songbird::{input::AuxMetadata, typemap::TypeMapKey, SerenityInit};
+use songbird::input::AuxMetadata;
 use tracing::{error, info, instrument, level_filters::LevelFilter};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use uuid::Uuid;
 
-use crate::voice::music;
+use crate::voice::commands::music;
 
 mod utils;
 mod voice;
-mod voice_events;
+
 
 async fn event_handler(
     _ctx: &serenity::Context,
@@ -47,6 +43,7 @@ pub type Context<'a> = poise::Context<'a, Data, eyre::ErrReport>;
 // User data, which is stored and accessible in all command invocations
 pub struct Data {
     http: HttpClient,
+    songbird: Arc<songbird::Songbird>,
     track_metadata: Arc<Mutex<HashMap<Uuid, AuxMetadata>>>,
 }
 
@@ -85,6 +82,9 @@ async fn main() -> Result<()> {
     #[cfg(not(debug_assertions))]
     let prefix = "aya";
 
+    let manager = songbird::Songbird::serenity();
+
+    let manager_clone = manager.clone();
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![about(), help(), ping(), music()],
@@ -159,6 +159,7 @@ async fn main() -> Result<()> {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {
                     http: HttpClient::new(),
+                    songbird: manager_clone,
                     track_metadata: Default::default(),
                 })
             })
@@ -170,19 +171,12 @@ async fn main() -> Result<()> {
         | serenity::GatewayIntents::GUILD_VOICE_STATES;
 
     let mut client = serenity::Client::builder(&token, intents)
+        .voice_manager_arc(manager)
         .framework(framework)
-        .register_songbird()
-        .type_map_insert::<HttpKey>(HttpClient::new())
         .await
-        .expect("Err creating client");
+        .expect("Error creating client");
 
     client.start().await.wrap_err("client ended")
-}
-
-struct HttpKey;
-
-impl TypeMapKey for HttpKey {
-    type Value = HttpClient;
 }
 
 #[poise::command(prefix_command, slash_command)]

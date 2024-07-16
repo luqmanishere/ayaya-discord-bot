@@ -109,10 +109,7 @@ impl VoiceEventHandler for BotInactiveCounter {
         let counter = self.counter.load(Ordering::Relaxed);
         if counter >= 5 {
             // Leave the voice channel
-            let manager = songbird::get(&self.ctx)
-                .await
-                .expect("Songbird Voice client placed in at initialisation.")
-                .clone();
+            let manager = &self.manager;
 
             if let Err(e) = manager.remove(self.guild_id).await {
                 check_msg(
@@ -139,11 +136,11 @@ impl VoiceEventHandler for BotInactiveCounter {
     }
 }
 
+/// Notify the calling channel when a track starts to play
 pub struct TrackPlayNotifier {
     pub channel_id: ChannelId,
     pub metadata: AuxMetadata,
-    pub http: Arc<Http>, // pub ctx: Context<'a>,
-                         // pub manager: Arc<Songbird>,
+    pub http: Arc<Http>,
 }
 
 #[async_trait]
