@@ -141,6 +141,7 @@ dependencies = [
  "serenity 0.12.2 (git+https://github.com/serenity-rs/serenity.git?rev=adf4673ab39e34e92578c6961c2612949ee23bcc)",
  "songbird",
  "symphonia",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-error",

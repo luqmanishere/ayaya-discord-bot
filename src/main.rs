@@ -1,4 +1,8 @@
-use std::{collections::HashMap, env, sync::{Arc, Mutex}};
+use std::{
+    collections::HashMap,
+    env,
+    sync::{Arc, Mutex},
+};
 
 use eyre::{Context as EyreContext, Result};
 use poise::{serenity_prelude as serenity, FrameworkError};
@@ -13,7 +17,6 @@ use crate::voice::commands::music;
 
 mod utils;
 mod voice;
-
 
 async fn event_handler(
     _ctx: &serenity::Context,
@@ -47,9 +50,8 @@ pub struct Data {
     track_metadata: Arc<Mutex<HashMap<Uuid, AuxMetadata>>>,
 }
 
-#[tokio::main]
 #[instrument]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     // Init tracing
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer())
@@ -103,7 +105,7 @@ async fn main() -> Result<()> {
             pre_command: |ctx: Context<'_>| {
                 Box::pin(async move {
                     let command_name = ctx.command().qualified_name.clone();
-                    let author = ctx.author(); 
+                    let author = ctx.author();
                     let channel_id = ctx.channel_id();
                     let guild_id = ctx.guild_id();
                     info!("Command \"{command_name}\" called from channel {channel_id} in guild {guild_id:?} by {} ({})", author.name, author);
@@ -170,13 +172,19 @@ async fn main() -> Result<()> {
         | serenity::GatewayIntents::MESSAGE_CONTENT
         | serenity::GatewayIntents::GUILD_VOICE_STATES;
 
-    let mut client = serenity::Client::builder(&token, intents)
-        .voice_manager_arc(manager)
-        .framework(framework)
-        .await
-        .expect("Error creating client");
+    let rt_main = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
 
-    client.start().await.wrap_err("client ended")
+    rt_main.block_on(async {
+        let mut client = serenity::Client::builder(&token, intents)
+            .voice_manager_arc(manager)
+            .framework(framework)
+            .await
+            .expect("Error creating client");
+
+        client.start().await.wrap_err("client ended")
+    })
 }
 
 #[poise::command(prefix_command, slash_command)]

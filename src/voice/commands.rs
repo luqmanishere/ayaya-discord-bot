@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     sync::{atomic::AtomicUsize, Arc},
     time::Duration,
 };
@@ -10,13 +11,14 @@ use songbird::{
     input::{Compose, YoutubeDl},
     Event,
 };
+use thiserror::Error;
 use tracing::{error, info, log::warn};
 
 // Imports within the crate
 use super::events::*;
 use crate::{
     utils::{
-        self, check_msg, create_search_interaction, error_embed, get_manager, metadata_to_embed,
+        self, check_msg, create_search_interaction, error_embed, metadata_to_embed, yt_playlist,
         yt_search, OptionExt,
     },
     Context,
@@ -105,7 +107,8 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                 )
                 .await?;
 
-                return Ok(());
+                // TODO: replace with proper errors
+                return Err(eyre!("Not in voice channel"));
             }
         };
         if let Some(guild_id) = user_voice_state.guild_id {
@@ -119,7 +122,8 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                         )
                         .await?;
 
-                        return Ok(());
+                        // TODO: replace with proper errors
+                        return Err(eyre!("Not in voice channel"));
                     }
                 }
             } else {
@@ -295,52 +299,122 @@ async fn play(
     // convert vec to a string
     let url = url.join(" ").trim().to_string();
 
+    ctx.defer().await?;
+
     play_inner(ctx, url).await?;
     Ok(())
 }
 
-async fn play_inner(ctx: Context<'_>, url: String) -> Result<()> {
+pub enum PlayParse {
+    Search(String),
+    Url(String),
+    PlaylistUrl(String),
+}
+
+impl PlayParse {
+    pub fn parse(input: &str) -> Self {
+        if input.starts_with("http") {
+            if input.contains("playlist") {
+                return Self::PlaylistUrl(input.to_string());
+            }
+
+            Self::Url(input.to_string())
+        } else {
+            Self::Search(input.to_string())
+        }
+    }
+
+    /// Handle the parsed input for play. Takes the poise context to facilitate communication
+    pub async fn run(self, ctx: Context<'_>) -> Result<()> {
+        let manager = ctx.data().songbird.clone();
+        let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
+        let calling_channel_id = ctx.channel_id();
+        let call = manager.get(guild_id);
+        match self {
+            PlayParse::Search(search) => {
+                info!("searching youtube for: {}", search);
+                let source = YoutubeDl::new_search(ctx.data().http.clone(), search);
+                match handle_single_play(call, calling_channel_id, source, ctx).await {
+                    Ok(_) => {}
+                    Err(_) => {
+                        ctx.send(
+                            poise::CreateReply::default()
+                                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
+                        )
+                        .await?;
+                    }
+                }
+            }
+            PlayParse::Url(url) => {
+                info!("using provided link: {}", url);
+                let source = YoutubeDl::new(ctx.data().http.clone(), url);
+                match handle_single_play(call, calling_channel_id, source, ctx).await {
+                    Ok(_) => {}
+                    Err(_) => {
+                        ctx.send(
+                            poise::CreateReply::default()
+                                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
+                        )
+                        .await?;
+                    }
+                }
+            }
+            PlayParse::PlaylistUrl(playlist_url) => {
+                ctx.reply("Handling playlist....").await?;
+
+                // TODO: implement playlist loading
+                let metadata_vec = yt_playlist(playlist_url).await?;
+
+                let channel_id = ctx.channel_id();
+                let call = manager.get(guild_id);
+
+                for metadata in metadata_vec {
+                    tokio::spawn(handle_from_playlist(
+                        metadata,
+                        ctx.data().http.clone(),
+                        ctx.data().track_metadata.clone(),
+                        call.clone(),
+                        ctx.serenity_context().http.clone(),
+                        channel_id,
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+async fn handle_from_playlist(
+    metadata: utils::YoutubeMetadata,
+    http: reqwest::Client,
+    track_metadata: Arc<std::sync::Mutex<HashMap<uuid::Uuid, songbird::input::AuxMetadata>>>,
+    call: Option<Arc<Mutex<songbird::Call>>>,
+    serenity_http: Arc<serenity::Http>,
+    calling_channel_id: ChannelId,
+) -> Result<songbird::input::AuxMetadata> {
+    // our ids are formatted into youtube links to prevent command line errors
+    let youtube_link = format!("https://www.youtube.com/watch?v={}", metadata.youtube_id);
+
+    let source = YoutubeDl::new(http.clone(), youtube_link);
+    insert_source(
+        source,
+        track_metadata,
+        call,
+        serenity_http,
+        calling_channel_id,
+    )
+    .await
+}
+
+async fn play_inner(ctx: Context<'_>, input: String) -> Result<()> {
+    let input_type = PlayParse::parse(&input);
+
     // join a channel first
     join_helper(ctx, false).await?;
 
-    let search_yt = if !url.starts_with("http") {
-        info!("searching youtube for: {}", url);
-        true
-    } else {
-        info!("got link: {}", url);
-        false
-    };
+    // TODO: check if youtube url
 
-    ctx.defer().await?;
-
-    let guild_id = ctx.guild_id().wrap_err("get guild id from context")?;
-
-    let manager = &ctx.data().songbird;
-
-    // Lock the call to insert the audio into the queue if in voice channel
-    if let Some(handler_lock) = manager.get(guild_id) {
-        // Here, we use lazy restartable sources to make sure that we don't pay
-        // for decoding, playback on tracks which aren't actually live yet.
-        // Refactor this into functions later
-
-        // the above comment is preserved for history. currently youtube playback is handled
-        // by songbird's struct
-
-        let source = if !search_yt {
-            YoutubeDl::new(ctx.data().http.clone(), url)
-        } else {
-            YoutubeDl::new_search(ctx.data().http.clone(), url)
-        };
-        insert_source_with_message(source, handler_lock, ctx).await?;
-    } else {
-        ctx.send(
-            poise::CreateReply::default()
-                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
-        )
-        .await?;
-    }
-
-    Ok(())
+    input_type.run(ctx).await
 }
 
 /// Search YT and get metadata
@@ -796,46 +870,91 @@ async fn seek(ctx: Context<'_>, secs: u64) -> Result<()> {
 }
 
 /// Inserts a youtube source, sets events and notifies the calling channel
-async fn insert_source_with_message(
-    mut source: YoutubeDl,
-    handler_lock: Arc<Mutex<songbird::Call>>,
+async fn handle_single_play(
+    call: Option<Arc<Mutex<songbird::Call>>>,
+    calling_channel_id: ChannelId,
+    source: YoutubeDl,
     ctx: Context<'_>,
 ) -> Result<()> {
-    let mut handler = handler_lock.lock().await;
-    let data = ctx.data();
+    let metadata = insert_source(
+        source,
+        ctx.data().track_metadata.clone(),
+        call,
+        ctx.serenity_context().http.clone(),
+        calling_channel_id,
+    )
+    .await?;
 
-    let metadata = source
-        .aux_metadata()
-        .await
-        .wrap_err("get metadata from the net")?;
-
-    let track: songbird::tracks::Track = source.into();
-    let track_uuid = track.uuid;
-
-    {
-        let mut metadata_lock = data.track_metadata.lock().unwrap();
-        metadata_lock.insert(track_uuid, metadata.clone());
-    }
-
-    // queue the next song few seconds before current song ends
-    let preload_time = if let Some(duration) = metadata.duration {
-        duration.checked_sub(std::time::Duration::from_secs(8))
-    } else {
-        None
-    };
-    let track_handle = handler.enqueue_with_preload(track, preload_time);
-
-    track_handle.add_event(
-        Event::Track(songbird::TrackEvent::Play),
-        TrackPlayNotifier {
-            channel_id: ctx.channel_id(),
-            metadata: metadata.clone(),
-            http: ctx.serenity_context().http.clone(),
-        },
-    )?;
-    // TODO: log added track
     let embed = metadata_to_embed(utils::EmbedOperation::AddToQueue, &metadata, None);
     ctx.send(poise::CreateReply::default().embed(embed)).await?;
 
     Ok(())
+}
+
+/// Process the given source, obtain its metadata and handle track insertion with events. This
+/// function is made to be used with tokio::spawn
+async fn insert_source(
+    mut source: YoutubeDl,
+    track_metadata: Arc<std::sync::Mutex<HashMap<uuid::Uuid, songbird::input::AuxMetadata>>>,
+    call: Option<Arc<Mutex<songbird::Call>>>,
+    serenity_http: Arc<serenity::Http>,
+    calling_channel_id: ChannelId,
+) -> Result<songbird::input::AuxMetadata> {
+    match source.aux_metadata().await {
+        Ok(metadata) => {
+            let track: songbird::tracks::Track = source.into();
+            let track_uuid = track.uuid;
+
+            {
+                let mut metadata_lock = track_metadata.lock().unwrap();
+                metadata_lock.insert(track_uuid, metadata.clone());
+            }
+
+            // queue the next song few seconds before current song ends
+            let preload_time = if let Some(duration) = metadata.duration {
+                duration.checked_sub(std::time::Duration::from_secs(8))
+            } else {
+                None
+            };
+
+            if let Some(handler_lock) = &call {
+                let mut handler = handler_lock.lock().await;
+                let track_handle = handler.enqueue_with_preload(track, preload_time);
+
+                let serenity_http_clone = serenity_http.clone();
+                track_handle
+                    .add_event(
+                        Event::Track(songbird::TrackEvent::Play),
+                        TrackPlayNotifier {
+                            channel_id: calling_channel_id,
+                            metadata: metadata.clone(),
+                            http: serenity_http_clone,
+                        },
+                    )
+                    .unwrap();
+                info!(
+                    "Added track {} ({}) to channel {calling_channel_id}",
+                    metadata.title.clone().unwrap_or_unknown(),
+                    metadata.channel.clone().unwrap_or_unknown()
+                );
+                // Logging added playlist in discord will be annoyying af
+                Ok(metadata)
+            } else {
+                error!("Call does not exist...");
+                Err(eyre!("Call does not exist..."))
+            }
+        }
+        Err(e) => {
+            let err = format!("Unable to get metadata from youtube {e}");
+            error!(err);
+            Err(eyre!(err))
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+#[allow(dead_code)]
+pub enum MusicCommandError {
+    #[error("no calls joined in guild {0}")]
+    BotCallNotJoined(serenity::GuildId),
 }

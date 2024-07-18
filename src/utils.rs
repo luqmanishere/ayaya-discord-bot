@@ -1,14 +1,11 @@
 use std::fmt::{self as fmt};
 use std::ops::Sub;
-use std::sync::Arc;
 use std::time::Duration;
 
 use eyre::{eyre, ContextCompat, Result};
 use poise::serenity_prelude as serenity;
-use serenity::client::Context as SerenityContext;
 use serenity::model::channel::Message;
 use serenity::Result as SerenityResult;
-use songbird::Songbird;
 use tracing::error;
 use youtube_dl::{SearchOptions, SingleVideo, YoutubeDlOutput};
 
@@ -19,12 +16,6 @@ pub fn check_msg(result: SerenityResult<Message>) {
     if let Err(why) = result {
         error!("Error sending message: {:?}", why);
     }
-}
-
-pub async fn get_manager(ctx: &SerenityContext) -> Arc<Songbird> {
-    songbird::get(ctx)
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -100,6 +91,27 @@ pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMe
         .await?;
 
     let videos = match youtube_search {
+        YoutubeDlOutput::Playlist(playlist) => {
+            playlist.entries.wrap_err("expect playlist has entries")?
+        }
+        YoutubeDlOutput::SingleVideo(video) => vec![*video],
+    };
+
+    let metadata_vec = videos
+        .iter()
+        .map(|e| Into::<YoutubeMetadata>::into(e.clone()))
+        .collect::<Vec<_>>();
+
+    Ok(metadata_vec)
+}
+
+pub async fn yt_playlist(playlist_url: String) -> Result<Vec<YoutubeMetadata>> {
+    let youtube_playlist = youtube_dl::YoutubeDl::new(playlist_url)
+        .flat_playlist(true)
+        .run_async()
+        .await?;
+
+    let videos = match youtube_playlist {
         YoutubeDlOutput::Playlist(playlist) => {
             playlist.entries.wrap_err("expect playlist has entries")?
         }

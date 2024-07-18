@@ -19,6 +19,7 @@ reqwest = { version = "0.11" }
 uuid = { version = "*" }
 humantime = { version = "2" }
 youtube_dl = { version = "0.10", features = ["tokio"] }
+thiserror = { version = "1" }
 
 [dependencies.songbird]
 version = "0.4.2"
