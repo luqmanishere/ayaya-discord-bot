@@ -8,9 +8,12 @@ use eyre::{Context as EyreContext, Result};
 use poise::{serenity_prelude as serenity, FrameworkError};
 use reqwest::Client as HttpClient;
 use songbird::input::AuxMetadata;
+use time::UtcOffset;
 use tracing::{error, info, instrument, level_filters::LevelFilter};
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{
+    fmt::time::OffsetTime, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter,
+};
 use uuid::Uuid;
 
 use crate::voice::commands::music;
@@ -52,9 +55,14 @@ pub struct Data {
 
 #[instrument]
 fn main() -> Result<()> {
-    // Init tracing
+    // Init tracing with malaysian offset cause thats where i live and read timestamps
+    let offset = UtcOffset::current_local_offset()
+        .unwrap_or(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().with_timer(OffsetTime::new(
+            offset,
+            time::format_description::well_known::Rfc3339,
+        )))
         .with(ErrorLayer::default())
         .with(
             EnvFilter::builder()

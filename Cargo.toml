@@ -6,7 +6,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "std", "time"] }
 tracing-futures = "0.2"
 tracing = "0.1"
 tracing-error = { version = "0.2", features = ["traced-error"] }
@@ -20,9 +20,10 @@ uuid = { version = "*" }
 humantime = { version = "2" }
 youtube_dl = { version = "0.10", features = ["tokio"] }
 thiserror = { version = "1" }
+time = { version = "0.3", features = ["local-offset"] }
 
 [dependencies.songbird]
-version = "0.4.2"
+version = "0.4.3"
 features = ["builtin-queue", "driver", "serenity"]
 
 [dependencies.serenity]

@@ -362,12 +362,12 @@ impl PlayParse {
             PlayParse::PlaylistUrl(playlist_url) => {
                 ctx.reply("Handling playlist....").await?;
 
-                // TODO: implement playlist loading
                 let metadata_vec = yt_playlist(playlist_url).await?;
 
                 let channel_id = ctx.channel_id();
                 let call = manager.get(guild_id);
 
+                // TODO: make it ordered
                 for metadata in metadata_vec {
                     tokio::spawn(handle_from_playlist(
                         metadata,
