@@ -16,7 +16,8 @@ use songbird::{
 };
 use tracing::{error, info};
 
-use crate::utils::{check_msg, metadata_to_embed};
+use super::utils::{metadata_to_embed, EmbedOperation};
+use crate::utils::check_msg;
 
 pub struct SongFader {
     pub chan_id: ChannelId,
@@ -154,7 +155,7 @@ impl VoiceEventHandler for TrackPlayNotifier {
                         .send_message(
                             self.http.clone(),
                             serenity::CreateMessage::default().embed(metadata_to_embed(
-                                crate::utils::EmbedOperation::NowPlayingNotification,
+                                EmbedOperation::NowPlayingNotification,
                                 &self.metadata,
                                 None,
                             )),

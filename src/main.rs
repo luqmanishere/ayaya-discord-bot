@@ -4,16 +4,19 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use eyre::{Context as EyreContext, Result};
+use color_eyre::{
+    eyre::{self, WrapErr},
+    Result,
+};
 use poise::{serenity_prelude as serenity, FrameworkError};
 use reqwest::Client as HttpClient;
 use songbird::input::AuxMetadata;
 use time::UtcOffset;
-use tracing::{error, info, instrument, level_filters::LevelFilter};
-use tracing_error::ErrorLayer;
-use tracing_subscriber::{
-    fmt::time::OffsetTime, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter,
+use tracing::{
+    error, info, instrument, level_filters::LevelFilter, subscriber::set_global_default,
 };
+use tracing_error::ErrorLayer;
+use tracing_subscriber::{fmt::time::OffsetTime, layer::SubscriberExt, EnvFilter};
 use uuid::Uuid;
 
 use crate::voice::commands::music;
@@ -47,6 +50,7 @@ async fn event_handler(
 pub type Context<'a> = poise::Context<'a, Data, eyre::ErrReport>;
 
 // User data, which is stored and accessible in all command invocations
+#[derive(Debug)]
 pub struct Data {
     http: HttpClient,
     songbird: Arc<songbird::Songbird>,
@@ -55,23 +59,29 @@ pub struct Data {
 
 #[instrument]
 fn main() -> Result<()> {
+    color_eyre::install()?;
+
     // Init tracing with malaysian offset cause thats where i live and read timestamps
     let offset = UtcOffset::current_local_offset()
         .unwrap_or(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_timer(OffsetTime::new(
-            offset,
-            time::format_description::well_known::Rfc3339,
-        )))
+    let registry = tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_timer(OffsetTime::new(
+                    offset,
+                    time::format_description::well_known::Rfc3339,
+                ))
+                .with_thread_ids(true),
+        )
         .with(ErrorLayer::default())
         .with(
             EnvFilter::builder()
                 .with_default_directive(LevelFilter::INFO.into())
                 .from_env_lossy(),
-        )
-        .init();
+        );
+    set_global_default(registry)?;
 
-    info!("log initialized");
+    info!("log initialized with time offset {offset}");
 
     // Configure the client with your Discord bot token in the environment.
     // DISCORD_TOKEN_FILE is searched first, then DISCORD_TOKEN.

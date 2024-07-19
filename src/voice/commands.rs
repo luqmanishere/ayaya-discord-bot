@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use eyre::{eyre, Context as EyreContext, ContextCompat, Result};
+use color_eyre::eyre::{eyre, Context as EyreContext, ContextCompat, Result};
 use poise::serenity_prelude as serenity;
 use serenity::{model::id::ChannelId, prelude::*, Mentionable};
 use songbird::{
@@ -15,12 +15,15 @@ use thiserror::Error;
 use tracing::{error, info, log::warn};
 
 // Imports within the crate
-use super::events::*;
-use crate::{
+use super::{
+    events::*,
     utils::{
-        self, check_msg, create_search_interaction, error_embed, metadata_to_embed, yt_playlist,
-        yt_search, OptionExt,
+        self, create_search_interaction, error_embed, metadata_to_embed, resolve_yt_playlist,
+        yt_search,
     },
+};
+use crate::{
+    utils::{check_msg, OptionExt},
     Context,
 };
 
@@ -43,6 +46,7 @@ use crate::{
         "undeafen",
         "seek",
         "deafen",
+        "delete"
     ),
     aliases("m"),
     subcommand_required
@@ -55,6 +59,7 @@ pub async fn music(ctx: Context<'_>) -> Result<()> {
 // TODO: reply to slash commands properly
 
 /// Deafens Ayaya. She knows how to read lips, you know.
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn deafen(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("command ran in guild")?;
@@ -73,7 +78,7 @@ async fn deafen(ctx: Context<'_>) -> Result<()> {
     let mut handler = handler_lock.lock().await;
 
     if handler.is_deaf() {
-        ctx.reply("Already deafened").await?;
+        ctx.reply("Already deafened.").await?;
     } else {
         if let Err(e) = handler.deafen(true).await {
             error!("Failed to deafen: {e}");
@@ -87,11 +92,13 @@ async fn deafen(ctx: Context<'_>) -> Result<()> {
 }
 
 /// Joins the voice channel the user is currently in. PARTY TIME!
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only, aliases("j"))]
 async fn join(ctx: Context<'_>) -> Result<()> {
     join_helper(ctx, true).await
 }
 
+#[tracing::instrument]
 async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
     let guild: serenity::Guild = ctx.guild().wrap_err("getting guild from context")?.clone();
     let chat_channel_id = ctx.channel_id();
@@ -231,6 +238,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
 }
 
 /// Leaves the current voice channel. Ever wonder what happens to Ayaya then?
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn leave(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("getting guild id from context")?;
@@ -258,6 +266,7 @@ async fn leave(ctx: Context<'_>) -> Result<()> {
 }
 
 /// Mutes Ayaya. Mmmhh mmhh mmmhhh????
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn mute(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from context")?;
@@ -289,6 +298,7 @@ async fn mute(ctx: Context<'_>) -> Result<()> {
 }
 
 /// Plays music from YT url or search term. We are getting help from a higher being...
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, aliases("p"), guild_only)]
 async fn play(
     ctx: Context<'_>,
@@ -362,7 +372,7 @@ impl PlayParse {
             PlayParse::PlaylistUrl(playlist_url) => {
                 ctx.reply("Handling playlist....").await?;
 
-                let metadata_vec = yt_playlist(playlist_url).await?;
+                let metadata_vec = resolve_yt_playlist(playlist_url).await?;
 
                 let channel_id = ctx.channel_id();
                 let call = manager.get(guild_id);
@@ -418,6 +428,7 @@ async fn play_inner(ctx: Context<'_>, input: String) -> Result<()> {
 }
 
 /// Search YT and get metadata
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command)]
 // #[usage("<search term>")]
 // #[example("ayaya intensifies")]
@@ -455,6 +466,7 @@ async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<()> {
 }
 
 /// Skips the currently playing song. Ayaya wonders why you abandoned your summon so easily.
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn skip(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
@@ -486,6 +498,7 @@ async fn skip(ctx: Context<'_>) -> Result<()> {
 }
 
 /// Shows the queue. The only kind of acceptable spoilers.
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, aliases("q"), guild_only)]
 async fn queue(ctx: Context<'_>) -> Result<()> {
     // TODO Implement queue viewing
@@ -545,6 +558,7 @@ async fn queue(ctx: Context<'_>) -> Result<()> {
 }
 
 /// Pause the party. Time is frozen in this bubble universe."
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn pause(ctx: Context<'_>, _args: String) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
@@ -583,6 +597,7 @@ async fn pause(ctx: Context<'_>, _args: String) -> Result<()> {
 }
 
 /// Resume the party. You hear a wind up sound as time speeds up.
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn resume(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
@@ -621,6 +636,7 @@ async fn resume(ctx: Context<'_>) -> Result<()> {
 }
 
 /// Stop all music and clear the queue. Will you stop by again?
+#[tracing::instrument]
 #[poise::command(prefix_command, slash_command, guild_only)]
 async fn stop(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
@@ -644,77 +660,72 @@ async fn stop(ctx: Context<'_>) -> Result<()> {
     Ok(())
 }
 
-// TODO: implement skipping a certain track
+/// Delete song from queue. Being able to make things go *poof* makes you feel like a Kami-sama, right?
+#[tracing::instrument]
+#[poise::command(slash_command, prefix_command, guild_only, aliases("d"))]
+async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<()> {
+    let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
 
-// #[command]
-// #[aliases("d")]
-// #[description("Delete song from queue. Being able to make things go *poof* makes you feel like a Kami-sama, right?")]
-// async fn delete(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-//     let guild = msg.guild(&ctx).await.unwrap();
-//     let guild_id = guild.id;
+    let manager = ctx.data().songbird.clone();
 
-//     let manager = get_manager(ctx).await;
+    if let Some(handler_lock) = manager.get(guild_id) {
+        // If not empty, remove the songs
+        if queue_position != 0 {
+            let handler = handler_lock.lock().await;
+            let queue = handler.queue();
+            if queue_position != 1 {
+                let index = queue_position - 1;
+                if let Some(track) = queue.current_queue().get(index) {
+                    let track_uuid = track.uuid();
+                    let track_metadata = ctx.data().track_metadata.clone();
+                    let metadata = {
+                        let lock = track_metadata.lock().unwrap();
+                        lock.get(&track_uuid)
+                            .wrap_err("getting metadata from map")?
+                            .clone()
+                    };
+                    if queue.dequeue(index).is_some() {
+                        ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
+                            utils::EmbedOperation::DeleteFromQueue,
+                            &metadata,
+                            None,
+                        )))
+                        .await?;
+                    } else {
+                        // TODO: notify user of error
+                        error!("Index {index} does not exist in queue for guild {guild_id}");
+                        return Err(eyre!(
+                            "Index {index} does not exist in queue for guild {guild_id}"
+                        ));
+                    }
+                }
+            } else {
+                ctx.send(poise::CreateReply::default().embed(error_embed(
+                    utils::EmbedOperation::ErrorQueueDeleteNowPlaying,
+                )))
+                .await?;
+            }
+        } else {
+            // Tell them to give arguments
+            ctx.send(
+                poise::CreateReply::default()
+                    .embed(error_embed(utils::EmbedOperation::ErrorQueueDeleteNoArgs)),
+            )
+            .await?;
+        }
+    } else {
+        ctx.send(
+            poise::CreateReply::default()
+                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
+        )
+        .await?;
+    }
 
-//     if let Some(handler_lock) = manager.get(guild_id) {
-//         // If not empty, remove the songs
-//         if !args.is_empty() {
-//             let handler = handler_lock.lock().await;
-//             let queue = handler.queue();
-//             if let Ok(index) = args.single::<usize>() {
-//                 if index != 1 {
-//                     let index = index - 1;
-//                     if let Some(track) = queue.current_queue().get(index) {
-//                         let song_name = track.metadata().title.clone().unwrap();
-//                         let channel_name = track.metadata().title.clone().unwrap();
-//                         check_msg(
-//                             msg.channel_id
-//                                 .say(
-//                                     &ctx.http,
-//                                     format!(
-//                                         "Removing `{} ({})` from position {}",
-//                                         song_name,
-//                                         channel_name,
-//                                         index + 1
-//                                     ),
-//                                 )
-//                                 .await,
-//                         );
-//                         queue.dequeue(index);
-//                     }
-//                 } else {
-//                     check_msg(
-//                         msg.channel_id
-//                             .say(&ctx.http, "Sorry, Ayaya can't delete what she is playing.")
-//                             .await,
-//                     );
-//                 }
-//             }
-//         } else {
-//             // Tell them to give arguments
-//             check_msg(
-//                 msg.channel_id
-//                     .say(
-//                         &ctx.http,
-//                         "Ayaya needs to know which song you want to delete, baka.",
-//                     )
-//                     .await,
-//             );
-//         }
-//     } else {
-//         check_msg(
-//             msg.channel_id
-//                 .say(
-//                     &ctx.http,
-//                     "Ayaya is not in a voice channel, hence she has nothing to delete.",
-//                 )
-//                 .await,
-//         );
-//     }
-
-//     Ok(())
-// }
+    Ok(())
+}
 
 /// Undeafens the bot. Finally, Ayaya pulls out her earplugs.
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn undeafen(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
@@ -740,6 +751,7 @@ async fn undeafen(ctx: Context<'_>) -> Result<()> {
 }
 
 /// Unmutes Ayaya. Poor Ayaya has been talking to herself unnoticed.
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only, aliases("um"))]
 async fn unmute(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
@@ -764,6 +776,7 @@ async fn unmute(ctx: Context<'_>) -> Result<()> {
 }
 
 /// "Shows what song is currently playing. Ayaya really knows everything about herself."
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, aliases("np"), guild_only)]
 async fn nowplaying(ctx: Context<'_>) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
@@ -811,6 +824,8 @@ async fn nowplaying(ctx: Context<'_>) -> Result<()> {
     Ok(())
 }
 
+/// Seeks the track to a position given in seconds
+#[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn seek(ctx: Context<'_>, secs: u64) -> Result<()> {
     let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
@@ -870,6 +885,7 @@ async fn seek(ctx: Context<'_>, secs: u64) -> Result<()> {
 }
 
 /// Inserts a youtube source, sets events and notifies the calling channel
+#[tracing::instrument]
 async fn handle_single_play(
     call: Option<Arc<Mutex<songbird::Call>>>,
     calling_channel_id: ChannelId,
@@ -893,6 +909,7 @@ async fn handle_single_play(
 
 /// Process the given source, obtain its metadata and handle track insertion with events. This
 /// function is made to be used with tokio::spawn
+#[tracing::instrument]
 async fn insert_source(
     mut source: YoutubeDl,
     track_metadata: Arc<std::sync::Mutex<HashMap<uuid::Uuid, songbird::input::AuxMetadata>>>,
