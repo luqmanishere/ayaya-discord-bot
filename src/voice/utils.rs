@@ -2,7 +2,7 @@ use std::fmt;
 use std::ops::Sub;
 use std::time::Duration;
 
-use color_eyre::eyre::{eyre, ContextCompat, Result};
+use anyhow::{anyhow, Context as _, Result};
 use poise::serenity_prelude as serenity;
 use youtube_dl::{SearchOptions, SingleVideo, YoutubeDlOutput};
 
@@ -82,7 +82,7 @@ pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMe
 
     let videos = match youtube_search {
         YoutubeDlOutput::Playlist(playlist) => {
-            playlist.entries.wrap_err("expect playlist has entries")?
+            playlist.entries.context("expect playlist has entries")?
         }
         YoutubeDlOutput::SingleVideo(video) => vec![*video],
     };
@@ -103,7 +103,7 @@ pub async fn resolve_yt_playlist(playlist_url: String) -> Result<Vec<YoutubeMeta
 
     let videos = match youtube_playlist {
         YoutubeDlOutput::Playlist(playlist) => {
-            playlist.entries.wrap_err("expect playlist has entries")?
+            playlist.entries.context("expect playlist has entries")?
         }
         YoutubeDlOutput::SingleVideo(video) => vec![*video],
     };
@@ -372,5 +372,5 @@ pub async fn create_search_interaction(
             )
             .await?;
     }
-    Err(eyre!("No selection made before timeout"))
+    Err(anyhow!("No selection made before timeout"))
 }

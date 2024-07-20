@@ -5,12 +5,18 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+
 [dependencies]
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "std", "time"] }
+tracing-subscriber = { version = "0.3", features = [
+  "env-filter",
+  "fmt",
+  "std",
+  "time",
+] }
 tracing-futures = "0.2"
 tracing = "0.1"
 tracing-error = { version = "0.2", features = ["traced-error"] }
-color-eyre = "0.6"
+# color-eyre = "0.6"
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 poise = { version = "0.6" }
@@ -21,6 +27,10 @@ humantime = { version = "2" }
 youtube_dl = { version = "0.10", features = ["tokio"] }
 thiserror = { version = "1" }
 time = { version = "0.3", features = ["local-offset"] }
+shuttle-runtime = { version = "0.46", default-features = false, optional = true }
+shuttle-serenity = { version = "0.46", optional = true }
+cfg-if = { version = "1" }
+anyhow = "1"
 
 [dependencies.songbird]
 version = "0.4.3"
@@ -44,3 +54,9 @@ features = [
 [dependencies.symphonia]
 version = "0.5"
 features = ["aac", "mp3", "isomp4", "alac"]
+
+
+[features]
+default = ["normal"]
+shuttle = ["dep:shuttle-runtime", "dep:shuttle-serenity"]
+normal = []

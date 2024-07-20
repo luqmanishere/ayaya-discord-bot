@@ -4,3 +4,5 @@
 /.stignore
 /.st*
 /.env
+/Secrets.toml
+/.vscode

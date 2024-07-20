@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use color_eyre::eyre::{eyre, Context as EyreContext, ContextCompat, Result};
+use anyhow::{anyhow, Context as _, Result};
 use poise::serenity_prelude as serenity;
 use serenity::{model::id::ChannelId, prelude::*, Mentionable};
 use songbird::{
@@ -59,10 +59,10 @@ pub async fn music(ctx: Context<'_>) -> Result<()> {
 // TODO: reply to slash commands properly
 
 /// Deafens Ayaya. She knows how to read lips, you know.
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx))]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn deafen(ctx: Context<'_>) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("command ran in guild")?;
+    let guild_id = ctx.guild_id().context("command ran in guild")?;
 
     let manager = &ctx.data().songbird;
 
@@ -100,7 +100,7 @@ async fn join(ctx: Context<'_>) -> Result<()> {
 
 #[tracing::instrument]
 async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
-    let guild: serenity::Guild = ctx.guild().wrap_err("getting guild from context")?.clone();
+    let guild: serenity::Guild = ctx.guild().context("getting guild from context")?.clone();
     let chat_channel_id = ctx.channel_id();
     let user_voice_state: Option<&serenity::VoiceState> = guild.voice_states.get(&ctx.author().id);
 
@@ -115,11 +115,11 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                 .await?;
 
                 // TODO: replace with proper errors
-                return Err(eyre!("Not in voice channel"));
+                return Err(anyhow!("Not in voice channel"));
             }
         };
         if let Some(guild_id) = user_voice_state.guild_id {
-            if guild_id == ctx.guild_id().wrap_err("getting guild id from context")? {
+            if guild_id == ctx.guild_id().context("getting guild id from context")? {
                 match user_voice_state.channel_id {
                     Some(channel_id) => channel_id,
                     None => {
@@ -130,7 +130,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                         .await?;
 
                         // TODO: replace with proper errors
-                        return Err(eyre!("Not in voice channel"));
+                        return Err(anyhow!("Not in voice channel"));
                     }
                 }
             } else {
@@ -143,18 +143,18 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
         } else {
             warn!(
                 "Not in a guild, expected guild id {}",
-                ctx.guild_id().wrap_err("getting guild id from ctx")?
+                ctx.guild_id().context("getting guild id from ctx")?
             );
             // TODO: replace with embed
             ctx.reply("Cache error. Please rejoin the channel").await?;
 
-            return Err(eyre!("Error in the cache: voice state guild_id is None"));
+            return Err(anyhow!("Error in the cache: voice state guild_id is None"));
         }
     };
 
     let manager = &ctx.data().songbird;
 
-    let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
+    let guild_id = ctx.guild_id().context("getting guild id from ctx")?;
 
     let joined;
     let voice_channel_id = match manager.get(guild_id) {
@@ -164,7 +164,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
             ChannelId::new(
                 handler
                     .current_channel()
-                    .wrap_err_with(|| {
+                    .with_context(|| {
                         format!("getting current joined channel in guild {}", guild_id)
                     })?
                     .0
@@ -219,7 +219,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
         let channel_name = voice_channel_id
             .name(ctx)
             .await
-            .wrap_err("getting channel name from id")?;
+            .context("getting channel name from id")?;
         warn!("Already in a channel {}, not joining", channel_name);
         if play_notify_flag {
             // TODO: replace with embed
@@ -241,7 +241,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
 #[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn leave(ctx: Context<'_>) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("getting guild id from context")?;
+    let guild_id = ctx.guild_id().context("getting guild id from context")?;
 
     let manager = &ctx.data().songbird;
     let has_handler = manager.get(guild_id).is_some();
@@ -269,7 +269,7 @@ async fn leave(ctx: Context<'_>) -> Result<()> {
 #[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn mute(ctx: Context<'_>) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("get guild id from context")?;
+    let guild_id = ctx.guild_id().context("get guild id from context")?;
 
     let manager = &ctx.data().songbird;
 
@@ -337,7 +337,7 @@ impl PlayParse {
     /// Handle the parsed input for play. Takes the poise context to facilitate communication
     pub async fn run(self, ctx: Context<'_>) -> Result<()> {
         let manager = ctx.data().songbird.clone();
-        let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
+        let guild_id = ctx.guild_id().context("get guild id from ctx")?;
         let calling_channel_id = ctx.channel_id();
         let call = manager.get(guild_id);
         match self {
@@ -451,7 +451,7 @@ async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<()> {
     // let songbird do the searching
     let search = yt_search(&term, Some(10))
         .await
-        .wrap_err_with(|| eyre!("searching youtube for term: {}", &term))?;
+        .with_context(|| anyhow!("searching youtube for term: {}", &term))?;
 
     match create_search_interaction(ctx, search).await {
         Ok(youtube_id) => {
@@ -469,7 +469,7 @@ async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<()> {
 #[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn skip(ctx: Context<'_>) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
+    let guild_id = ctx.guild_id().context("get guild id from ctx")?;
 
     let manager = &ctx.data().songbird;
 
@@ -481,7 +481,7 @@ async fn skip(ctx: Context<'_>) -> Result<()> {
             let metadata_lock = ctx.data().track_metadata.lock().unwrap();
             metadata_lock
                 .get(&track_uuid)
-                .wrap_err_with(|| eyre!("getting metadata for uuid: {}", track_uuid))?
+                .with_context(|| anyhow!("getting metadata for uuid: {}", track_uuid))?
                 .clone()
         };
         queue.skip()?;
@@ -503,7 +503,7 @@ async fn skip(ctx: Context<'_>) -> Result<()> {
 async fn queue(ctx: Context<'_>) -> Result<()> {
     // TODO Implement queue viewing
     // let guild = msg.guild(&ctx.cache).await.unwrap();
-    let guild_id = ctx.guild_id().wrap_err("getting guild id")?;
+    let guild_id = ctx.guild_id().context("getting guild id")?;
 
     let manager = &ctx.data().songbird;
 
@@ -527,7 +527,7 @@ async fn queue(ctx: Context<'_>) -> Result<()> {
                 let track_uuid = track.uuid();
                 let metadata = metadata_lock
                     .get(&track_uuid)
-                    .wrap_err("getting track metadata")?;
+                    .context("getting track metadata")?;
 
                 lines.push_quote_line(format!(
                     "{}. {} ({})",
@@ -561,7 +561,7 @@ async fn queue(ctx: Context<'_>) -> Result<()> {
 #[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn pause(ctx: Context<'_>, _args: String) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
+    let guild_id = ctx.guild_id().context("get guild id from ctx")?;
 
     let manager = &ctx.data().songbird;
 
@@ -573,7 +573,7 @@ async fn pause(ctx: Context<'_>, _args: String) -> Result<()> {
             let metadata_lock = ctx.data().track_metadata.lock().unwrap();
             metadata_lock
                 .get(&track_uuid)
-                .wrap_err_with(|| eyre!("getting metadata for uuid: {}", track_uuid))?
+                .with_context(|| anyhow!("getting metadata for uuid: {}", track_uuid))?
                 .title
                 .clone()
                 .unwrap_or_unknown()
@@ -600,7 +600,7 @@ async fn pause(ctx: Context<'_>, _args: String) -> Result<()> {
 #[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn resume(ctx: Context<'_>) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
+    let guild_id = ctx.guild_id().context("getting guild id from ctx")?;
 
     let manager = &ctx.data().songbird;
 
@@ -612,7 +612,7 @@ async fn resume(ctx: Context<'_>) -> Result<()> {
             let metadata_lock = ctx.data().track_metadata.lock().unwrap();
             metadata_lock
                 .get(&track_uuid)
-                .wrap_err_with(|| eyre!("getting metadata for uuid: {}", track_uuid))?
+                .with_context(|| anyhow!("getting metadata for uuid: {}", track_uuid))?
                 .title
                 .clone()
                 .unwrap_or_unknown()
@@ -639,7 +639,7 @@ async fn resume(ctx: Context<'_>) -> Result<()> {
 #[tracing::instrument]
 #[poise::command(prefix_command, slash_command, guild_only)]
 async fn stop(ctx: Context<'_>) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
+    let guild_id = ctx.guild_id().context("getting guild id from ctx")?;
 
     let manager = &ctx.data().songbird;
 
@@ -664,7 +664,7 @@ async fn stop(ctx: Context<'_>) -> Result<()> {
 #[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only, aliases("d"))]
 async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
+    let guild_id = ctx.guild_id().context("get guild id from ctx")?;
 
     let manager = ctx.data().songbird.clone();
 
@@ -681,7 +681,7 @@ async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<()> {
                     let metadata = {
                         let lock = track_metadata.lock().unwrap();
                         lock.get(&track_uuid)
-                            .wrap_err("getting metadata from map")?
+                            .context("getting metadata from map")?
                             .clone()
                     };
                     if queue.dequeue(index).is_some() {
@@ -694,7 +694,7 @@ async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<()> {
                     } else {
                         // TODO: notify user of error
                         error!("Index {index} does not exist in queue for guild {guild_id}");
-                        return Err(eyre!(
+                        return Err(anyhow!(
                             "Index {index} does not exist in queue for guild {guild_id}"
                         ));
                     }
@@ -728,7 +728,7 @@ async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<()> {
 #[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn undeafen(ctx: Context<'_>) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("getting guild id from ctx")?;
+    let guild_id = ctx.guild_id().context("getting guild id from ctx")?;
 
     let manager = &ctx.data().songbird;
 
@@ -754,7 +754,7 @@ async fn undeafen(ctx: Context<'_>) -> Result<()> {
 #[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only, aliases("um"))]
 async fn unmute(ctx: Context<'_>) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
+    let guild_id = ctx.guild_id().context("get guild id from ctx")?;
     let manager = &ctx.data().songbird;
 
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -779,7 +779,7 @@ async fn unmute(ctx: Context<'_>) -> Result<()> {
 #[tracing::instrument]
 #[poise::command(slash_command, prefix_command, aliases("np"), guild_only)]
 async fn nowplaying(ctx: Context<'_>) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
+    let guild_id = ctx.guild_id().context("get guild id from ctx")?;
 
     let manager = &ctx.data().songbird;
 
@@ -793,7 +793,7 @@ async fn nowplaying(ctx: Context<'_>) -> Result<()> {
                 let metadata = {
                     let lock = data.track_metadata.lock().unwrap();
                     lock.get(&track_uuid)
-                        .wrap_err("expect track to exist")?
+                        .context("expect track to exist")?
                         .clone()
                 };
 
@@ -828,7 +828,7 @@ async fn nowplaying(ctx: Context<'_>) -> Result<()> {
 #[tracing::instrument]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn seek(ctx: Context<'_>, secs: u64) -> Result<()> {
-    let guild_id = ctx.guild_id().wrap_err("get guild id from ctx")?;
+    let guild_id = ctx.guild_id().context("get guild id from ctx")?;
 
     let manager = &ctx.data().songbird;
 
@@ -841,13 +841,13 @@ async fn seek(ctx: Context<'_>, secs: u64) -> Result<()> {
                 let metadata = {
                     let lock = data.track_metadata.lock().unwrap();
                     lock.get(&track_uuid)
-                        .wrap_err("expect track to exist")?
+                        .context("expect track to exist")?
                         .clone()
                 };
                 track
                     .seek(std::time::Duration::from_secs(secs))
                     .result()
-                    // .wrap_err("seeking track")
+                    // .context("seeking track")
                  ?;
                 let song_name = metadata.title.clone().unwrap();
                 let channel_name = metadata.channel.clone().unwrap();
@@ -958,13 +958,13 @@ async fn insert_source(
                 Ok(metadata)
             } else {
                 error!("Call does not exist...");
-                Err(eyre!("Call does not exist..."))
+                Err(anyhow!("Call does not exist..."))
             }
         }
         Err(e) => {
             let err = format!("Unable to get metadata from youtube {e}");
             error!(err);
-            Err(eyre!(err))
+            Err(anyhow!(err))
         }
     }
 }
