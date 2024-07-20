@@ -3,7 +3,7 @@ use std::sync::{
     Arc,
 };
 
-use poise::serenity_prelude as serenity;
+use poise::serenity_prelude::{self as serenity, UserId};
 use serenity::{
     async_trait,
     http::Http,
@@ -50,6 +50,7 @@ impl VoiceEventHandler for SongFader {
 pub struct BotInactiveCounter {
     pub channel_id: ChannelId,
     pub guild_id: GuildId,
+    pub bot_user_id: UserId,
     pub ctx: SerenityContext,
     pub manager: Arc<Songbird>,
     pub counter: Arc<AtomicUsize>,
@@ -60,13 +61,17 @@ impl VoiceEventHandler for BotInactiveCounter {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
         if let Some(handler_lock) = self.manager.get(self.guild_id) {
             let handler = handler_lock.lock().await;
-            // TODO: leave if noone in channel for 5 minutes
-            let current_channel = handler
-                .current_channel()
-                .expect("a channelid is always present");
+            // TODO: clarify reasons for leaving, not playing or no listener
 
-            let _channel_id: serenity::ChannelId =
-                serenity::ChannelId::new(current_channel.0.into());
+            let alone_in_channel = {
+                match self.guild_id.to_guild_cached(&self.ctx) {
+                    Some(guild) => {
+                        let voice_states = guild.clone().voice_states;
+                        voice_states.len() == 1 && voice_states.contains_key(&self.bot_user_id)
+                    }
+                    None => true,
+                }
+            };
 
             let queue = handler.queue();
             match queue.current() {
@@ -75,6 +80,7 @@ impl VoiceEventHandler for BotInactiveCounter {
                     if track_state.playing == PlayMode::End
                         || track_state.playing == PlayMode::Pause
                         || track_state.playing == PlayMode::Stop
+                        || alone_in_channel
                     {
                         let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
                         info!(

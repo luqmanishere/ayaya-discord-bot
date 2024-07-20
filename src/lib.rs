@@ -4,10 +4,14 @@ use std::{
 };
 
 use anyhow::{Context as _, Result};
-use poise::{serenity_prelude as serenity, FrameworkError};
+use poise::{
+    serenity_prelude::{self as serenity},
+    FrameworkError,
+};
 use reqwest::Client as HttpClient;
 use songbird::input::AuxMetadata;
 use time::UtcOffset;
+use tokio::sync::RwLock;
 use tracing::{error, info, level_filters::LevelFilter, subscriber::set_global_default};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{fmt::time::OffsetTime, layer::SubscriberExt, EnvFilter};
@@ -26,6 +30,7 @@ pub struct Data {
     http: HttpClient,
     songbird: Arc<songbird::Songbird>,
     track_metadata: Arc<Mutex<HashMap<Uuid, AuxMetadata>>>,
+    user_id: RwLock<serenity::UserId>,
 }
 
 pub async fn client(token: String) -> Result<serenity::Client> {
@@ -105,8 +110,8 @@ pub async fn client(token: String) -> Result<serenity::Client> {
                     }
                 })
             },
-            event_handler: |ctx, event, framework, data| {
-                Box::pin(event_handler(ctx, event, framework, data))
+            event_handler: |ctx, event, framework,  data| {
+                Box::pin(event_handler(ctx, event, framework,   data))
             },
             ..Default::default()
         })
@@ -118,6 +123,7 @@ pub async fn client(token: String) -> Result<serenity::Client> {
                     http: HttpClient::new(),
                     songbird: manager_clone,
                     track_metadata: Default::default(),
+                    user_id: Default::default()
                 })
             })
         })
@@ -169,10 +175,15 @@ async fn event_handler(
         serenity::FullEvent::Ready { data_about_bot, .. } => {
             let bot_user_name = &data_about_bot.user.name;
             let session_id = &data_about_bot.session_id;
+            let bot_user_id = data_about_bot.user.id;
             info!(
                 "Logged in as {} with session id {}.",
                 bot_user_name, session_id
             );
+            {
+                let mut user_id_lock = _data.user_id.write().await;
+                *user_id_lock = bot_user_id;
+            }
         }
         serenity::FullEvent::CacheReady { guilds } => {
             info!("Cached guild info is ready for {} guilds.", guilds.len());

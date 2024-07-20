@@ -196,6 +196,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                 call.deafen(true).await?;
 
                 // TODO: Add event to detect inactivity
+                let bot_user_id = { *ctx.data().user_id.read().await };
 
                 // inactive counter bot
                 call.add_global_event(
@@ -204,6 +205,7 @@ async fn join_helper(ctx: Context<'_>, play_notify_flag: bool) -> Result<()> {
                         channel_id: chat_channel_id,
                         counter: Arc::new(AtomicUsize::new(0)),
                         guild_id,
+                        bot_user_id,
                         manager: ctx.data().songbird.clone(),
                         ctx: ctx.serenity_context().to_owned(),
                     },
