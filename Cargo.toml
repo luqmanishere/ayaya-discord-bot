@@ -30,6 +30,7 @@ shuttle-runtime = { version = "0.46", default-features = false, optional = true 
 shuttle-serenity = { version = "0.46", optional = true }
 cfg-if = { version = "1" }
 anyhow = "1"
+miette = { version = "7" }
 
 [dependencies.songbird]
 version = "0.4.3"

@@ -1,3 +1,4 @@
+use miette::Diagnostic;
 use poise::serenity_prelude as serenity;
 use thiserror::Error;
 use tracing::error;
@@ -28,12 +29,21 @@ pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
         }
         poise::FrameworkError::Command { error, ctx, .. } => {
             let cmd = ctx.command().name.clone();
-            error!("Error in command ({}): {}", cmd, error);
+            error!("Error executing command ({}): {}", cmd, error);
             // TODO: flesh out user facing error message
-            ctx.channel_id()
-                .say(ctx, "Error running whatever you did")
-                .await
-                .expect("works");
+
+            let error_help = { error.help().map(|e| e.to_string()) };
+            match error_help {
+                Some(error_str) => {
+                    ctx.reply(error_str).await.expect("ok");
+                }
+                None => {
+                    ctx.channel_id()
+                        .say(ctx, "Error running whatever you did")
+                        .await
+                        .expect("works");
+                }
+            }
         }
         other => {
             if let Err(e) = poise::builtins::on_error(other).await {
@@ -43,9 +53,10 @@ pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Diagnostic, Debug)]
 pub enum BotError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     MusicCommandError(#[from] MusicCommandError),
     #[error("Ayaya is unable to figure out her Guild ID.")]
     NoGuildId,

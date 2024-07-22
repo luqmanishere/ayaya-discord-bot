@@ -1,9 +1,11 @@
+use miette::Diagnostic;
 use poise::serenity_prelude as serenity;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Diagnostic, Debug)]
 pub enum MusicCommandError {
     #[error("Ayaya has not joined any voice channels in the guild {voice_guild_id}.")]
+    #[diagnostic(help("Try joining Ayaya to a voice channel with the join command."))]
     BotVoiceNotJoined { voice_guild_id: serenity::GuildId },
     #[error("Ayaya can't find user {user} in any voice channel in the guild {voice_guild_id}")]
     UserVoiceNotJoined {

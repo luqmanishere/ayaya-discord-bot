@@ -76,7 +76,9 @@ pub async fn client(token: String) -> Result<serenity::Client> {
                 })
             },
             on_error: |error: FrameworkError<'_, Data, BotError>| {
-                Box::pin(error_handler(error))
+                Box::pin(
+                    error_handler(error)
+                )
             },
             event_handler: |ctx, event, framework,  data| {
                 Box::pin(event_handler(ctx, event, framework,   data))
