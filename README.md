@@ -10,5 +10,5 @@ Built upon [serenity-rs/serenity](https://github.com/serenity-rs/serenity) and [
 
 - [x] Detect inactivity and leave automatically
 - [x] Queue management
-- [ ] Youtube playlists
+- [x] Youtube playlists
 - [ ] Minigames

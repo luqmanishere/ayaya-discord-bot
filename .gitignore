@@ -6,3 +6,4 @@
 /.env
 /Secrets.toml
 /.vscode
+/rust-analyzer.json

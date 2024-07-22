@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Context as _, Result};
+use error::{error_handler, BotError};
 use poise::{
     serenity_prelude::{self as serenity},
     FrameworkError,
@@ -12,17 +13,18 @@ use reqwest::Client as HttpClient;
 use songbird::input::AuxMetadata;
 use time::UtcOffset;
 use tokio::sync::RwLock;
-use tracing::{error, info, level_filters::LevelFilter, subscriber::set_global_default};
+use tracing::{info, level_filters::LevelFilter, subscriber::set_global_default};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{fmt::time::OffsetTime, layer::SubscriberExt, EnvFilter};
 use uuid::Uuid;
 
 use crate::voice::commands::music;
 
+pub mod error;
 pub mod utils;
 pub mod voice;
 
-pub type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
+pub type Context<'a> = poise::Context<'a, Data, BotError>;
 
 // User data, which is stored and accessible in all command invocations
 #[derive(Debug)]
@@ -60,6 +62,8 @@ pub async fn client(token: String) -> Result<serenity::Client> {
                 }),*/
                 mention_as_prefix: true,
                 case_insensitive_commands: true,
+                execute_untracked_edits:true,
+                edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(std::time::Duration::from_secs(20)))),
                 ..Default::default()
             },
             pre_command: |ctx: Context<'_>| {
@@ -71,44 +75,8 @@ pub async fn client(token: String) -> Result<serenity::Client> {
                     info!("Command \"{command_name}\" called from channel {channel_id} in guild {guild_id:?} by {} ({})", author.name, author);
                 })
             },
-            on_error: |error: FrameworkError<'_, Data, anyhow::Error>| {
-                Box::pin(async move {
-                    error!("error error error {}", error);
-                    match error {
-                        poise::FrameworkError::ArgumentParse { error, .. } => {
-                            if let Some(error) = error.downcast_ref::<serenity::RoleParseError>() {
-                                error!("Found a RoleParseError: {:?}", error);
-                            } else {
-                                error!("Not a RoleParseError :(");
-                            }
-                        }
-                        poise::FrameworkError::UnknownCommand {
-                            ctx,
-                            msg,
-                            msg_content,
-                            ..
-                        } => {
-                            error!("unrecognized command: {}", msg_content);
-                            msg.reply(ctx, format!("unrecognized command: {}", msg_content))
-                                .await
-                                .expect("no errors");
-                        }
-                        poise::FrameworkError::Command { error, ctx, .. } => {
-                            let cmd = ctx.command().name.clone();
-                            error!("Error in command ({}): {}", cmd, error);
-                            // TODO: flesh out user facing error message
-                            ctx.channel_id()
-                                .say(ctx, "Error running whatever you did")
-                                .await
-                                .expect("works");
-                        }
-                        other => {
-                            if let Err(e) = poise::builtins::on_error(other).await {
-                                error!("Error sending error message: {}", e);
-                            }
-                        }
-                    }
-                })
+            on_error: |error: FrameworkError<'_, Data, BotError>| {
+                Box::pin(error_handler(error))
             },
             event_handler: |ctx, event, framework,  data| {
                 Box::pin(event_handler(ctx, event, framework,   data))
@@ -168,9 +136,9 @@ fn setup_logging() -> Result<()> {
 async fn event_handler(
     _ctx: &serenity::Context,
     event: &serenity::FullEvent,
-    _framework: poise::FrameworkContext<'_, Data, anyhow::Error>,
+    _framework: poise::FrameworkContext<'_, Data, BotError>,
     _data: &Data,
-) -> Result<()> {
+) -> Result<(), BotError> {
     match event {
         serenity::FullEvent::Ready { data_about_bot, .. } => {
             let bot_user_name = &data_about_bot.user.name;
@@ -194,7 +162,7 @@ async fn event_handler(
 }
 
 #[poise::command(prefix_command, slash_command)]
-async fn ping(ctx: Context<'_>) -> Result<()> {
+async fn ping(ctx: Context<'_>) -> Result<(), BotError> {
     ctx.reply("Pong!").await?;
 
     Ok(())
@@ -202,7 +170,7 @@ async fn ping(ctx: Context<'_>) -> Result<()> {
 
 /// Ayaya likes to talk about herself...
 #[poise::command(slash_command, prefix_command)]
-async fn about(ctx: Context<'_>) -> Result<()> {
+async fn about(ctx: Context<'_>) -> Result<(), BotError> {
     let about = poise::CreateReply::default()
         .content(
             r"
@@ -223,7 +191,7 @@ Consider leaving a star on the Github page!
 pub async fn help(
     ctx: Context<'_>,
     #[description = "Specific command to show help about"] command: Option<String>,
-) -> Result<()> {
+) -> Result<(), BotError> {
     let configuration = poise::builtins::HelpConfiguration {
         // [configure aspects about the help message here]
         ..Default::default()

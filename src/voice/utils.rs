@@ -2,11 +2,12 @@ use std::fmt;
 use std::ops::Sub;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context as _, Result};
 use poise::serenity_prelude as serenity;
 use youtube_dl::{SearchOptions, SingleVideo, YoutubeDlOutput};
 
-use crate::{utils::OptionExt, Context};
+use crate::{utils::OptionExt, BotError, Context};
+
+use super::error::MusicCommandError;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct YoutubeMetadata {
@@ -74,16 +75,17 @@ impl From<SingleVideo> for YoutubeMetadata {
     }
 }
 
-pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMetadata>> {
+pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMetadata>, BotError> {
     let search_options = SearchOptions::youtube(term).with_count(count.unwrap_or(10));
     let youtube_search = youtube_dl::YoutubeDl::search_for(&search_options)
         .run_async()
-        .await?;
+        .await
+        .map_err(MusicCommandError::YoutubeDlError)?;
 
     let videos = match youtube_search {
-        YoutubeDlOutput::Playlist(playlist) => {
-            playlist.entries.context("expect playlist has entries")?
-        }
+        YoutubeDlOutput::Playlist(playlist) => playlist
+            .entries
+            .ok_or(MusicCommandError::YoutubeDlEmptyPlaylist)?,
         YoutubeDlOutput::SingleVideo(video) => vec![*video],
     };
 
@@ -95,16 +97,17 @@ pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMe
     Ok(metadata_vec)
 }
 
-pub async fn resolve_yt_playlist(playlist_url: String) -> Result<Vec<YoutubeMetadata>> {
+pub async fn resolve_yt_playlist(playlist_url: String) -> Result<Vec<YoutubeMetadata>, BotError> {
     let youtube_playlist = youtube_dl::YoutubeDl::new(playlist_url)
         .flat_playlist(true)
         .run_async()
-        .await?;
+        .await
+        .map_err(MusicCommandError::YoutubeDlError)?;
 
     let videos = match youtube_playlist {
-        YoutubeDlOutput::Playlist(playlist) => {
-            playlist.entries.context("expect playlist has entries")?
-        }
+        YoutubeDlOutput::Playlist(playlist) => playlist
+            .entries
+            .ok_or(MusicCommandError::YoutubeDlEmptyPlaylist)?,
         YoutubeDlOutput::SingleVideo(video) => vec![*video],
     };
 
@@ -277,7 +280,7 @@ pub fn error_embed(operation: EmbedOperation) -> serenity::CreateEmbed {
 pub async fn create_search_interaction(
     ctx: Context<'_>,
     metadata_vec: Vec<YoutubeMetadata>,
-) -> Result<String> {
+) -> Result<String, BotError> {
     // Define some unique identifiers for the navigation buttons
     let ctx_id = ctx.id();
     let prev_button_id = format!("{}prev", ctx_id);
@@ -372,5 +375,5 @@ pub async fn create_search_interaction(
             )
             .await?;
     }
-    Err(anyhow!("No selection made before timeout"))
+    Err(MusicCommandError::SearchTimeout.into())
 }

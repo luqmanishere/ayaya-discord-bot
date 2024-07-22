@@ -46,7 +46,7 @@ impl VoiceEventHandler for SongFader {
 
 /// Bot inactive counter. Will start counting when song ends, is stopped or paused.
 /// The check is ran every 60 seconds, so the 5 minutes actually has a margin
-/// of 1 min.
+/// of 1 min. Also starts counting when the bot is alone in the voice channel
 pub struct BotInactiveCounter {
     pub channel_id: ChannelId,
     pub guild_id: GuildId,
@@ -59,6 +59,7 @@ pub struct BotInactiveCounter {
 #[async_trait]
 impl VoiceEventHandler for BotInactiveCounter {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
+        // TODO: simplify
         if let Some(handler_lock) = self.manager.get(self.guild_id) {
             let handler = handler_lock.lock().await;
             // TODO: clarify reasons for leaving, not playing or no listener
