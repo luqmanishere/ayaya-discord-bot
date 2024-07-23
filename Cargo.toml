@@ -26,8 +26,8 @@ humantime = { version = "2" }
 youtube_dl = { version = "0.10", features = ["tokio"] }
 thiserror = { version = "1" }
 time = { version = "0.3", features = ["local-offset"] }
-shuttle-runtime = { version = "0.46", default-features = false, optional = true }
-shuttle-serenity = { version = "0.46", optional = true }
+shuttle-runtime = { version = "0.47", default-features = false, optional = true }
+shuttle-serenity = { version = "0.47", optional = true }
 cfg-if = { version = "1" }
 anyhow = "1"
 miette = { version = "7" }
