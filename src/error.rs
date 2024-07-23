@@ -39,7 +39,7 @@ pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
                 }
                 None => {
                     ctx.channel_id()
-                        .say(ctx, "Error running whatever you did")
+                        .say(ctx, "Error running command: {cmd}")
                         .await
                         .expect("works");
                 }
@@ -63,6 +63,7 @@ pub enum BotError {
     #[error("Ayaya is has confused her current Guild")]
     NoGuild,
     #[error("Cache is stale, please rejoin voice channels")]
+    #[diagnostic(help("Try rejoining the voice channel."))]
     GuildCacheStale,
     #[error("Ayaya is confused, how is your guild info not matching?")]
     GuildMismatch,

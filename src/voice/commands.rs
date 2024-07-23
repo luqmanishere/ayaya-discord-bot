@@ -123,16 +123,12 @@ async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotE
 
             if play_notify_flag {
                 // TODO: replace with embed
-                ctx.channel_id()
-                    .say(
-                        ctx,
-                        format!(
-                            "Already in voice channel \"{}\"",
-                            voice_channel_id.mention()
-                        ),
-                    )
-                    .await
-                    .map_err(BotError::GeneralSerenityError)?;
+                ctx.reply(format!(
+                    "Already in voice channel \"{}\"",
+                    voice_channel_id.mention()
+                ))
+                .await
+                .map_err(BotError::GeneralSerenityError)?;
             }
         }
         None => {
