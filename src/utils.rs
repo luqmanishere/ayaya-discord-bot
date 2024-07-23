@@ -28,3 +28,19 @@ pub fn get_guild_id(ctx: Context<'_>) -> Result<serenity::GuildId, BotError> {
 pub fn get_guild(ctx: Context<'_>) -> Result<serenity::Guild, BotError> {
     Ok(ctx.guild().ok_or(BotError::NoGuild)?.clone())
 }
+
+pub fn get_guild_name(ctx: Context<'_>) -> Result<String, BotError> {
+    Ok(get_guild_id(ctx)?
+        .name(ctx)
+        .unwrap_or("Unknown Guild".to_string()))
+}
+
+pub async fn get_channel_name_id(
+    ctx: Context<'_>,
+    channel_id: serenity::ChannelId,
+) -> Result<String, BotError> {
+    Ok(channel_id
+        .name(ctx)
+        .await
+        .unwrap_or("Unknown Channel".to_string()))
+}

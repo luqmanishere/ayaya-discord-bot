@@ -2,25 +2,31 @@ use miette::Diagnostic;
 use poise::serenity_prelude as serenity;
 use thiserror::Error;
 
+// TODO: include names of guilds and channels
 #[derive(Error, Diagnostic, Debug)]
 pub enum MusicCommandError {
     #[error("Ayaya has not joined any voice channels in the guild {voice_guild_id}.")]
     #[diagnostic(help("Try joining Ayaya to a voice channel with the join command."))]
     BotVoiceNotJoined { voice_guild_id: serenity::GuildId },
-    #[error("Ayaya can't find user {user} in any voice channel in the guild {voice_guild_id}")]
+    #[error(
+        "Ayaya can't find user {} ({}) in any voice channel in the guild {voice_guild_name} ({voice_guild_id})", user.name, user.id
+    )]
     #[diagnostic(help("Try joining a voice channel before running the command."))]
     UserVoiceNotJoined {
         user: serenity::User,
         voice_guild_id: serenity::GuildId,
+        voice_guild_name: String,
     },
     #[error(
-        "Failed to join voice channel {voice_channel_id} in guild {voice_guild_id} due to {source}"
+        "Failed to join voice channel {voice_guild_name} ({voice_channel_id}) in guild {voice_guild_name} ({voice_guild_id}) due to {source}"
     )]
     #[diagnostic(help("Contact @solemnattic for assistance"))]
     FailedJoinCall {
         source: songbird::error::JoinError,
         voice_guild_id: serenity::GuildId,
+        voice_guild_name: String,
         voice_channel_id: serenity::ChannelId,
+        voice_channel_name: String,
     },
     #[error(
         "Failed to unmute voice channel {voice_channel_id} in guild {voice_guild_id} due to {source}"

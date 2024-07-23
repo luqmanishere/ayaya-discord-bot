@@ -22,7 +22,7 @@ use super::{
     },
 };
 use crate::{
-    utils::{check_msg, get_guild, get_guild_id, OptionExt},
+    utils::{check_msg, get_channel_name_id, get_guild, get_guild_id, get_guild_name, OptionExt},
     voice::error::MusicCommandError,
     BotError, Context,
 };
@@ -101,12 +101,13 @@ async fn join(ctx: Context<'_>) -> Result<(), BotError> {
 #[tracing::instrument(skip(ctx))]
 async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotError> {
     let guild: serenity::Guild = get_guild(ctx)?;
+    let guild_id = get_guild_id(ctx)?;
+    let guild_name = get_guild_name(ctx)?;
     let chat_channel_id = ctx.channel_id();
     let user_voice_state_option: Option<&serenity::VoiceState> =
         guild.voice_states.get(&ctx.author().id);
 
     let manager = ctx.data().songbird.clone();
-    let guild_id = get_guild_id(ctx)?;
 
     // check if we are already in a call
     match manager.get(guild_id) {
@@ -136,6 +137,7 @@ async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotE
                 user_voice_state_option.ok_or(MusicCommandError::UserVoiceNotJoined {
                     user: ctx.author().clone(),
                     voice_guild_id: guild_id,
+                    voice_guild_name: guild_name.clone(),
                 })?;
 
             // the voice channel id to join
@@ -147,6 +149,7 @@ async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotE
                         .ok_or(MusicCommandError::UserVoiceNotJoined {
                             user: ctx.author().clone(),
                             voice_guild_id: guild_id,
+                            voice_guild_name: guild_name.clone(),
                         })?
                 } else {
                     return Err(BotError::GuildMismatch);
@@ -212,7 +215,9 @@ async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotE
                     return Err(MusicCommandError::FailedJoinCall {
                         source: e,
                         voice_guild_id: guild_id,
+                        voice_guild_name: guild_name,
                         voice_channel_id,
+                        voice_channel_name: get_channel_name_id(ctx, voice_channel_id).await?,
                     }
                     .into());
                 }
