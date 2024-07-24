@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let mut client = client(token).await?;
+    let mut client = client(token, None).await?;
     Ok(client.start().await?)
 }
 
@@ -31,6 +31,7 @@ async fn shuttle_main(
     #[shuttle_runtime::Secrets] secret_store: shuttle_runtime::SecretStore,
 ) -> shuttle_serenity::ShuttleSerenity {
     use anyhow::Context as _;
+    use ayaya_discord_bot::LokiOpts;
 
     // Install external dependency (in the shuttle container only)
     use std::env;
@@ -78,6 +79,27 @@ async fn shuttle_main(
         .get("DISCORD_TOKEN")
         .context("'DISCORD_TOKEN' was not found")?;
 
-    let client = client(token).await?;
+    let loki = match secret_store.get("GRAFANA_USER") {
+        Some(grafana_user) => {
+            let grafana_api_key = secret_store
+                .get("GRAFANA_API_KEY")
+                .context("'GRAFANA_API_KEY' is not found")?;
+            let application_log_label = secret_store
+                .get("APPLICATION_LOG_LABEL")
+                .context("'APPLICATION_LOG_LABEL' is not found")?;
+
+            Some(LokiOpts {
+                grafana_user,
+                grafana_api_key,
+                application_log_label,
+            })
+        }
+        None => {
+            println!("Grafana Loki will not be used");
+            None
+        }
+    };
+
+    let client = client(token, loki).await?;
     Ok(client.into())
 }

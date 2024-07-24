@@ -4,6 +4,6 @@
 /.stignore
 /.st*
 /.env
-/Secrets.toml
+/Secrets*.toml
 /.vscode
 /rust-analyzer.json

@@ -31,6 +31,9 @@ shuttle-serenity = { version = "0.47", optional = true }
 cfg-if = { version = "1" }
 anyhow = "1"
 miette = { version = "7" }
+tracing-loki = "0.2.5"
+base64 = "0.22.1"
+url = "2.5.2"
 
 [dependencies.songbird]
 version = "0.4.3"

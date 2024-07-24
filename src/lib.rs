@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Context as _, Result};
+use base64::Engine as _;
 use error::{error_handler, BotError};
 use poise::{
     serenity_prelude::{self as serenity},
@@ -35,10 +36,10 @@ pub struct Data {
     user_id: RwLock<serenity::UserId>,
 }
 
-pub async fn client(token: String) -> Result<serenity::Client> {
+pub async fn client(token: String, loki: Option<LokiOpts>) -> Result<serenity::Client> {
     // color_eyre::install()?;
 
-    setup_logging()?;
+    setup_logging(loki).await?;
 
     #[cfg(debug_assertions)]
     let prefix = "~";
@@ -110,26 +111,60 @@ pub async fn client(token: String) -> Result<serenity::Client> {
         .context("Error creating client")
 }
 
-fn setup_logging() -> Result<()> {
+async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
     // Init tracing with malaysian offset cause thats where i live and read timestamps
     let offset = UtcOffset::current_local_offset()
         .unwrap_or(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
-    let registry = tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_timer(OffsetTime::new(
-                    offset,
-                    time::format_description::well_known::Rfc3339,
-                ))
-                .with_thread_ids(true),
-        )
-        .with(ErrorLayer::default())
-        .with(
-            EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
-                .from_env_lossy(),
-        );
-    set_global_default(registry)?;
+
+    match loki {
+        Some(loki) => {
+            let url = url::Url::parse("https://logs-prod-020.grafana.net")?;
+
+            let builder = tracing_loki::builder()
+                .label("application", loki.application_log_label.clone())?
+                .extra_field("pid", format!("{}", std::process::id()))?
+                .http_header("Authorization", format!("Basic {}", loki.get_basic_auth()))?;
+
+            let (layer, task) = builder.build_url(url)?;
+            let registry = tracing_subscriber::registry()
+                .with(
+                    EnvFilter::builder()
+                        .with_default_directive(LevelFilter::INFO.into())
+                        .from_env_lossy(),
+                )
+                .with(
+                    tracing_subscriber::fmt::layer()
+                        .with_timer(OffsetTime::new(
+                            offset,
+                            time::format_description::well_known::Rfc3339,
+                        ))
+                        .with_thread_ids(true),
+                )
+                .with(ErrorLayer::default())
+                .with(layer);
+            set_global_default(registry)?;
+            tokio::spawn(task);
+        }
+        None => {
+            println!("Not sending logs to Grafana Loki");
+            let registry = tracing_subscriber::registry()
+                .with(
+                    EnvFilter::builder()
+                        .with_default_directive(LevelFilter::INFO.into())
+                        .from_env_lossy(),
+                )
+                .with(
+                    tracing_subscriber::fmt::layer()
+                        .with_timer(OffsetTime::new(
+                            offset,
+                            time::format_description::well_known::Rfc3339,
+                        ))
+                        .with_thread_ids(true),
+                )
+                .with(ErrorLayer::default());
+            set_global_default(registry)?;
+        }
+    };
 
     info!("log initialized with time offset {offset}");
     Ok(())
@@ -200,4 +235,16 @@ pub async fn help(
     };
     poise::builtins::help(ctx, command.as_deref(), configuration).await?;
     Ok(())
+}
+
+pub struct LokiOpts {
+    pub grafana_user: String,
+    pub grafana_api_key: String,
+    pub application_log_label: String,
+}
+impl LokiOpts {
+    pub fn get_basic_auth(&self) -> String {
+        let basic_auth = format!("{}:{}", self.grafana_user, self.grafana_api_key);
+        base64::engine::general_purpose::STANDARD.encode(basic_auth.as_bytes())
+    }
 }
