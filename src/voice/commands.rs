@@ -59,7 +59,7 @@ pub async fn music(ctx: Context<'_>) -> Result<(), BotError> {
 // TODO: reply to slash commands properly
 
 /// Deafens Ayaya. She knows how to read lips, you know.
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn deafen(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
@@ -92,7 +92,7 @@ async fn deafen(ctx: Context<'_>) -> Result<(), BotError> {
 }
 
 /// Joins the voice channel the user is currently in. PARTY TIME!
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only, aliases("j"))]
 async fn join(ctx: Context<'_>) -> Result<(), BotError> {
     join_inner(ctx, true).await
@@ -229,7 +229,7 @@ async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotE
 }
 
 /// Leaves the current voice channel. Ever wonder what happens to Ayaya then?
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn leave(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
@@ -257,7 +257,7 @@ async fn leave(ctx: Context<'_>) -> Result<(), BotError> {
 }
 
 /// Mutes Ayaya. Mmmhh mmhh mmmhhh????
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn mute(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
@@ -289,7 +289,7 @@ async fn mute(ctx: Context<'_>) -> Result<(), BotError> {
 }
 
 /// Plays music from YT url or search term. We are getting help from a higher being...
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, aliases("p"), guild_only)]
 async fn play(
     ctx: Context<'_>,
@@ -361,6 +361,7 @@ impl PlayParse {
                 }
             }
             PlayParse::PlaylistUrl(playlist_url) => {
+                info!("using provided playlist link: {playlist_url}");
                 ctx.reply("Handling playlist....").await?;
 
                 let metadata_vec = resolve_yt_playlist(playlist_url).await?;
@@ -385,6 +386,7 @@ impl PlayParse {
     }
 }
 
+// TODO: decide if this needs to be instrumented
 async fn handle_from_playlist(
     metadata: utils::YoutubeMetadata,
     http: reqwest::Client,
@@ -419,7 +421,7 @@ async fn play_inner(ctx: Context<'_>, input: String) -> Result<(), BotError> {
 }
 
 /// Search YT and get metadata
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command)]
 // #[usage("<search term>")]
 // #[example("ayaya intensifies")]
@@ -460,7 +462,7 @@ async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<(), BotErr
 }
 
 /// Skips the currently playing song. Ayaya wonders why you abandoned your summon so easily.
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn skip(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
@@ -498,7 +500,7 @@ async fn skip(ctx: Context<'_>) -> Result<(), BotError> {
 }
 
 /// Shows the queue. The only kind of acceptable spoilers.
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, aliases("q"), guild_only)]
 async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
     // TODO Implement queue viewing
@@ -541,15 +543,12 @@ async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
             .colour(serenity::Colour::MEIBE_PINK)
             .description(lines.to_string());
 
-        let msg = serenity::CreateMessage::new().embed(embed);
-
-        check_msg(ctx.channel_id().send_message(ctx, msg).await);
+        ctx.send(poise::CreateReply::default().embed(embed)).await?;
     } else {
-        check_msg(
-            ctx.channel_id()
-                .say(ctx, "Not in a voice channel to play in")
-                .await,
-        );
+        return Err(MusicCommandError::BotVoiceNotJoined {
+            voice_guild_id: guild_id,
+        }
+        .into());
     }
     //TODO check for
 
@@ -557,7 +556,7 @@ async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
 }
 
 /// Pause the party. Time is frozen in this bubble universe."
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn pause(ctx: Context<'_>, _args: String) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
@@ -602,7 +601,7 @@ async fn pause(ctx: Context<'_>, _args: String) -> Result<(), BotError> {
 }
 
 /// Resume the party. You hear a wind up sound as time speeds up.
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn resume(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
@@ -636,18 +635,17 @@ async fn resume(ctx: Context<'_>) -> Result<(), BotError> {
                 .await,
         );
     } else {
-        check_msg(
-            ctx.channel_id()
-                .say(ctx, "Not in a voice channel to play in")
-                .await,
-        );
+        return Err(MusicCommandError::BotVoiceNotJoined {
+            voice_guild_id: guild_id,
+        }
+        .into());
     }
 
     Ok(())
 }
 
 /// Stop all music and clear the queue. Will you stop by again?
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(prefix_command, slash_command, guild_only)]
 async fn stop(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
@@ -661,18 +659,17 @@ async fn stop(ctx: Context<'_>) -> Result<(), BotError> {
 
         check_msg(ctx.channel_id().say(ctx, "Queue cleared.").await);
     } else {
-        check_msg(
-            ctx.channel_id()
-                .say(ctx, "Not in a voice channel to play in")
-                .await,
-        );
+        return Err(MusicCommandError::BotVoiceNotJoined {
+            voice_guild_id: guild_id,
+        }
+        .into());
     }
 
     Ok(())
 }
 
 /// Delete song from queue. Being able to make things go *poof* makes you feel like a Kami-sama, right?
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only, aliases("d"))]
 async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
@@ -744,7 +741,7 @@ async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<(), BotError>
 }
 
 /// Undeafens the bot. Finally, Ayaya pulls out her earplugs.
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn undeafen(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
@@ -753,24 +750,28 @@ async fn undeafen(ctx: Context<'_>) -> Result<(), BotError> {
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
-        if let Err(e) = handler.deafen(false).await {
-            check_msg(ctx.channel_id().say(ctx, format!("Failed: {:?}", e)).await);
-        }
+        handler
+            .deafen(false)
+            .await
+            .map_err(|e| MusicCommandError::FailedUndeafenCall {
+                source: e,
+                voice_guild_id: guild_id,
+                voice_channel_id: ctx.channel_id(),
+            })?;
 
-        check_msg(ctx.channel_id().say(ctx, "Undeafened").await);
+        ctx.reply("Undeafened").await?;
     } else {
-        check_msg(
-            ctx.channel_id()
-                .say(ctx, "Ayaya is not in a voice channel to undeafen in.")
-                .await,
-        );
+        return Err(MusicCommandError::BotVoiceNotJoined {
+            voice_guild_id: guild_id,
+        }
+        .into());
     }
 
     Ok(())
 }
 
 /// Unmutes Ayaya. Poor Ayaya has been talking to herself unnoticed.
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only, aliases("um"))]
 async fn unmute(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
@@ -778,24 +779,27 @@ async fn unmute(ctx: Context<'_>) -> Result<(), BotError> {
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
-        if let Err(e) = handler.mute(false).await {
-            check_msg(ctx.channel_id().say(ctx, format!("Failed: {:?}", e)).await);
-        }
-
-        check_msg(ctx.channel_id().say(ctx, "Unmuted").await);
+        handler
+            .mute(false)
+            .await
+            .map_err(|e| MusicCommandError::FailedUnmuteCall {
+                source: e,
+                voice_guild_id: guild_id,
+                voice_channel_id: ctx.channel_id(),
+            })?;
+        ctx.reply("Unmuted").await?;
     } else {
-        check_msg(
-            ctx.channel_id()
-                .say(ctx, "Not in a voice channel to unmute in")
-                .await,
-        );
+        return Err(MusicCommandError::BotVoiceNotJoined {
+            voice_guild_id: guild_id,
+        }
+        .into());
     }
 
     Ok(())
 }
 
 /// "Shows what song is currently playing. Ayaya really knows everything about herself."
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, aliases("np"), guild_only)]
 async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
@@ -851,13 +855,14 @@ async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
 }
 
 /// Seeks the track to a position given in seconds
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
 
     let manager = &ctx.data().songbird;
 
+    // TODO: polish and user error handling
     if let Some(handler) = manager.get(guild_id) {
         let handler = handler.lock().await;
         match handler.queue().current() {
@@ -915,7 +920,7 @@ async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
 }
 
 /// Inserts a youtube source, sets events and notifies the calling channel
-#[tracing::instrument]
+#[tracing::instrument(skip(ctx, call, source))]
 async fn handle_single_play(
     call: Option<Arc<Mutex<songbird::Call>>>,
     calling_channel_id: ChannelId,
@@ -939,7 +944,7 @@ async fn handle_single_play(
 
 /// Process the given source, obtain its metadata and handle track insertion with events. This
 /// function is made to be used with tokio::spawn
-#[tracing::instrument]
+#[tracing::instrument(skip(track_metadata, call, serenity_http, calling_channel_id, source))]
 async fn insert_source(
     mut source: YoutubeDl,
     track_metadata: Arc<std::sync::Mutex<HashMap<uuid::Uuid, songbird::input::AuxMetadata>>>,

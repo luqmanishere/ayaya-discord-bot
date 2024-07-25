@@ -14,7 +14,7 @@ use reqwest::Client as HttpClient;
 use songbird::input::AuxMetadata;
 use time::UtcOffset;
 use tokio::sync::RwLock;
-use tracing::{info, level_filters::LevelFilter, subscriber::set_global_default};
+use tracing::{debug, info, level_filters::LevelFilter, subscriber::set_global_default};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{fmt::time::OffsetTime, layer::SubscriberExt, EnvFilter};
 use uuid::Uuid;
@@ -116,6 +116,7 @@ async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
     let offset = UtcOffset::current_local_offset()
         .unwrap_or(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
 
+    // TODO: simplify
     match loki {
         Some(loki) => {
             let url = url::Url::parse("https://logs-prod-020.grafana.net")?;
@@ -130,7 +131,8 @@ async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
                 .with(
                     EnvFilter::builder()
                         .with_default_directive(LevelFilter::INFO.into())
-                        .from_env_lossy(),
+                        .from_env_lossy()
+                        .add_directive("ayaya_discord_bot=debug".parse()?),
                 )
                 .with(
                     tracing_subscriber::fmt::layer()
@@ -151,7 +153,8 @@ async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
                 .with(
                     EnvFilter::builder()
                         .with_default_directive(LevelFilter::INFO.into())
-                        .from_env_lossy(),
+                        .from_env_lossy()
+                        .add_directive("ayaya_discord_bot=debug".parse()?),
                 )
                 .with(
                     tracing_subscriber::fmt::layer()
@@ -167,6 +170,7 @@ async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
     };
 
     info!("log initialized with time offset {offset}");
+    debug!("debug logging is enabled for ayaya_discord_bot");
     Ok(())
 }
 

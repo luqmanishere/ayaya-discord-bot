@@ -46,6 +46,15 @@ pub enum MusicCommandError {
         voice_guild_id: serenity::GuildId,
         voice_channel_id: serenity::ChannelId,
     },
+    #[error(
+        "Failed to undeafen Ayaya in voice channel {voice_channel_id} in guild {voice_guild_id} due to {source}"
+    )]
+    #[diagnostic(help("Contact @solemnattic for assistance"))]
+    FailedUndeafenCall {
+        source: songbird::error::JoinError,
+        voice_guild_id: serenity::GuildId,
+        voice_channel_id: serenity::ChannelId,
+    },
     #[error("Ayaya can't find the bond between her and this guild ")]
     CallDoesNotExist,
     #[error("An error occured with youtube-dl: {0}")]
