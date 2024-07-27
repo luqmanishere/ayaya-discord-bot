@@ -2,7 +2,7 @@ use poise::serenity_prelude as serenity;
 use serenity::{model::channel::Message, Result as SerenityResult};
 use tracing::error;
 
-use crate::{BotError, Context};
+use crate::{voice::error::MusicCommandError, BotError, Context};
 
 /// Checks that a message successfully sent; if not, then logs why to stdout.
 pub fn check_msg(result: SerenityResult<Message>) {
@@ -43,4 +43,78 @@ pub async fn get_channel_name_id(
         .name(ctx)
         .await
         .unwrap_or("Unknown Channel".to_string()))
+}
+
+pub fn songbird_channel_to_serenity_channel(
+    songbird_voice_channel_id: songbird::id::ChannelId,
+) -> serenity::ChannelId {
+    let channel_id: u64 = songbird_voice_channel_id.0.into();
+    serenity::ChannelId::from(channel_id)
+}
+
+#[derive(Debug, Clone)]
+pub struct GuildInfo {
+    pub guild_name: String,
+    pub guild_id: serenity::GuildId,
+}
+
+impl GuildInfo {
+    pub fn from_ctx(ctx: Context<'_>) -> Result<Self, BotError> {
+        let guild_id = get_guild_id(ctx)?;
+        let guild_name = get_guild_name(ctx)?;
+        Ok(Self {
+            guild_name,
+            guild_id,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ChannelInfo {
+    pub channel_name: String,
+    pub channel_id: serenity::ChannelId,
+    pub is_voice: bool,
+}
+
+impl ChannelInfo {
+    pub async fn from_ctx(ctx: Context<'_>, is_voice: bool) -> Result<Self, BotError> {
+        let channel_id = ctx.channel_id();
+        let channel_name = channel_id.name(ctx).await?;
+        Ok(Self {
+            channel_name,
+            channel_id,
+            is_voice,
+        })
+    }
+
+    pub async fn from_songbird_current_channel(
+        ctx: Context<'_>,
+        songbird_voice_channel: Option<songbird::id::ChannelId>,
+        guild_info: &GuildInfo,
+    ) -> Result<Self, BotError> {
+        let channel_id = songbird_channel_to_serenity_channel(songbird_voice_channel.ok_or(
+            MusicCommandError::BotVoiceNotJoined {
+                guild_info: guild_info.clone(),
+            },
+        )?);
+        let channel_name = channel_id.name(ctx).await?;
+        Ok(Self {
+            channel_name,
+            channel_id,
+            is_voice: true,
+        })
+    }
+
+    pub async fn from_serenity_id(
+        ctx: Context<'_>,
+        channel_id: serenity::ChannelId,
+        is_voice: bool,
+    ) -> Result<Self, BotError> {
+        let channel_name = channel_id.name(ctx).await?;
+        Ok(Self {
+            channel_name,
+            channel_id,
+            is_voice,
+        })
+    }
 }

@@ -80,12 +80,19 @@ pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMe
     let youtube_search = youtube_dl::YoutubeDl::search_for(&search_options)
         .run_async()
         .await
-        .map_err(MusicCommandError::YoutubeDlError)?;
+        .map_err(|e| MusicCommandError::YoutubeDlError {
+            source: e,
+            args: term.to_string(),
+        })?;
 
     let videos = match youtube_search {
-        YoutubeDlOutput::Playlist(playlist) => playlist
-            .entries
-            .ok_or(MusicCommandError::YoutubeDlEmptyPlaylist)?,
+        YoutubeDlOutput::Playlist(playlist) => {
+            playlist
+                .entries
+                .ok_or(MusicCommandError::YoutubeDlEmptyPlaylist {
+                    args: term.to_string(),
+                })?
+        }
         YoutubeDlOutput::SingleVideo(video) => vec![*video],
     };
 
@@ -98,16 +105,19 @@ pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMe
 }
 
 pub async fn resolve_yt_playlist(playlist_url: String) -> Result<Vec<YoutubeMetadata>, BotError> {
-    let youtube_playlist = youtube_dl::YoutubeDl::new(playlist_url)
+    let youtube_playlist = youtube_dl::YoutubeDl::new(playlist_url.clone())
         .flat_playlist(true)
         .run_async()
         .await
-        .map_err(MusicCommandError::YoutubeDlError)?;
+        .map_err(|e| MusicCommandError::YoutubeDlError {
+            source: e,
+            args: playlist_url.clone(),
+        })?;
 
     let videos = match youtube_playlist {
         YoutubeDlOutput::Playlist(playlist) => playlist
             .entries
-            .ok_or(MusicCommandError::YoutubeDlEmptyPlaylist)?,
+            .ok_or(MusicCommandError::YoutubeDlEmptyPlaylist { args: playlist_url })?,
         YoutubeDlOutput::SingleVideo(video) => vec![*video],
     };
 

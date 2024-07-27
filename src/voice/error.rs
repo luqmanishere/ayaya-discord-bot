@@ -2,124 +2,223 @@ use miette::Diagnostic;
 use poise::serenity_prelude as serenity;
 use thiserror::Error;
 
+use crate::utils::{ChannelInfo, GuildInfo};
+
 // TODO: include names of guilds and channels
 #[derive(Error, Diagnostic, Debug)]
 pub enum MusicCommandError {
-    #[error("Ayaya has not joined any voice channels in the guild {voice_guild_id}.")]
+    #[error("Ayaya has not joined any voice channels in the guild {} ({})", guild_info.guild_id, guild_info.guild_name)]
     #[diagnostic(help("Try joining Ayaya to a voice channel with the join command."))]
-    BotVoiceNotJoined { voice_guild_id: serenity::GuildId },
+    BotVoiceNotJoined { guild_info: GuildInfo },
+
     #[error(
-        "Ayaya can't find user {} ({}) in any voice channel in the guild {voice_guild_name} ({voice_guild_id})", user.name, user.id
+        "Ayaya can't find user {} ({}) in any voice channel in the guild {} ({})",
+        user.name, user.id, guild_info.guild_name, guild_info.guild_id
     )]
     #[diagnostic(help("Try joining a voice channel before running the command."))]
     UserVoiceNotJoined {
         user: serenity::User,
-        voice_guild_id: serenity::GuildId,
-        voice_guild_name: String,
+        guild_info: GuildInfo,
     },
+
     #[error(
-        "Failed to join voice channel {voice_guild_name} ({voice_channel_id}) in guild {voice_guild_name} ({voice_guild_id}) due to {source}"
+        "Failed to join voice channel {} ({}) in guild {} ({}) with error {source}",
+        voice_channel_info.channel_name,
+        voice_channel_info.channel_id,
+        guild_info.guild_name,
+        guild_info.guild_id
     )]
     #[diagnostic(help("Contact @solemnattic for assistance"))]
     FailedJoinCall {
         source: songbird::error::JoinError,
-        voice_guild_id: serenity::GuildId,
-        voice_guild_name: String,
-        voice_channel_id: serenity::ChannelId,
-        voice_channel_name: String,
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
     },
+
     #[error(
-        "Failed to unmute voice channel {voice_channel_id} in guild {voice_guild_id} due to {source}"
+        "Failed to leave voice channel {} ({}) in guild {} ({}) with error: {source}",
+        voice_channel_info.channel_name,
+        voice_channel_info.channel_id,
+        guild_info.guild_name,
+        guild_info.guild_id
     )]
+    #[diagnostic(help("Contact @solemnattic for assistance or just yeet her."))]
+    FailedLeaveCall {
+        source: songbird::error::JoinError,
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
+    },
+
+    #[error("Failed to unmute voice channel {} ({}) in guild {} ({}) due to {source}", voice_channel_info.channel_name, voice_channel_info.channel_id, guild_info.guild_name, guild_info.guild_id)]
     #[diagnostic(help("Contact @solemnattic for assistance"))]
     FailedUnmuteCall {
         source: songbird::error::JoinError,
-        voice_guild_id: serenity::GuildId,
-        voice_channel_id: serenity::ChannelId,
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
     },
+
     #[error(
-        "Failed to deafen Ayaya in voice channel {voice_channel_id} in guild {voice_guild_id} due to {source}"
+        "Failed to deafen Ayaya in voice channel {} ({}) in guild {} ({}) with error: {source}",
+        voice_channel_info.channel_name,
+        voice_channel_info.channel_id,
+        guild_info.guild_name,
+        guild_info.guild_id
     )]
     #[diagnostic(help("Contact @solemnattic for assistance"))]
     FailedDeafenCall {
         source: songbird::error::JoinError,
-        voice_guild_id: serenity::GuildId,
-        voice_channel_id: serenity::ChannelId,
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
     },
+
     #[error(
-        "Failed to undeafen Ayaya in voice channel {voice_channel_id} in guild {voice_guild_id} due to {source}"
+        "Failed to undeafen Ayaya in voice channel {} ({}) in guild {} ({}) with error: {source}",
+        voice_channel_info.channel_name,
+        voice_channel_info.channel_id,
+        guild_info.guild_name,
+        guild_info.guild_id
     )]
     #[diagnostic(help("Contact @solemnattic for assistance"))]
     FailedUndeafenCall {
         source: songbird::error::JoinError,
-        voice_guild_id: serenity::GuildId,
-        voice_channel_id: serenity::ChannelId,
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
     },
-    #[error("Ayaya can't find the bond between her and this guild ")]
+
+    // TODO: fix this error
+    #[error("Ayaya can't find the bond between her and this guild. Time for a reboot perhaps?")]
+    #[diagnostic(help("Contact @solemnattic for assistance."))]
     CallDoesNotExist,
-    #[error("An error occured with youtube-dl: {0}")]
-    #[diagnostic(help("Ayaya thinks youtube is being stupid tonight."))]
-    YoutubeDlError(#[from] youtube_dl::Error),
-    #[error("Empty playlist returned, Ayaya has nothing to play")]
-    #[diagnostic(help("Ayaya thinks youtube is being stupid tonight."))]
-    YoutubeDlEmptyPlaylist,
+
+    #[error("An error occured with youtube-dl while processing query \"{args}\" : {source}")]
+    #[diagnostic(help("Ayaya thinks youtube is being stupid tonight. Just try again"))]
+    YoutubeDlError {
+        source: youtube_dl::Error,
+        args: String,
+    },
+
+    #[error("Empty playlist returned from \"{args}\", Ayaya has nothing to play")]
+    #[diagnostic(help("Ayaya thinks youtube is being stupid tonight. Just try again."))]
+    YoutubeDlEmptyPlaylist { args: String },
+
     #[error("Ayaya is unable to find the track metadata for uuid: {track_uuid}")]
     #[diagnostic(help(
         "Ayaya forgot something important, contact her owner @solemnattic to find out what."
     ))]
     TrackMetadataNotFound { track_uuid: uuid::Uuid },
+
     #[error("Failed to retrieve metadata for the track: {0}")]
-    #[diagnostic(help("Ayaya thinks youtube is being stupid tonight."))]
+    #[diagnostic(help(
+        "Ayaya thinks YouTube is being stupid tonight. Tell @solemnattic to check what's up"
+    ))]
     TrackMetadataRetrieveFailed(#[from] songbird::input::AudioStreamError),
+
     #[error("Ayaya is unable to find the track state for uuid: {track_uuid}")]
     #[diagnostic(help(
-        "Ayaya forgot something important, contact her owner @solemnattic to find out what."
+        "Ayaya forgot something important, contact her owner @solemnattic to help her."
     ))]
     TrackStateNotFound {
         source: songbird::error::ControlError,
         track_uuid: uuid::Uuid,
     },
-    #[error("Failed to skip the track with uuid {track_uuid} in guild {voice_guild_id}: {source}")]
+
+    #[error(
+        "Failed to skip the track with uuid {track_uuid} in voice channel {} ({}) in guild {} ({}): {source}",
+        voice_channel_info.channel_name,
+        voice_channel_info.channel_id,
+        guild_info.guild_name,
+        guild_info.guild_id
+    )]
     #[diagnostic(help("Contact @solemnattic for assistance"))]
     FailedTrackSkip {
         source: songbird::error::ControlError,
         track_uuid: uuid::Uuid,
-        voice_guild_id: serenity::GuildId,
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
     },
+
     #[error(
-        "Failed to pause the track with uuid {track_uuid} in guild {voice_guild_id}: {source}"
+        "Failed to pause the track with uuid {track_uuid} in voice channel {} ({}) in guild {} ({}): {source}",
+        voice_channel_info.channel_name,
+        voice_channel_info.channel_id,
+        guild_info.guild_name,
+        guild_info.guild_id
     )]
     #[diagnostic(help("Contact @solemnattic for assistance"))]
     FailedTrackPause {
         source: songbird::error::ControlError,
         track_uuid: uuid::Uuid,
-        voice_guild_id: serenity::GuildId,
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
     },
+
     #[error(
-        "Failed to resume the track with uuid {track_uuid} in guild {voice_guild_id}: {source}"
+        "Failed to resume the track with uuid {track_uuid} in voice channel {} ({}) in guild {} ({}): {source}",
+        voice_channel_info.channel_name,
+        voice_channel_info.channel_id,
+        guild_info.guild_name,
+        guild_info.guild_id
     )]
     #[diagnostic(help("Contact @solemnattic for assistance"))]
     FailedTrackResume {
         source: songbird::error::ControlError,
         track_uuid: uuid::Uuid,
-        voice_guild_id: serenity::GuildId,
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
     },
+
     #[error(
-        "Failed to seek the track with uuid {track_uuid} in guild {voice_guild_id} to position {position}: {source}"
+        "Failed to seek the track with uuid {track_uuid} in voice channel {} ({}) in guild {} ({}) to position {position}: {source}",
+        voice_channel_info.channel_name,
+        voice_channel_info.channel_id,
+        guild_info.guild_name,
+        guild_info.guild_id
     )]
     #[diagnostic(help("Contact @solemnattic for assistance"))]
     FailedTrackSeek {
         source: songbird::error::ControlError,
         track_uuid: uuid::Uuid,
-        voice_guild_id: serenity::GuildId,
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
         position: u64,
     },
-    #[error("Error accessing the index {index} in the queue for guild {voice_guild_id}")]
-    #[diagnostic(help("Ayaya tried to access the non existent."))]
+
+    #[error(
+        "Error accessing the index {index} in the queue for voice channel {} ({}) in guild {} ({})",
+        voice_channel_info.channel_name,
+        voice_channel_info.channel_id,
+        guild_info.guild_name,
+        guild_info.guild_id
+    )]
+    #[diagnostic(help(
+        "Ayaya tried to access the non existent, so pick something that exists..."
+    ))]
     QueueOutOfBounds {
         index: usize,
-        voice_guild_id: serenity::GuildId,
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
     },
+
+    #[error(
+        "Ayaya tried to yeet whatever she's playing in the voice channel {} ({}) guild {} ({}).",
+        voice_channel_info.channel_name,
+        voice_channel_info.channel_id,
+        guild_info.guild_name,
+        guild_info.guild_id
+    )]
+    #[diagnostic(help("Sorry, Ayaya can't delete what she is playing. Maybe pick another?"))]
+    QueueDeleteNowPlaying {
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
+    },
+
+    #[error("Ayaya has no audio tracks to seek in channel {} ({}) in guild {} ({})", voice_channel_info.channel_name, voice_channel_info.channel_id, guild_info.guild_name, guild_info.guild_id)]
+    #[diagnostic(help("How about playing a song and then telling Ayaya to seek forward?"))]
+    NoTrackToSeek {
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
+    },
+
     #[error("Ayaya has been waiting too long for an input...")]
     #[diagnostic(help("Ayaya waited too long for you... *baka*."))]
     SearchTimeout,

@@ -22,7 +22,7 @@ use super::{
     },
 };
 use crate::{
-    utils::{check_msg, get_channel_name_id, get_guild, get_guild_id, get_guild_name, OptionExt},
+    utils::{check_msg, get_guild, get_guild_id, ChannelInfo, GuildInfo, OptionExt},
     voice::error::MusicCommandError,
     BotError, Context,
 };
@@ -102,7 +102,7 @@ async fn join(ctx: Context<'_>) -> Result<(), BotError> {
 async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotError> {
     let guild: serenity::Guild = get_guild(ctx)?;
     let guild_id = get_guild_id(ctx)?;
-    let guild_name = get_guild_name(ctx)?;
+    let guild_info = GuildInfo::from_ctx(ctx)?;
     let chat_channel_id = ctx.channel_id();
     let user_voice_state_option: Option<&serenity::VoiceState> =
         guild.voice_states.get(&ctx.author().id);
@@ -136,8 +136,7 @@ async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotE
             let user_voice_state =
                 user_voice_state_option.ok_or(MusicCommandError::UserVoiceNotJoined {
                     user: ctx.author().clone(),
-                    voice_guild_id: guild_id,
-                    voice_guild_name: guild_name.clone(),
+                    guild_info: guild_info.clone(),
                 })?;
 
             // the voice channel id to join
@@ -148,8 +147,7 @@ async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotE
                         .channel_id
                         .ok_or(MusicCommandError::UserVoiceNotJoined {
                             user: ctx.author().clone(),
-                            voice_guild_id: guild_id,
-                            voice_guild_name: guild_name.clone(),
+                            guild_info: guild_info.clone(),
                         })?
                 } else {
                     return Err(BotError::GuildMismatch);
@@ -169,6 +167,12 @@ async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotE
             match manager.join(guild_id, voice_channel_id).await {
                 Ok(call) => {
                     let mut call = call.lock().await;
+                    let voice_channel_info = ChannelInfo::from_songbird_current_channel(
+                        ctx,
+                        call.current_channel(),
+                        &guild_info,
+                    )
+                    .await?;
                     info!("joined channel id: {voice_channel_id} in guild {guild_id}",);
                     if play_notify_flag {
                         // TODO: replace with embed
@@ -180,15 +184,15 @@ async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotE
                     call.mute(false)
                         .map_err(|e| MusicCommandError::FailedUnmuteCall {
                             source: e,
-                            voice_guild_id: guild_id,
-                            voice_channel_id,
+                            guild_info: guild_info.clone(),
+                            voice_channel_info: voice_channel_info.clone(),
                         })
                         .await?;
                     call.deafen(true)
                         .map_err(|e| MusicCommandError::FailedDeafenCall {
                             source: e,
-                            voice_guild_id: guild_id,
-                            voice_channel_id,
+                            guild_info,
+                            voice_channel_info,
                         })
                         .await?;
 
@@ -209,15 +213,15 @@ async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotE
                     );
                 }
                 Err(e) => {
+                    let voice_channel_info =
+                        ChannelInfo::from_serenity_id(ctx, voice_channel_id, true).await?;
                     error!("Error joining channel: {}", e);
                     // TODO: centralize
                     ctx.say("Unable to join voice channel").await?;
                     return Err(MusicCommandError::FailedJoinCall {
                         source: e,
-                        voice_guild_id: guild_id,
-                        voice_guild_name: guild_name,
-                        voice_channel_id,
-                        voice_channel_name: get_channel_name_id(ctx, voice_channel_id).await?,
+                        guild_info,
+                        voice_channel_info,
                     }
                     .into());
                 }
@@ -232,25 +236,30 @@ async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotE
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only)]
 async fn leave(ctx: Context<'_>) -> Result<(), BotError> {
-    let guild_id = get_guild_id(ctx)?;
+    let guild_info = GuildInfo::from_ctx(ctx)?;
 
     let manager = &ctx.data().songbird;
-    let has_handler = manager.get(guild_id).is_some();
 
-    if has_handler {
-        if let Err(e) = manager.remove(guild_id).await {
-            // FIXME: wtf is this
-            check_msg(ctx.channel_id().say(ctx, format!("Failed: {:?}", e)).await);
+    if let Some(handler_lock) = manager.get(guild_info.guild_id) {
+        let voice_channel_info = {
+            let handler = handler_lock.lock().await;
+            ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
+                .await?
+        };
+
+        if let Err(e) = manager.remove(guild_info.guild_id).await {
+            return Err(MusicCommandError::FailedLeaveCall {
+                source: e,
+                guild_info,
+                voice_channel_info,
+            }
+            .into());
         }
 
         // TODO: replace with embeds
         check_msg(ctx.channel_id().say(ctx, "Left voice channel").await);
     } else {
-        ctx.send(
-            poise::CreateReply::default()
-                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
-        )
-        .await?;
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }
 
     Ok(())
@@ -303,6 +312,529 @@ async fn play(
     ctx.defer().await?;
 
     play_inner(ctx, url).await?;
+    Ok(())
+}
+
+async fn play_inner(ctx: Context<'_>, input: String) -> Result<(), BotError> {
+    let input_type = PlayParse::parse(&input);
+
+    // join a channel first
+    join_inner(ctx, false).await?;
+
+    // TODO: check if youtube url
+
+    input_type.run(ctx).await
+}
+
+/// Search YT and get metadata
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(slash_command, prefix_command)]
+// #[usage("<search term>")]
+// #[example("ayaya intensifies")]
+async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<(), BotError> {
+    let term = search_term.join(" ");
+
+    // reply or say in channel depending on command type
+    match ctx {
+        poise::Context::Application(ctx) => {
+            ctx.reply(format!("Searching youtube for: {term}")).await?;
+        }
+        poise::Context::Prefix(ctx) => {
+            ctx.channel_id()
+                .say(ctx, format!("Searching youtube for: {term}"))
+                .await?;
+        }
+    }
+    ctx.defer().await?;
+
+    // let songbird do the searching
+    let search = yt_search(&term, Some(10)).await?;
+
+    // TODO: return errors here
+    match create_search_interaction(ctx, search).await {
+        Ok(youtube_id) => {
+            play_inner(ctx, youtube_id).await?;
+        }
+        Err(e) => {
+            if let BotError::MusicCommandError(MusicCommandError::SearchTimeout) = e {
+                return Ok(());
+            }
+            error!("Error from interaction: {e}");
+            return Err(e);
+        }
+    };
+
+    Ok(())
+}
+
+/// Skips the currently playing song. Ayaya wonders why you abandoned your summon so easily.
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(slash_command, prefix_command, guild_only)]
+async fn skip(ctx: Context<'_>) -> Result<(), BotError> {
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    if let Some(handler_lock) = manager.get(guild_info.guild_id) {
+        let handler = handler_lock.lock().await;
+        let voice_channel_info =
+            ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
+                .await?;
+        let queue = handler.queue();
+        let track_uuid = queue.current().unwrap().uuid();
+        let song_metadata = {
+            let metadata_lock = ctx.data().track_metadata.lock().unwrap();
+            metadata_lock
+                .get(&track_uuid)
+                .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
+                .clone()
+        };
+        queue
+            .skip()
+            .map_err(|e| MusicCommandError::FailedTrackSkip {
+                source: e,
+                track_uuid,
+                guild_info,
+                voice_channel_info,
+            })?;
+
+        let embed = metadata_to_embed(utils::EmbedOperation::SkipSong, &song_metadata, None);
+
+        ctx.send(poise::CreateReply::default().embed(embed)).await?;
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+
+    Ok(())
+}
+
+/// Shows the queue. The only kind of acceptable spoilers.
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(slash_command, prefix_command, aliases("q"), guild_only)]
+async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
+    // TODO Implement queue viewing
+    let guild_id = get_guild_id(ctx)?;
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    // Check if in channel
+    if let Some(handler_lock) = manager.get(guild_id) {
+        let handler = handler_lock.lock().await;
+        let queue = handler.queue();
+        let tracks = queue.current_queue();
+        let mut lines = serenity::MessageBuilder::new();
+        {
+            let data = ctx.data();
+            let metadata_lock = data.track_metadata.lock().unwrap();
+
+            // TODO: replace with embed
+            if tracks.is_empty() {
+                lines.push_line("# Nothing in queue");
+            } else {
+                lines.push_line("# Queue");
+            }
+            for (i, track) in tracks.iter().enumerate() {
+                let track_uuid = track.uuid();
+                let metadata = metadata_lock
+                    .get(&track_uuid)
+                    .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?;
+
+                lines.push_quote_line(format!(
+                    "{}. {} ({})",
+                    i + 1,
+                    metadata.title.as_ref().unwrap(),
+                    metadata.channel.as_ref().unwrap()
+                ));
+            }
+        }
+
+        let embed = serenity::CreateEmbed::new()
+            .colour(serenity::Colour::MEIBE_PINK)
+            .description(lines.to_string());
+
+        ctx.send(poise::CreateReply::default().embed(embed)).await?;
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+    //TODO check for
+
+    Ok(())
+}
+
+/// Pause the party. Time is frozen in this bubble universe."
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(slash_command, prefix_command, guild_only)]
+async fn pause(ctx: Context<'_>, _args: String) -> Result<(), BotError> {
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    if let Some(handler_lock) = manager.get(guild_info.guild_id) {
+        let handler = handler_lock.lock().await;
+        let voice_channel_info =
+            ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
+                .await?;
+        let queue = handler.queue();
+        let track_uuid = queue.current().unwrap().uuid();
+        let song_name = {
+            let metadata_lock = ctx.data().track_metadata.lock().unwrap();
+            metadata_lock
+                .get(&track_uuid)
+                .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
+                .title
+                .clone()
+                .unwrap_or_unknown()
+        };
+        queue
+            .pause()
+            .map_err(|e| MusicCommandError::FailedTrackPause {
+                source: e,
+                track_uuid,
+                guild_info,
+                voice_channel_info,
+            })?;
+
+        check_msg(
+            ctx.channel_id()
+                .say(ctx, format!("{} - paused", song_name))
+                .await,
+        );
+    } else {
+        check_msg(
+            ctx.channel_id()
+                .say(ctx, "Not in a voice channel to play in")
+                .await,
+        );
+    }
+
+    Ok(())
+}
+
+/// Resume the party. You hear a wind up sound as time speeds up.
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(slash_command, prefix_command, guild_only)]
+async fn resume(ctx: Context<'_>) -> Result<(), BotError> {
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    if let Some(handler_lock) = manager.get(guild_info.guild_id) {
+        let handler = handler_lock.lock().await;
+        let voice_channel_info =
+            ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
+                .await?;
+        let queue = handler.queue();
+        let track_uuid = queue.current().unwrap().uuid();
+        let song_name = {
+            let metadata_lock = ctx.data().track_metadata.lock().unwrap();
+            metadata_lock
+                .get(&track_uuid)
+                .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
+                .title
+                .clone()
+                .unwrap_or_unknown()
+        };
+        queue
+            .resume()
+            .map_err(|e| MusicCommandError::FailedTrackResume {
+                source: e,
+                track_uuid,
+                guild_info,
+                voice_channel_info,
+            })?;
+
+        check_msg(
+            ctx.channel_id()
+                .say(ctx, format!("{} - resumed", song_name))
+                .await,
+        );
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+
+    Ok(())
+}
+
+/// Stop all music and clear the queue. Will you stop by again?
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(prefix_command, slash_command, guild_only)]
+async fn stop(ctx: Context<'_>) -> Result<(), BotError> {
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    if let Some(handler_lock) = manager.get(guild_info.guild_id) {
+        let handler = handler_lock.lock().await;
+        let queue = handler.queue();
+        queue.stop();
+
+        check_msg(ctx.channel_id().say(ctx, "queue cleared.").await);
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+
+    Ok(())
+}
+
+/// Delete song from queue. Being able to make things go *poof* makes you feel like a Kami-sama, right?
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(slash_command, prefix_command, guild_only, aliases("d"))]
+async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<(), BotError> {
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = ctx.data().songbird.clone();
+
+    if let Some(handler_lock) = manager.get(guild_info.guild_id) {
+        let voice_channel_info = {
+            let handler = handler_lock.lock().await;
+            ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
+                .await?
+        };
+        // If not empty, remove the songs
+        if queue_position != 0 {
+            let handler = handler_lock.lock().await;
+            let queue = handler.queue();
+            if queue_position != 1 {
+                let index = queue_position - 1;
+                if let Some(track) = queue.current_queue().get(index) {
+                    let track_uuid = track.uuid();
+                    let track_metadata = ctx.data().track_metadata.clone();
+                    let metadata = {
+                        let lock = track_metadata.lock().unwrap();
+                        lock.get(&track_uuid)
+                            .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
+                            .clone()
+                    };
+                    if queue.dequeue(index).is_some() {
+                        ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
+                            utils::EmbedOperation::DeleteFromQueue,
+                            &metadata,
+                            None,
+                        )))
+                        .await?;
+                    } else {
+                        // TODO: notify user of error
+                        error!(
+                            "Index {index} does not exist in queue for guild {}",
+                            guild_info.guild_id
+                        );
+                        return Err(MusicCommandError::QueueOutOfBounds {
+                            index,
+                            guild_info,
+                            voice_channel_info,
+                        }
+                        .into());
+                    }
+                } else {
+                    return Err(MusicCommandError::QueueOutOfBounds {
+                        index,
+                        guild_info,
+                        voice_channel_info,
+                    }
+                    .into());
+                }
+            } else {
+                return Err(MusicCommandError::QueueDeleteNowPlaying {
+                    guild_info,
+                    voice_channel_info,
+                }
+                .into());
+            }
+        } else {
+            // TODO: zero is an error
+        }
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+
+    Ok(())
+}
+
+/// Undeafens the bot. Finally, Ayaya pulls out her earplugs.
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(slash_command, prefix_command, guild_only)]
+async fn undeafen(ctx: Context<'_>) -> Result<(), BotError> {
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    if let Some(handler_lock) = manager.get(guild_info.guild_id) {
+        let mut handler = handler_lock.lock().await;
+        let voice_channel_info =
+            ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
+                .await?;
+        handler
+            .deafen(false)
+            .await
+            .map_err(|e| MusicCommandError::FailedUndeafenCall {
+                source: e,
+                guild_info,
+                voice_channel_info,
+            })?;
+
+        ctx.reply("Undeafened").await?;
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+
+    Ok(())
+}
+
+/// Unmutes Ayaya. Poor Ayaya has been talking to herself unnoticed.
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(slash_command, prefix_command, guild_only, aliases("um"))]
+async fn unmute(ctx: Context<'_>) -> Result<(), BotError> {
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    if let Some(handler_lock) = manager.get(guild_info.guild_id) {
+        let mut handler = handler_lock.lock().await;
+        let voice_channel_info =
+            ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
+                .await?;
+        handler
+            .mute(false)
+            .await
+            .map_err(|e| MusicCommandError::FailedUnmuteCall {
+                source: e,
+                guild_info,
+                voice_channel_info,
+            })?;
+        // TODO: embed
+        ctx.reply("Unmuted").await?;
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+
+    Ok(())
+}
+
+/// "Shows what song is currently playing. Ayaya really knows everything about herself."
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(slash_command, prefix_command, aliases("np"), guild_only)]
+async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
+    let guild_id = get_guild_id(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    if let Some(handler) = manager.get(guild_id) {
+        let handler = handler.lock().await;
+        match handler.queue().current() {
+            Some(track) => {
+                let data = ctx.data();
+                let track_uuid = track.uuid();
+                let track_state =
+                    track
+                        .get_info()
+                        .await
+                        .map_err(|e| MusicCommandError::TrackStateNotFound {
+                            source: e,
+                            track_uuid,
+                        })?;
+                let metadata = {
+                    let lock = data.track_metadata.lock().unwrap();
+                    lock.get(&track_uuid)
+                        .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
+                        .clone()
+                };
+
+                ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
+                    utils::EmbedOperation::NowPlaying,
+                    &metadata,
+                    Some(&track_state),
+                )))
+                .await?;
+            }
+            None => {
+                ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
+                    utils::EmbedOperation::NowPlaying,
+                    &songbird::input::AuxMetadata::default(),
+                    None,
+                )))
+                .await?;
+            }
+        };
+    } else {
+        ctx.send(
+            poise::CreateReply::default()
+                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
+/// Seeks the track to a position given in seconds
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(slash_command, prefix_command, guild_only)]
+async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    // TODO: polish and user error handling
+    if let Some(handler) = manager.get(guild_info.guild_id) {
+        let handler = handler.lock().await;
+        let voice_channel_info =
+            ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
+                .await?;
+        match handler.queue().current() {
+            Some(track) => {
+                let data = ctx.data();
+                let track_uuid = track.uuid();
+                let metadata = {
+                    let lock = data.track_metadata.lock().unwrap();
+                    lock.get(&track_uuid)
+                        .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
+                        .clone()
+                };
+                track
+                    .seek(std::time::Duration::from_secs(secs))
+                    .result()
+                    .map_err(|e| MusicCommandError::FailedTrackSeek {
+                        source: e,
+                        track_uuid,
+                        guild_info,
+                        voice_channel_info,
+                        position: secs,
+                    })?;
+                let song_name = metadata.title.clone().unwrap();
+                let channel_name = metadata.channel.clone().unwrap();
+
+                // TODO: express in embed
+                check_msg(
+                    ctx.channel_id()
+                        .say(
+                            ctx,
+                            format!(
+                                "Seek track: `{} ({})` to {} seconds",
+                                song_name, channel_name, secs
+                            ),
+                        )
+                        .await,
+                );
+            }
+            None => {
+                let voice_channel_info = ChannelInfo::from_songbird_current_channel(
+                    ctx,
+                    handler.current_channel(),
+                    &guild_info,
+                )
+                .await?;
+                return Err(MusicCommandError::NoTrackToSeek {
+                    guild_info,
+                    voice_channel_info,
+                }
+                .into());
+            }
+        };
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+
     Ok(())
 }
 
@@ -386,539 +918,6 @@ impl PlayParse {
     }
 }
 
-// TODO: decide if this needs to be instrumented
-async fn handle_from_playlist(
-    metadata: utils::YoutubeMetadata,
-    http: reqwest::Client,
-    track_metadata: Arc<std::sync::Mutex<HashMap<uuid::Uuid, songbird::input::AuxMetadata>>>,
-    call: Option<Arc<Mutex<songbird::Call>>>,
-    serenity_http: Arc<serenity::Http>,
-    calling_channel_id: ChannelId,
-) -> Result<songbird::input::AuxMetadata, BotError> {
-    // our ids are formatted into youtube links to prevent command line errors
-    let youtube_link = format!("https://www.youtube.com/watch?v={}", metadata.youtube_id);
-
-    let source = YoutubeDl::new(http.clone(), youtube_link);
-    insert_source(
-        source,
-        track_metadata,
-        call,
-        serenity_http,
-        calling_channel_id,
-    )
-    .await
-}
-
-async fn play_inner(ctx: Context<'_>, input: String) -> Result<(), BotError> {
-    let input_type = PlayParse::parse(&input);
-
-    // join a channel first
-    join_inner(ctx, false).await?;
-
-    // TODO: check if youtube url
-
-    input_type.run(ctx).await
-}
-
-/// Search YT and get metadata
-#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command)]
-// #[usage("<search term>")]
-// #[example("ayaya intensifies")]
-async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<(), BotError> {
-    let term = search_term.join(" ");
-
-    // reply or say in channel depending on command type
-    match ctx {
-        poise::Context::Application(ctx) => {
-            ctx.reply(format!("Searching youtube for: {term}")).await?;
-        }
-        poise::Context::Prefix(ctx) => {
-            ctx.channel_id()
-                .say(ctx, format!("Searching youtube for: {term}"))
-                .await?;
-        }
-    }
-    ctx.defer().await?;
-
-    // let songbird do the searching
-    let search = yt_search(&term, Some(10)).await?;
-
-    // TODO: return errors here
-    match create_search_interaction(ctx, search).await {
-        Ok(youtube_id) => {
-            play_inner(ctx, youtube_id).await?;
-        }
-        Err(e) => {
-            if let BotError::MusicCommandError(MusicCommandError::SearchTimeout) = e {
-                return Ok(());
-            }
-            error!("Error from interaction: {e}");
-            return Err(e);
-        }
-    };
-
-    Ok(())
-}
-
-/// Skips the currently playing song. Ayaya wonders why you abandoned your summon so easily.
-#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
-async fn skip(ctx: Context<'_>) -> Result<(), BotError> {
-    let guild_id = get_guild_id(ctx)?;
-
-    let manager = &ctx.data().songbird;
-
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let handler = handler_lock.lock().await;
-        let queue = handler.queue();
-        let track_uuid = queue.current().unwrap().uuid();
-        let song_metadata = {
-            let metadata_lock = ctx.data().track_metadata.lock().unwrap();
-            metadata_lock
-                .get(&track_uuid)
-                .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                .clone()
-        };
-        queue
-            .skip()
-            .map_err(|e| MusicCommandError::FailedTrackSkip {
-                source: e,
-                track_uuid,
-                voice_guild_id: guild_id,
-            })?;
-
-        let embed = metadata_to_embed(utils::EmbedOperation::SkipSong, &song_metadata, None);
-
-        ctx.send(poise::CreateReply::default().embed(embed)).await?;
-    } else {
-        ctx.say("Not in a voice channel, Ayaya can't skip air bruh.")
-            .await?;
-    }
-
-    Ok(())
-}
-
-/// Shows the queue. The only kind of acceptable spoilers.
-#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, aliases("q"), guild_only)]
-async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
-    // TODO Implement queue viewing
-    let guild_id = get_guild_id(ctx)?;
-
-    let manager = &ctx.data().songbird;
-
-    // Check if in channel
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let handler = handler_lock.lock().await;
-        let queue = handler.queue();
-        let tracks = queue.current_queue();
-        let mut lines = serenity::MessageBuilder::new();
-        {
-            let data = ctx.data();
-            let metadata_lock = data.track_metadata.lock().unwrap();
-
-            // TODO: replace with embed
-            if tracks.is_empty() {
-                lines.push_line("# Nothing in queue");
-            } else {
-                lines.push_line("# Queue");
-            }
-            for (i, track) in tracks.iter().enumerate() {
-                let track_uuid = track.uuid();
-                let metadata = metadata_lock
-                    .get(&track_uuid)
-                    .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?;
-
-                lines.push_quote_line(format!(
-                    "{}. {} ({})",
-                    i + 1,
-                    metadata.title.as_ref().unwrap(),
-                    metadata.channel.as_ref().unwrap()
-                ));
-            }
-        }
-
-        let embed = serenity::CreateEmbed::new()
-            .colour(serenity::Colour::MEIBE_PINK)
-            .description(lines.to_string());
-
-        ctx.send(poise::CreateReply::default().embed(embed)).await?;
-    } else {
-        return Err(MusicCommandError::BotVoiceNotJoined {
-            voice_guild_id: guild_id,
-        }
-        .into());
-    }
-    //TODO check for
-
-    Ok(())
-}
-
-/// Pause the party. Time is frozen in this bubble universe."
-#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
-async fn pause(ctx: Context<'_>, _args: String) -> Result<(), BotError> {
-    let guild_id = get_guild_id(ctx)?;
-
-    let manager = &ctx.data().songbird;
-
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let handler = handler_lock.lock().await;
-        let queue = handler.queue();
-        let track_uuid = queue.current().unwrap().uuid();
-        let song_name = {
-            let metadata_lock = ctx.data().track_metadata.lock().unwrap();
-            metadata_lock
-                .get(&track_uuid)
-                .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                .title
-                .clone()
-                .unwrap_or_unknown()
-        };
-        queue
-            .pause()
-            .map_err(|e| MusicCommandError::FailedTrackPause {
-                source: e,
-                track_uuid,
-                voice_guild_id: guild_id,
-            })?;
-
-        check_msg(
-            ctx.channel_id()
-                .say(ctx, format!("{} - paused", song_name))
-                .await,
-        );
-    } else {
-        check_msg(
-            ctx.channel_id()
-                .say(ctx, "Not in a voice channel to play in")
-                .await,
-        );
-    }
-
-    Ok(())
-}
-
-/// Resume the party. You hear a wind up sound as time speeds up.
-#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
-async fn resume(ctx: Context<'_>) -> Result<(), BotError> {
-    let guild_id = get_guild_id(ctx)?;
-
-    let manager = &ctx.data().songbird;
-
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let handler = handler_lock.lock().await;
-        let queue = handler.queue();
-        let track_uuid = queue.current().unwrap().uuid();
-        let song_name = {
-            let metadata_lock = ctx.data().track_metadata.lock().unwrap();
-            metadata_lock
-                .get(&track_uuid)
-                .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                .title
-                .clone()
-                .unwrap_or_unknown()
-        };
-        queue
-            .resume()
-            .map_err(|e| MusicCommandError::FailedTrackResume {
-                source: e,
-                track_uuid,
-                voice_guild_id: guild_id,
-            })?;
-
-        check_msg(
-            ctx.channel_id()
-                .say(ctx, format!("{} - resumed", song_name))
-                .await,
-        );
-    } else {
-        return Err(MusicCommandError::BotVoiceNotJoined {
-            voice_guild_id: guild_id,
-        }
-        .into());
-    }
-
-    Ok(())
-}
-
-/// Stop all music and clear the queue. Will you stop by again?
-#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(prefix_command, slash_command, guild_only)]
-async fn stop(ctx: Context<'_>) -> Result<(), BotError> {
-    let guild_id = get_guild_id(ctx)?;
-
-    let manager = &ctx.data().songbird;
-
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let handler = handler_lock.lock().await;
-        let queue = handler.queue();
-        queue.stop();
-
-        check_msg(ctx.channel_id().say(ctx, "Queue cleared.").await);
-    } else {
-        return Err(MusicCommandError::BotVoiceNotJoined {
-            voice_guild_id: guild_id,
-        }
-        .into());
-    }
-
-    Ok(())
-}
-
-/// Delete song from queue. Being able to make things go *poof* makes you feel like a Kami-sama, right?
-#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only, aliases("d"))]
-async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<(), BotError> {
-    let guild_id = get_guild_id(ctx)?;
-
-    let manager = ctx.data().songbird.clone();
-
-    if let Some(handler_lock) = manager.get(guild_id) {
-        // If not empty, remove the songs
-        if queue_position != 0 {
-            let handler = handler_lock.lock().await;
-            let queue = handler.queue();
-            if queue_position != 1 {
-                let index = queue_position - 1;
-                if let Some(track) = queue.current_queue().get(index) {
-                    let track_uuid = track.uuid();
-                    let track_metadata = ctx.data().track_metadata.clone();
-                    let metadata = {
-                        let lock = track_metadata.lock().unwrap();
-                        lock.get(&track_uuid)
-                            .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                            .clone()
-                    };
-                    if queue.dequeue(index).is_some() {
-                        ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
-                            utils::EmbedOperation::DeleteFromQueue,
-                            &metadata,
-                            None,
-                        )))
-                        .await?;
-                    } else {
-                        // TODO: notify user of error
-                        error!("Index {index} does not exist in queue for guild {guild_id}");
-                        return Err(MusicCommandError::QueueOutOfBounds {
-                            index,
-                            voice_guild_id: guild_id,
-                        }
-                        .into());
-                    }
-                } else {
-                    return Err(MusicCommandError::QueueOutOfBounds {
-                        index,
-                        voice_guild_id: guild_id,
-                    }
-                    .into());
-                }
-            } else {
-                ctx.send(poise::CreateReply::default().embed(error_embed(
-                    utils::EmbedOperation::ErrorQueueDeleteNowPlaying,
-                )))
-                .await?;
-            }
-        } else {
-            // Tell them to give arguments
-            ctx.send(
-                poise::CreateReply::default()
-                    .embed(error_embed(utils::EmbedOperation::ErrorQueueDeleteNoArgs)),
-            )
-            .await?;
-        }
-    } else {
-        ctx.send(
-            poise::CreateReply::default()
-                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
-        )
-        .await?;
-    }
-
-    Ok(())
-}
-
-/// Undeafens the bot. Finally, Ayaya pulls out her earplugs.
-#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
-async fn undeafen(ctx: Context<'_>) -> Result<(), BotError> {
-    let guild_id = get_guild_id(ctx)?;
-
-    let manager = &ctx.data().songbird;
-
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-        handler
-            .deafen(false)
-            .await
-            .map_err(|e| MusicCommandError::FailedUndeafenCall {
-                source: e,
-                voice_guild_id: guild_id,
-                voice_channel_id: ctx.channel_id(),
-            })?;
-
-        ctx.reply("Undeafened").await?;
-    } else {
-        return Err(MusicCommandError::BotVoiceNotJoined {
-            voice_guild_id: guild_id,
-        }
-        .into());
-    }
-
-    Ok(())
-}
-
-/// Unmutes Ayaya. Poor Ayaya has been talking to herself unnoticed.
-#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only, aliases("um"))]
-async fn unmute(ctx: Context<'_>) -> Result<(), BotError> {
-    let guild_id = get_guild_id(ctx)?;
-    let manager = &ctx.data().songbird;
-
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-        handler
-            .mute(false)
-            .await
-            .map_err(|e| MusicCommandError::FailedUnmuteCall {
-                source: e,
-                voice_guild_id: guild_id,
-                voice_channel_id: ctx.channel_id(),
-            })?;
-        ctx.reply("Unmuted").await?;
-    } else {
-        return Err(MusicCommandError::BotVoiceNotJoined {
-            voice_guild_id: guild_id,
-        }
-        .into());
-    }
-
-    Ok(())
-}
-
-/// "Shows what song is currently playing. Ayaya really knows everything about herself."
-#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, aliases("np"), guild_only)]
-async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
-    let guild_id = get_guild_id(ctx)?;
-
-    let manager = &ctx.data().songbird;
-
-    if let Some(handler) = manager.get(guild_id) {
-        let handler = handler.lock().await;
-        match handler.queue().current() {
-            Some(track) => {
-                let data = ctx.data();
-                let track_uuid = track.uuid();
-                let track_state =
-                    track
-                        .get_info()
-                        .await
-                        .map_err(|e| MusicCommandError::TrackStateNotFound {
-                            source: e,
-                            track_uuid,
-                        })?;
-                let metadata = {
-                    let lock = data.track_metadata.lock().unwrap();
-                    lock.get(&track_uuid)
-                        .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                        .clone()
-                };
-
-                ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
-                    utils::EmbedOperation::NowPlaying,
-                    &metadata,
-                    Some(&track_state),
-                )))
-                .await?;
-            }
-            None => {
-                ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
-                    utils::EmbedOperation::NowPlaying,
-                    &songbird::input::AuxMetadata::default(),
-                    None,
-                )))
-                .await?;
-            }
-        };
-    } else {
-        ctx.send(
-            poise::CreateReply::default()
-                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
-        )
-        .await?;
-    }
-
-    Ok(())
-}
-
-/// Seeks the track to a position given in seconds
-#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
-async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
-    let guild_id = get_guild_id(ctx)?;
-
-    let manager = &ctx.data().songbird;
-
-    // TODO: polish and user error handling
-    if let Some(handler) = manager.get(guild_id) {
-        let handler = handler.lock().await;
-        match handler.queue().current() {
-            Some(track) => {
-                let data = ctx.data();
-                let track_uuid = track.uuid();
-                let metadata = {
-                    let lock = data.track_metadata.lock().unwrap();
-                    lock.get(&track_uuid)
-                        .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                        .clone()
-                };
-                track
-                    .seek(std::time::Duration::from_secs(secs))
-                    .result()
-                    .map_err(|e| MusicCommandError::FailedTrackSeek {
-                        source: e,
-                        track_uuid,
-                        voice_guild_id: guild_id,
-                        position: secs,
-                    })?;
-                let song_name = metadata.title.clone().unwrap();
-                let channel_name = metadata.channel.clone().unwrap();
-
-                // TODO: express in embed
-                check_msg(
-                    ctx.channel_id()
-                        .say(
-                            ctx,
-                            format!(
-                                "Seek track: `{} ({})` to {} seconds",
-                                song_name, channel_name, secs
-                            ),
-                        )
-                        .await,
-                );
-            }
-            None => {
-                ctx.send(
-                    poise::CreateReply::default()
-                        .embed(error_embed(utils::EmbedOperation::ErrorNotPlaying)),
-                )
-                .await?;
-            }
-        };
-    } else {
-        ctx.send(
-            poise::CreateReply::default()
-                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
-        )
-        .await?;
-    }
-
-    Ok(())
-}
-
 /// Inserts a youtube source, sets events and notifies the calling channel
 #[tracing::instrument(skip(ctx, call, source))]
 async fn handle_single_play(
@@ -940,6 +939,29 @@ async fn handle_single_play(
     ctx.send(poise::CreateReply::default().embed(embed)).await?;
 
     Ok(())
+}
+
+// TODO: decide if this needs to be instrumented
+async fn handle_from_playlist(
+    metadata: utils::YoutubeMetadata,
+    http: reqwest::Client,
+    track_metadata: Arc<std::sync::Mutex<HashMap<uuid::Uuid, songbird::input::AuxMetadata>>>,
+    call: Option<Arc<Mutex<songbird::Call>>>,
+    serenity_http: Arc<serenity::Http>,
+    calling_channel_id: ChannelId,
+) -> Result<songbird::input::AuxMetadata, BotError> {
+    // our ids are formatted into youtube links to prevent command line errors
+    let youtube_link = format!("https://www.youtube.com/watch?v={}", metadata.youtube_id);
+
+    let source = YoutubeDl::new(http.clone(), youtube_link);
+    insert_source(
+        source,
+        track_metadata,
+        call,
+        serenity_http,
+        calling_channel_id,
+    )
+    .await
 }
 
 /// Process the given source, obtain its metadata and handle track insertion with events. This
@@ -994,7 +1016,6 @@ async fn insert_source(
             } else {
                 error!("Call does not exist...");
                 return Err(MusicCommandError::CallDoesNotExist.into());
-                // TODO: error when call does not exist
             }
         }
         Err(e) => {
