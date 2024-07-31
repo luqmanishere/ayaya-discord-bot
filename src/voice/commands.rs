@@ -11,7 +11,7 @@ use songbird::{
     input::{Compose, YoutubeDl},
     Event,
 };
-use tracing::{error, info, log::warn};
+use tracing::{debug, error, info, log::warn};
 
 // Imports within the crate
 use super::{
@@ -900,17 +900,20 @@ impl PlayParse {
 
                 let channel_id = ctx.channel_id();
                 let call = manager.get(guild_id);
+                let pool = &ctx.data().youtube_task_pool;
 
                 // TODO: make it ordered
                 for metadata in metadata_vec {
-                    tokio::spawn(handle_from_playlist(
+                    pool.spawn(handle_from_playlist(
                         metadata,
                         ctx.data().http.clone(),
                         ctx.data().track_metadata.clone(),
                         call.clone(),
                         ctx.serenity_context().http.clone(),
                         channel_id,
-                    ));
+                    ))
+                    .await
+                    .unwrap();
                 }
             }
         }
@@ -953,6 +956,8 @@ async fn handle_from_playlist(
     // our ids are formatted into youtube links to prevent command line errors
     let youtube_link = format!("https://www.youtube.com/watch?v={}", metadata.youtube_id);
 
+    // TODO: polis
+    debug!("Handling youtube link {youtube_link}");
     let source = YoutubeDl::new(http.clone(), youtube_link);
     insert_source(
         source,
@@ -974,6 +979,8 @@ async fn insert_source(
     serenity_http: Arc<serenity::Http>,
     calling_channel_id: ChannelId,
 ) -> Result<songbird::input::AuxMetadata, BotError> {
+    // TODO: rework this entire thing
+    info!("Gathering metadata for source");
     match source.aux_metadata().await {
         Ok(metadata) => {
             let track: songbird::tracks::Track = source.into();
