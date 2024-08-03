@@ -5,6 +5,7 @@ use std::{
 };
 
 use ::serenity::futures::TryFutureExt;
+use futures::{stream, StreamExt};
 use poise::serenity_prelude as serenity;
 use serenity::{model::id::ChannelId, prelude::*, Mentionable};
 use songbird::{
@@ -22,6 +23,7 @@ use super::{
     },
 };
 use crate::{
+    error::command_error_embed,
     utils::{check_msg, get_guild, get_guild_id, ChannelInfo, GuildInfo, OptionExt},
     voice::error::MusicCommandError,
     BotError, Context,
@@ -900,21 +902,35 @@ impl PlayParse {
 
                 let channel_id = ctx.channel_id();
                 let call = manager.get(guild_id);
-                let pool = &ctx.data().youtube_task_pool;
 
                 // TODO: make it ordered
-                for metadata in metadata_vec {
-                    pool.spawn(handle_from_playlist(
+                let fut = stream::iter(metadata_vec).for_each_concurrent(20, |metadata| async {
+                    if let Err(error) = handle_from_playlist(
                         metadata,
                         ctx.data().http.clone(),
                         ctx.data().track_metadata.clone(),
                         call.clone(),
                         ctx.serenity_context().http.clone(),
                         channel_id,
-                    ))
+                    )
                     .await
-                    .unwrap();
-                }
+                    {
+                        let cmd = ctx.command().name.clone();
+                        error!("Error executing command ({}): {}", cmd, error);
+
+                        if let Err(e) = ctx
+                            .send(
+                                poise::CreateReply::default()
+                                    .embed(command_error_embed(cmd, error)),
+                            )
+                            .await
+                        {
+                            error!("Error sending error message: {}", e);
+                        }
+                    };
+                });
+
+                fut.await;
             }
         }
         Ok(())

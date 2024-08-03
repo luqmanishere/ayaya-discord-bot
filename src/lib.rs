@@ -34,7 +34,6 @@ pub struct Data {
     songbird: Arc<songbird::Songbird>,
     track_metadata: Arc<Mutex<HashMap<Uuid, AuxMetadata>>>,
     user_id: RwLock<serenity::UserId>,
-    youtube_task_pool: tokio_task_pool::Pool,
 }
 
 pub async fn client(token: String, loki: Option<LokiOpts>) -> Result<serenity::Client> {
@@ -96,8 +95,6 @@ pub async fn client(token: String, loki: Option<LokiOpts>) -> Result<serenity::C
                     songbird: manager_clone,
                     track_metadata: Default::default(),
                     user_id: Default::default(),
-                    youtube_task_pool: tokio_task_pool::Pool::bounded(10)
-                        .with_spawn_timeout(std::time::Duration::from_secs(60)).with_run_timeout(std::time::Duration::from_secs(120))
                 })
             })
         })

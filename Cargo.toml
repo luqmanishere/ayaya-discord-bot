@@ -34,7 +34,7 @@ miette = { version = "7" }
 tracing-loki = "0.2.5"
 base64 = "0.22.1"
 url = "2.5.2"
-tokio-task-pool = "0.1.5"
+futures = { version = "0.3" }
 
 [dependencies.songbird]
 version = "0.4.3"
