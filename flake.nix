@@ -36,13 +36,14 @@
           [
             libGL
             libxkbcommon
-              openssl.dev
+            openssl.dev
             wayland
             xorg.libX11
             xorg.libXcursor
             xorg.libXi
             xorg.libXrandr
             libopus
+            openssl
           ];
       in {
         # use oxalica/rust-overlay
@@ -77,7 +78,7 @@
             runtimeLibs = with pkgs; [
               libGL
               libxkbcommon
-                openssl.dev
+              openssl.dev
               wayland
               xorg.libX11
               xorg.libXcursor
@@ -122,6 +123,7 @@
             ripgrep
             mold
             libopus
+            yt-dlp
           ];
 
           packagesFrom = [crateOutputs.packages.release];
