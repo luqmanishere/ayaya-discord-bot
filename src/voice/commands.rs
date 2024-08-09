@@ -869,30 +869,12 @@ impl PlayParse {
             PlayParse::Search(search) => {
                 info!("searching youtube for: {}", search);
                 let source = YoutubeDl::new_search(ctx.data().http.clone(), search);
-                match handle_single_play(call, calling_channel_id, source, ctx).await {
-                    Ok(_) => {}
-                    Err(_) => {
-                        ctx.send(
-                            poise::CreateReply::default()
-                                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
-                        )
-                        .await?;
-                    }
-                }
+                handle_single_play(call, calling_channel_id, source, ctx).await?;
             }
             PlayParse::Url(url) => {
                 info!("using provided link: {}", url);
                 let source = YoutubeDl::new(ctx.data().http.clone(), url);
-                match handle_single_play(call, calling_channel_id, source, ctx).await {
-                    Ok(_) => {}
-                    Err(_) => {
-                        ctx.send(
-                            poise::CreateReply::default()
-                                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
-                        )
-                        .await?;
-                    }
-                }
+                handle_single_play(call, calling_channel_id, source, ctx).await?;
             }
             PlayParse::PlaylistUrl(playlist_url) => {
                 info!("using provided playlist link: {playlist_url}");
