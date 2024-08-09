@@ -29,6 +29,7 @@ use crate::{
     BotError, Context,
 };
 
+/// This command must be called with a subcommmand.
 #[poise::command(
     slash_command,
     prefix_command,
@@ -50,11 +51,14 @@ use crate::{
         "deafen",
         "delete"
     ),
-    aliases("m"),
-    subcommand_required
+    aliases("m")
 )]
 pub async fn music(ctx: Context<'_>) -> Result<(), BotError> {
-    info!("called by {}", ctx.author());
+    let configuration = poise::builtins::HelpConfiguration {
+        // [configure aspects about the help message here]
+        ..Default::default()
+    };
+    poise::builtins::help(ctx, Some(&ctx.command().name), configuration).await?;
     Ok(())
 }
 
