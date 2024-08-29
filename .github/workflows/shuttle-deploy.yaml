@@ -2,6 +2,10 @@ name: Shuttle Deploy
 
 on:
   push:
+    paths:
+      - "**.rs"
+      - "Cargo.lock"
+      - ".github/workflows/shuttle-deploy.yml"
     branches:
       - main
   workflow_dispatch:
