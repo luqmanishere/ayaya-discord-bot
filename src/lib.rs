@@ -211,7 +211,7 @@ async fn event_handler(
 
             reader
                 .lines()
-                .filter_map(|line| line.ok())
+                .map_while(Result::ok)
                 .for_each(|line| info!("yt-dlp setup: {}", line));
         }
         serenity::FullEvent::CacheReady { guilds } => {
