@@ -44,14 +44,14 @@ features = ["builtin-queue", "driver", "serenity"]
 # version = "0.12"
 git = "https://github.com/serenity-rs/serenity.git"
 # branch = "next"
-rev = "adf4673ab39e34e92578c6961c2612949ee23bcc"
+rev = "c3d4a3386ea0710a81618f07771c83912c5f6196"
 features = [
   "cache",
   "framework",
   "voice",
   "http",
   "rustls_backend",
-  "client",
+  "gateway",
   "collector",
 ]
 

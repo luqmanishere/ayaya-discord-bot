@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    io::{BufRead, BufReader, ErrorKind},
     sync::{Arc, Mutex},
 };
 
@@ -193,6 +194,25 @@ async fn event_handler(
                 let mut user_id_lock = _data.user_id.write().await;
                 *user_id_lock = bot_user_id;
             }
+
+            // test yt-dlp
+            let stdout = std::process::Command::new("yt-dlp")
+                .arg("-J")
+                .arg("-v")
+                .arg("https://www.youtube.com/watch?v=KId6eunoiWk")
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .expect("yt-dlp runs")
+                .stderr
+                .ok_or_else(|| std::io::Error::new(ErrorKind::Other, "Could not capture stdout"))
+                .expect("cant get yt-dlp stdout");
+
+            let reader = BufReader::new(stdout);
+
+            reader
+                .lines()
+                .filter_map(|line| line.ok())
+                .for_each(|line| info!("yt-dlp setup: {}", line));
         }
         serenity::FullEvent::CacheReady { guilds } => {
             info!("Cached guild info is ready for {} guilds.", guilds.len());

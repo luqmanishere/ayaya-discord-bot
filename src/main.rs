@@ -39,6 +39,7 @@ async fn shuttle_main(
         .unwrap_or_default()
         .contains("true")
     {
+        // installs the following packages with apt
         if !std::process::Command::new("apt")
             .arg("install")
             .arg("-y")
@@ -51,6 +52,7 @@ async fn shuttle_main(
         {
             panic!("failed to install dependencies")
         }
+        // installs the following packages with pipx
         if !std::process::Command::new("pipx")
             .arg("install")
             .arg("yt-dlp")
@@ -61,6 +63,19 @@ async fn shuttle_main(
         {
             panic!("failed to install dependencies")
         }
+
+        if !std::process::Command::new("pipx")
+            .arg("inject")
+            .arg("yt-dlp")
+            .arg("https://github.com/coletdjnz/yt-dlp-youtube-oauth2/archive/refs/heads/master.zip")
+            .status()
+            .expect("failed to run pipx")
+            .success()
+        {
+            panic!("failed to install dependencies")
+        }
+
+        // prepend pipx path
         if let Some(path) = env::var_os("PATH") {
             let mut paths = env::split_paths(&path).collect::<Vec<_>>();
             let home = std::path::PathBuf::from(
@@ -69,6 +84,22 @@ async fn shuttle_main(
             paths.push(home.join(".local/bin/"));
             let new_path = env::join_paths(paths).map_err(shuttle_runtime::CustomError::new)?;
             env::set_var("PATH", &new_path);
+        }
+
+        // write yt-dlp config file
+        {
+            let home = std::path::PathBuf::from(
+                std::env::var("HOME").map_err(shuttle_runtime::CustomError::new)?,
+            );
+            let yt_dlp_config_dir = home.join(".config/yt-dlp");
+            if !yt_dlp_config_dir.exists() {
+                std::fs::create_dir_all(&yt_dlp_config_dir)?;
+            }
+
+            let yt_dlp_config = "--netrc";
+            let netrc_config = "machine youtube login oauth2 password \"\"";
+            std::fs::write(yt_dlp_config_dir.join("config"), yt_dlp_config)?;
+            std::fs::write(home.join(".netrc"), netrc_config)?;
         }
     }
 
