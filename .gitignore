@@ -7,3 +7,4 @@
 /Secrets*.toml
 /.vscode
 /rust-analyzer.json
+/.DS_Store

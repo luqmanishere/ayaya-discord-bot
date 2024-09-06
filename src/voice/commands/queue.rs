@@ -5,7 +5,7 @@ use tracing::error;
 
 use crate::{
     error::BotError,
-    utils::{get_guild_id, ChannelInfo, GuildInfo},
+    utils::{get_guild_id, ChannelInfo, GuildInfo, OptionExt},
     voice::{
         error::MusicCommandError,
         utils::{self, error_embed, metadata_to_embed},
@@ -28,37 +28,33 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
         let handler = handler_lock.lock().await;
         let queue = handler.queue();
         let tracks = queue.current_queue();
-        let mut lines = serenity::MessageBuilder::new();
-        {
+        let queue_vec = {
             let data = ctx.data();
             let metadata_lock = data.track_metadata.lock().unwrap();
+            let mut queue_vec = vec![];
 
             // TODO: replace with embed
-            if tracks.is_empty() {
-                lines.push_line("# Nothing in queue");
-            } else {
-                lines.push_line("# Queue");
-            }
-            for (i, track) in tracks.iter().enumerate() {
+            for (index, track) in tracks.iter().enumerate() {
                 let track_uuid = track.uuid();
                 let metadata = metadata_lock
                     .get(&track_uuid)
                     .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?;
-
-                lines.push_quote_line(format!(
-                    "{}. {} ({})",
-                    i + 1,
-                    metadata.title.as_ref().unwrap(),
-                    metadata.channel.as_ref().unwrap()
-                ));
+                let rendered = format!(
+                    "{}. {} | Channel: {}",
+                    index,
+                    metadata.title.clone().unwrap_or_unknown(),
+                    metadata.channel.clone().unwrap_or_unknown()
+                );
+                queue_vec.push(rendered);
             }
-        }
-
-        let embed = serenity::CreateEmbed::new()
-            .colour(serenity::Colour::MEIBE_PINK)
-            .description(lines.to_string());
-
-        ctx.send(poise::CreateReply::default().embed(embed)).await?;
+            queue_vec
+        };
+        // TODO: pagination
+        if let Err(BotError::MusicCommandError(MusicCommandError::SearchTimeout)) =
+            queue_pagination_interaction(ctx, queue_vec).await
+        {
+            return Ok(());
+        };
     } else {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }
@@ -195,4 +191,106 @@ pub async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
     }
 
     Ok(())
+}
+
+async fn queue_pagination_interaction(
+    ctx: Context<'_>,
+    queued_metadata: Vec<String>,
+) -> Result<(), BotError> {
+    // define unique identifiers
+    let ctx_id = ctx.id();
+    let prev_button_id = format!("{}prev", ctx_id);
+    let next_button_id = format!("{}next", ctx_id);
+
+    let mut current_page = 0;
+
+    // cut the metadata into chunks
+    let queued_metadata_chunks = queued_metadata.chunks(3).collect::<Vec<_>>();
+
+    // create the first reply
+    let reply = {
+        let mut buttons = vec![serenity::CreateButton::new(&prev_button_id).emoji('◀')];
+        let mut reply = poise::CreateReply::default();
+        let mut message = serenity::MessageBuilder::default();
+        let mut embed = serenity::CreateEmbed::new()
+            .author(serenity::CreateEmbedAuthor::new(format!("Queue | Page: {}", current_page)).icon_url(
+                "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
+            ))
+            .timestamp(serenity::Timestamp::now())
+            .footer(serenity::CreateEmbedFooter::new("Ayaya Discord Bot"));
+
+        for (i, rendered) in queued_metadata_chunks[0].iter().enumerate() {
+            message.push_line(rendered);
+        }
+
+        // set the description
+        embed = embed.description(message.to_string());
+        reply = reply.embed(embed.to_owned());
+        buttons.push(serenity::CreateButton::new(&next_button_id).emoji('▶'));
+
+        let components = serenity::CreateActionRow::Buttons(buttons);
+        reply.components(vec![components])
+    };
+    ctx.send(reply).await?;
+
+    // Loop through incoming interactions with the navigation buttons
+    while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
+        // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
+        // button was pressed
+        .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+        // Timeout when no navigation button has been pressed for 1 minute
+        .timeout(std::time::Duration::from_secs(60))
+        .await
+    {
+        // Depending on which button was pressed, go to next or previous page
+        if press.data.custom_id == next_button_id {
+            current_page += 1;
+            if current_page >= queued_metadata_chunks.len() {
+                current_page = 0;
+            }
+        } else if press.data.custom_id == prev_button_id {
+            current_page = current_page
+                .checked_sub(1)
+                .unwrap_or(queued_metadata_chunks.len() - 1);
+        } else {
+            // This is an unrelated button interaction
+            continue;
+        }
+
+        let response = {
+            let mut buttons = vec![serenity::CreateButton::new(&prev_button_id).emoji('◀')];
+            let mut response = serenity::CreateInteractionResponseMessage::new();
+            let mut message = serenity::MessageBuilder::default();
+            let mut embed = serenity::CreateEmbed::new()
+                .author(serenity::CreateEmbedAuthor::new(format!("Queue | Page: {}", current_page)).icon_url(
+                    "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
+                ))
+                .timestamp(serenity::Timestamp::now())
+                .footer(serenity::CreateEmbedFooter::new(
+                    "Ayaya Discord Bot"
+                ));
+
+            for (i, rendered) in queued_metadata_chunks[0].iter().enumerate() {
+                message.push_line(rendered);
+            }
+
+            // set the description
+            embed = embed.description(message.to_string());
+            response = response.embed(embed.to_owned());
+            buttons.push(serenity::CreateButton::new(&next_button_id).emoji('▶'));
+
+            let components = serenity::CreateActionRow::Buttons(buttons);
+            response.components(vec![components])
+        };
+
+        // Update the message with the new page contents
+        press
+            .create_response(
+                ctx.serenity_context(),
+                serenity::CreateInteractionResponse::UpdateMessage(response),
+            )
+            .await?;
+    }
+    // TODO: its own error
+    Err(MusicCommandError::SearchTimeout.into())
 }

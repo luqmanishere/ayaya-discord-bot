@@ -71,6 +71,7 @@ impl PlayParse {
                 let call = manager.get(guild_id);
 
                 // TODO: make it ordered
+                // FIXME: this is blocking the thread, need to encapsulate in task
                 let fut = stream::iter(metadata_vec).for_each_concurrent(20, |metadata| async {
                     if let Err(error) = handle_from_playlist(
                         metadata,
