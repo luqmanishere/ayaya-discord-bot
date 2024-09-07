@@ -41,7 +41,7 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
                     .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?;
                 let rendered = format!(
                     "{}. {} | Channel: {}",
-                    index,
+                    index + 1,
                     metadata.title.clone().unwrap_or_unknown(),
                     metadata.channel.clone().unwrap_or_unknown()
                 );
@@ -205,7 +205,7 @@ async fn queue_pagination_interaction(
     let mut current_page = 0;
 
     // cut the metadata into chunks
-    let queued_metadata_chunks = queued_metadata.chunks(3).collect::<Vec<_>>();
+    let queued_metadata_chunks = queued_metadata.chunks(10).collect::<Vec<_>>();
 
     // create the first reply
     let reply = {
@@ -213,7 +213,7 @@ async fn queue_pagination_interaction(
         let mut reply = poise::CreateReply::default();
         let mut message = serenity::MessageBuilder::default();
         let mut embed = serenity::CreateEmbed::new()
-            .author(serenity::CreateEmbedAuthor::new(format!("Queue | Page: {}", current_page)).icon_url(
+            .author(serenity::CreateEmbedAuthor::new(format!("Queue | Page: {}", current_page  +1)).icon_url(
                 "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
             ))
             .timestamp(serenity::Timestamp::now())
@@ -262,7 +262,7 @@ async fn queue_pagination_interaction(
             let mut response = serenity::CreateInteractionResponseMessage::new();
             let mut message = serenity::MessageBuilder::default();
             let mut embed = serenity::CreateEmbed::new()
-                .author(serenity::CreateEmbedAuthor::new(format!("Queue | Page: {}", current_page)).icon_url(
+                .author(serenity::CreateEmbedAuthor::new(format!("Queue | Page: {}", current_page + 1)).icon_url(
                     "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
                 ))
                 .timestamp(serenity::Timestamp::now())
@@ -270,7 +270,7 @@ async fn queue_pagination_interaction(
                     "Ayaya Discord Bot"
                 ));
 
-            for (i, rendered) in queued_metadata_chunks[0].iter().enumerate() {
+            for (i, rendered) in queued_metadata_chunks[current_page].iter().enumerate() {
                 message.push_line(rendered);
             }
 
