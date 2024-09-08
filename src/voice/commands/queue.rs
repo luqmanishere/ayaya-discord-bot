@@ -8,7 +8,7 @@ use crate::{
     utils::{get_guild_id, ChannelInfo, GuildInfo, OptionExt},
     voice::{
         error::MusicCommandError,
-        utils::{self, error_embed, metadata_to_embed},
+        utils::{self, metadata_to_embed},
     },
     Context,
 };
@@ -141,11 +141,11 @@ pub async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<(), BotEr
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, aliases("np"), guild_only)]
 pub async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
-    let guild_id = get_guild_id(ctx)?;
+    let guild_info = GuildInfo::from_ctx(ctx)?;
 
     let manager = &ctx.data().songbird;
 
-    if let Some(handler) = manager.get(guild_id) {
+    if let Some(handler) = manager.get(guild_info.guild_id) {
         let handler = handler.lock().await;
         match handler.queue().current() {
             Some(track) => {
@@ -183,11 +183,7 @@ pub async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
             }
         };
     } else {
-        ctx.send(
-            poise::CreateReply::default()
-                .embed(error_embed(utils::EmbedOperation::ErrorNotInVoiceChannel)),
-        )
-        .await?;
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }
 
     Ok(())

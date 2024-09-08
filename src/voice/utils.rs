@@ -148,7 +148,6 @@ pub enum EmbedOperation {
     NowPlaying,
     SkipSong,
     DeleteFromQueue,
-    ErrorNotInVoiceChannel,
 }
 
 impl std::fmt::Display for EmbedOperation {
@@ -158,7 +157,6 @@ impl std::fmt::Display for EmbedOperation {
             EmbedOperation::AddToQueue => "Added to Queue",
             EmbedOperation::NowPlayingNotification | EmbedOperation::NowPlaying => "Now Playing",
             EmbedOperation::SkipSong => "Skipping Song",
-            EmbedOperation::ErrorNotInVoiceChannel => "Not in Voice Channel",
             EmbedOperation::DeleteFromQueue => "Delete From Queue",
         };
         write!(f, "{out}")
@@ -255,33 +253,9 @@ pub fn metadata_to_embed(
                 serenity::Color::DARK_GREEN
             }
             EmbedOperation::SkipSong => serenity::Color::ORANGE,
-            _ => serenity::Color::MEIBE_PINK,
         });
 
     embed
-}
-
-pub fn error_embed(operation: EmbedOperation) -> serenity::CreateEmbed {
-    serenity::CreateEmbed::default()
-        .color(serenity::Color::RED)
-        .author(
-            serenity::CreateEmbedAuthor::new(format!("Error | {}", operation)).icon_url(
-                "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
-            ),
-        )
-        .description(
-            serenity::MessageBuilder::default()
-                .push_line(format!("### {}: {}", "Error", operation))
-                .push_line(match operation {
-                    EmbedOperation::ErrorNotInVoiceChannel => {
-                        "Ayaya tells you to join a voice channel to run this command. Hehe."
-                    }
-                    _ => "Even Ayaya doesn't know what went wrong",
-                })
-                .to_string(),
-        )
-        .timestamp(serenity::Timestamp::now())
-        .footer(serenity::CreateEmbedFooter::new("Ayaya Discord Bot"))
 }
 
 /// Create an interaction for the search command. Returns the selected video id if any
