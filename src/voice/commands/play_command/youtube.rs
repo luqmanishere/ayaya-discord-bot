@@ -150,6 +150,7 @@ impl YoutubeDl {
             .extra_arg("--no-playlist")
             .extra_arg("-f")
             .extra_arg("ba[abr>0][vcodec=none]/best")
+            .process_timeout(std::time::Duration::from_secs(45)) // the length of a youtube ad
             .run_async()
             .await
             .map_err(|e| AudioStreamError::Fail(Box::new(e)))?;
