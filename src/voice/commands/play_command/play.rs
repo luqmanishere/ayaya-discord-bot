@@ -2,7 +2,10 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use futures::{stream, StreamExt};
+use futures::{
+    stream::{self},
+    StreamExt,
+};
 use poise::serenity_prelude as serenity;
 use songbird::{input::Compose, Event};
 use tokio::sync::Mutex;
@@ -70,32 +73,42 @@ impl PlayParse {
 
                 // TODO: make it ordered by computing the metadata first and adding in order. This means splitting up the metadata collection and the adding to queue part
                 // FIXME: this is blocking the thread, need to encapsulate in task
-                let fut = stream::iter(playlist_inputs).for_each_concurrent(20, |source| async {
-                    if let Err(error) = insert_source(
-                        source,
-                        ctx.data().track_metadata.clone(),
-                        call.clone(),
-                        ctx.serenity_context().http.clone(),
-                        calling_channel_id,
-                    )
-                    .await
-                    {
-                        let cmd = ctx.command().name.clone();
-                        error!("Error executing command ({}): {}", cmd, error);
 
-                        if let Err(e) = ctx
-                            .send(
-                                poise::CreateReply::default()
-                                    .embed(command_error_embed(cmd, error)),
+                let mut buffered =
+                    stream::iter(playlist_inputs.into_iter().map(|e| metadata_fut(e))).buffered(5);
+
+                let track_metadata = ctx.data().track_metadata.clone();
+                let serenity_http = ctx.serenity_context().http.clone();
+
+                while let Some(metadata_result) = buffered.next().await {
+                    match metadata_result {
+                        Ok(source) => {
+                            insert_source(
+                                source,
+                                track_metadata.clone(),
+                                call.clone(),
+                                serenity_http.clone(),
+                                calling_channel_id,
                             )
-                            .await
-                        {
-                            error!("Error sending error message: {}", e);
+                            .await?;
                         }
-                    };
-                });
+                        Err(error) => {
+                            let cmd = ctx.command().name.clone();
+                            error!("Error executing command ({}): {}", cmd, error);
 
-                fut.await;
+                            if let Err(e) = ctx
+                                .send(
+                                    poise::CreateReply::default()
+                                        .embed(command_error_embed(cmd, error)),
+                                )
+                                .await
+                            {
+                                error!("Error sending error message: {}", e);
+                            }
+                        }
+                    }
+                }
+                info!("Done adding playlist")
             }
         }
         Ok(())
@@ -198,5 +211,14 @@ async fn insert_source(
             error!(err);
             return Err(MusicCommandError::TrackMetadataRetrieveFailed(e).into());
         }
+    }
+}
+
+async fn metadata_fut(mut source: youtube::YoutubeDl) -> Result<youtube::YoutubeDl, BotError> {
+    info!("Gathering metadata for source");
+    // Poll source for metadata
+    match source.aux_metadata().await {
+        Ok(_) => Ok::<youtube::YoutubeDl, BotError>(source),
+        Err(e) => Err(MusicCommandError::TrackMetadataRetrieveFailed(e).into()),
     }
 }
