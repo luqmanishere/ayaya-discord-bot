@@ -1,7 +1,7 @@
 //! This module contains commands for queue manipulation (excluding addition)
 
 use poise::serenity_prelude as serenity;
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::{
     error::BotError,
@@ -28,7 +28,7 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
         let handler = handler_lock.lock().await;
         let queue = handler.queue();
         let tracks = queue.current_queue();
-        let queue_vec = {
+        let queue_vec = if !tracks.is_empty() {
             let data = ctx.data();
             let metadata_lock = data.track_metadata.lock().unwrap();
             let mut queue_vec = vec![];
@@ -48,12 +48,22 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
                 queue_vec.push(rendered);
             }
             queue_vec
+        } else {
+            vec![]
         };
         // TODO: pagination
+        if queue_vec.is_empty() {
+            ctx.reply("Queue is empty, add some music to see something")
+                .await?;
+            return Ok(());
+        }
+
         if let Err(BotError::MusicCommandError(MusicCommandError::SearchTimeout)) =
             queue_pagination_interaction(ctx, queue_vec).await
         {
             return Ok(());
+        } else {
+            warn!("Waited too long");
         };
     } else {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
