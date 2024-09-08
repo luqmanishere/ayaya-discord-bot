@@ -41,14 +41,19 @@ async fn shuttle_main(
     {
         // installs the following packages with apt
         if !std::process::Command::new("apt")
-            .arg("install")
-            .arg("-y")
-            .arg("pipx") // the apt package that a dependency of my project needs to compile
-            .arg("ffmpeg") // the apt package that a dependency of my project needs to compile
-            // can add more here
+            .arg("update")
             .status()
             .expect("failed to run apt")
             .success()
+            || !std::process::Command::new("apt")
+                .arg("install")
+                .arg("-y")
+                .arg("pipx") // the apt package that a dependency of my project needs to compile
+                .arg("ffmpeg") // the apt package that a dependency of my project needs to compile
+                // can add more here
+                .status()
+                .expect("failed to run apt")
+                .success()
         {
             panic!("failed to install dependencies")
         }
