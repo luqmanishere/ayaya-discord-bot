@@ -219,7 +219,7 @@ async fn queue_pagination_interaction(
             .timestamp(serenity::Timestamp::now())
             .footer(serenity::CreateEmbedFooter::new("Ayaya Discord Bot"));
 
-        for (i, rendered) in queued_metadata_chunks[0].iter().enumerate() {
+        for rendered in queued_metadata_chunks[0].iter() {
             message.push_line(rendered);
         }
 
@@ -270,7 +270,7 @@ async fn queue_pagination_interaction(
                     "Ayaya Discord Bot"
                 ));
 
-            for (i, rendered) in queued_metadata_chunks[current_page].iter().enumerate() {
+            for rendered in queued_metadata_chunks[current_page].iter() {
                 message.push_line(rendered);
             }
 
