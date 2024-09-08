@@ -16,6 +16,7 @@ use crate::{
 
 mod join;
 mod play;
+mod youtube;
 
 /// Joins the voice channel the user is currently in. PARTY TIME!
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]

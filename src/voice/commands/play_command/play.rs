@@ -4,20 +4,18 @@ use std::{collections::HashMap, sync::Arc};
 
 use futures::{stream, StreamExt};
 use poise::serenity_prelude as serenity;
-use songbird::{
-    input::{self, Compose},
-    Event,
-};
+use songbird::{input::Compose, Event};
 use tokio::sync::Mutex;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 use crate::{
     error::{command_error_embed, BotError},
     utils::{get_guild_id, OptionExt},
     voice::{
+        commands::play_command::youtube,
         error::MusicCommandError,
         events::TrackPlayNotifier,
-        utils::{self, metadata_to_embed, resolve_yt_playlist},
+        utils::{self, metadata_to_embed},
     },
     Context,
 };
@@ -53,33 +51,32 @@ impl PlayParse {
         match self {
             PlayParse::Search(search) => {
                 info!("searching youtube for: {}", search);
-                let source = input::YoutubeDl::new_search(ctx.data().http.clone(), search);
+                let source = youtube::YoutubeDl::new_search(ctx.data().http.clone(), search);
                 handle_single_play(call, calling_channel_id, source, ctx).await?;
             }
             PlayParse::Url(url) => {
                 info!("using provided link: {}", url);
-                let source = input::YoutubeDl::new(ctx.data().http.clone(), url);
+                let source = youtube::YoutubeDl::new(ctx.data().http.clone(), url);
                 handle_single_play(call, calling_channel_id, source, ctx).await?;
             }
             PlayParse::PlaylistUrl(playlist_url) => {
                 info!("using provided playlist link: {playlist_url}");
                 ctx.reply("Handling playlist....").await?;
 
-                let metadata_vec = resolve_yt_playlist(playlist_url).await?;
+                let playlist_inputs =
+                    youtube::YoutubeDl::new_playlist(ctx.data().http.clone(), playlist_url).await?;
 
-                let channel_id = ctx.channel_id();
                 let call = manager.get(guild_id);
 
-                // TODO: make it ordered
+                // TODO: make it ordered by computing the metadata first and adding in order. This means splitting up the metadata collection and the adding to queue part
                 // FIXME: this is blocking the thread, need to encapsulate in task
-                let fut = stream::iter(metadata_vec).for_each_concurrent(20, |metadata| async {
-                    if let Err(error) = handle_from_playlist(
-                        metadata,
-                        ctx.data().http.clone(),
+                let fut = stream::iter(playlist_inputs).for_each_concurrent(20, |source| async {
+                    if let Err(error) = insert_source(
+                        source,
                         ctx.data().track_metadata.clone(),
                         call.clone(),
                         ctx.serenity_context().http.clone(),
-                        channel_id,
+                        calling_channel_id,
                     )
                     .await
                     {
@@ -122,7 +119,7 @@ pub async fn play_inner(ctx: Context<'_>, input: String) -> Result<(), BotError>
 async fn handle_single_play(
     call: Option<Arc<Mutex<songbird::Call>>>,
     calling_channel_id: serenity::ChannelId,
-    source: input::YoutubeDl,
+    source: youtube::YoutubeDl,
     ctx: Context<'_>,
 ) -> Result<(), BotError> {
     let metadata = insert_source(
@@ -140,35 +137,11 @@ async fn handle_single_play(
     Ok(())
 }
 
-// TODO: decide if this needs to be instrumented
-async fn handle_from_playlist(
-    metadata: utils::YoutubeMetadata,
-    http: reqwest::Client,
-    track_metadata: Arc<std::sync::Mutex<HashMap<uuid::Uuid, songbird::input::AuxMetadata>>>,
-    call: Option<Arc<Mutex<songbird::Call>>>,
-    serenity_http: Arc<serenity::Http>,
-    calling_channel_id: serenity::ChannelId,
-) -> Result<songbird::input::AuxMetadata, BotError> {
-    // our ids are formatted into youtube links to prevent command line errors
-    let youtube_link = format!("https://www.youtube.com/watch?v={}", metadata.youtube_id);
-
-    debug!("Handling youtube link {youtube_link}");
-    let source = input::YoutubeDl::new(http.clone(), youtube_link);
-    insert_source(
-        source,
-        track_metadata,
-        call,
-        serenity_http,
-        calling_channel_id,
-    )
-    .await
-}
-
 /// Process the given source, obtain its metadata and handle track insertion with events. This
 /// function is made to be used with tokio::spawn
 #[tracing::instrument(skip(track_metadata, call, serenity_http, calling_channel_id, source))]
 async fn insert_source(
-    mut source: input::YoutubeDl,
+    mut source: youtube::YoutubeDl,
     track_metadata: Arc<std::sync::Mutex<HashMap<uuid::Uuid, songbird::input::AuxMetadata>>>,
     call: Option<Arc<Mutex<songbird::Call>>>,
     serenity_http: Arc<serenity::Http>,

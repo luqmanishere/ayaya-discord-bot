@@ -1,15 +1,17 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::Sub;
 use std::time::Duration;
 
 use poise::serenity_prelude as serenity;
+use songbird::constants::SAMPLE_RATE_RAW;
 use youtube_dl::{SearchOptions, SingleVideo, YoutubeDlOutput};
 
 use crate::{utils::OptionExt, BotError, Context};
 
 use super::error::MusicCommandError;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct YoutubeMetadata {
     pub track: Option<String>,
     pub artist: Option<String>,
@@ -18,60 +20,93 @@ pub struct YoutubeMetadata {
     pub channels: Option<u8>,
     pub channel: Option<String>,
     pub start_time: Option<Duration>,
-    pub duration: Option<Duration>,
+    pub duration: Option<f64>,
     pub sample_rate: Option<u32>,
     pub source_url: Option<String>,
     pub title: Option<String>,
     pub thumbnail: Option<String>,
     pub youtube_id: String,
+    pub filesize: Option<u64>,
+    pub http_headers: Option<BTreeMap<String, Option<String>>>,
+    pub release_date: Option<String>,
+    pub upload_date: Option<String>,
+    pub uploader: Option<String>,
+    pub url: String,
+    pub webpage_url: Option<String>,
+    pub protocol: Option<youtube_dl::Protocol>,
 }
 
 impl YoutubeMetadata {
-    pub fn aux_metadata(&self) -> songbird::input::AuxMetadata {
-        Into::<AuxMetadataWrap>::into(self.clone()).0
+    pub fn as_aux_metadata(&self) -> songbird::input::AuxMetadata {
+        let album = self.album.clone();
+        let track = self.track.clone();
+        let true_artist = self.artist.as_ref();
+        let artist = true_artist.or(self.uploader.as_ref()).cloned();
+        let r_date = self.release_date.as_ref();
+        let date = r_date.or(self.upload_date.as_ref()).cloned();
+        let channel = self.channel.clone();
+        let duration = self.duration.map(std::time::Duration::from_secs_f64);
+        let source_url = self.webpage_url.clone();
+        let title = self.title.clone();
+        let thumbnail = self.thumbnail.clone();
+
+        songbird::input::AuxMetadata {
+            track,
+            artist,
+            album,
+            date,
+
+            channels: Some(2),
+            channel,
+            duration,
+            sample_rate: Some(SAMPLE_RATE_RAW as u32),
+            source_url,
+            title,
+            thumbnail,
+
+            ..songbird::input::AuxMetadata::default()
+        }
     }
 }
 
-pub struct AuxMetadataWrap(songbird::input::AuxMetadata);
-
-impl From<YoutubeMetadata> for AuxMetadataWrap {
-    fn from(value: YoutubeMetadata) -> Self {
-        AuxMetadataWrap(songbird::input::AuxMetadata {
-            track: value.track,
-            artist: value.artist,
-            album: value.album,
-            date: value.date,
-            channels: value.channels,
-            channel: value.channel,
-            start_time: value.start_time,
-            duration: value.duration,
-            sample_rate: value.sample_rate,
-            source_url: value.source_url,
-            title: value.title,
-            thumbnail: value.thumbnail,
-        })
-    }
+pub trait AsYoutubeMetadata {
+    fn as_youtube_metadata(&self) -> YoutubeMetadata;
 }
 
-impl From<SingleVideo> for YoutubeMetadata {
-    fn from(value: SingleVideo) -> Self {
-        Self {
+impl AsYoutubeMetadata for SingleVideo {
+    fn as_youtube_metadata(&self) -> YoutubeMetadata {
+        let value = self.clone();
+        YoutubeMetadata {
             track: value.track,
             artist: value.artist,
             album: value.album,
-            date: value.upload_date,
+            date: value.upload_date.clone(),
             channels: None,
             channel: value.channel,
             start_time: None,
             duration: value
                 .duration
-                .map(|e| std::time::Duration::from_secs(e.as_u64().expect("duration is integer"))),
+                .map(|e| e.as_f64().expect("duration is a number")),
             sample_rate: None,
-            source_url: value.url,
+            source_url: value.url.clone(),
             title: value.title,
             thumbnail: value.thumbnail,
             youtube_id: value.id,
+            filesize: value.filesize.map(|e| e as u64),
+            http_headers: value.http_headers,
+            release_date: value.release_date,
+            upload_date: value.upload_date,
+            uploader: value.uploader,
+            url: value.url.expect("url has to exist"),
+            webpage_url: value.webpage_url,
+            protocol: value.protocol,
         }
+    }
+}
+
+impl From<SingleVideo> for YoutubeMetadata {
+    fn from(value: SingleVideo) -> Self {
+        value.as_youtube_metadata()
     }
 }
 
@@ -93,31 +128,6 @@ pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMe
                     args: term.to_string(),
                 })?
         }
-        YoutubeDlOutput::SingleVideo(video) => vec![*video],
-    };
-
-    let metadata_vec = videos
-        .iter()
-        .map(|e| Into::<YoutubeMetadata>::into(e.clone()))
-        .collect::<Vec<_>>();
-
-    Ok(metadata_vec)
-}
-
-pub async fn resolve_yt_playlist(playlist_url: String) -> Result<Vec<YoutubeMetadata>, BotError> {
-    let youtube_playlist = youtube_dl::YoutubeDl::new(playlist_url.clone())
-        .flat_playlist(true)
-        .run_async()
-        .await
-        .map_err(|e| MusicCommandError::YoutubeDlError {
-            source: e,
-            args: playlist_url.clone(),
-        })?;
-
-    let videos = match youtube_playlist {
-        YoutubeDlOutput::Playlist(playlist) => playlist
-            .entries
-            .ok_or(MusicCommandError::YoutubeDlEmptyPlaylist { args: playlist_url })?,
         YoutubeDlOutput::SingleVideo(video) => vec![*video],
     };
 
@@ -301,7 +311,7 @@ pub async fn create_search_interaction(
     // TODO: optimize?
     let metadata_embeds = metadata_vec
         .iter()
-        .map(|e| metadata_to_embed(EmbedOperation::YoutubeSearch, &e.aux_metadata(), None))
+        .map(|e| metadata_to_embed(EmbedOperation::YoutubeSearch, &e.as_aux_metadata(), None))
         .collect::<Vec<_>>();
     let metadata_embed_chunks = metadata_embeds.chunks(3).collect::<Vec<_>>();
 
