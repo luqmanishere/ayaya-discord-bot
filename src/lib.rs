@@ -22,9 +22,9 @@ use uuid::Uuid;
 
 use crate::voice::commands::music;
 
-pub mod error;
-pub mod utils;
-pub mod voice;
+pub(crate) mod error;
+pub(crate) mod utils;
+pub(crate) mod voice;
 
 pub type Context<'a> = poise::Context<'a, Data, BotError>;
 

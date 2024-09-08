@@ -12,6 +12,7 @@ use crate::{utils::OptionExt, BotError, Context};
 use super::error::MusicCommandError;
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct YoutubeMetadata {
     pub track: Option<String>,
     pub artist: Option<String>,
@@ -147,10 +148,7 @@ pub enum EmbedOperation {
     NowPlaying,
     SkipSong,
     DeleteFromQueue,
-    ErrorNotPlaying,
     ErrorNotInVoiceChannel,
-    ErrorQueueDeleteNowPlaying,
-    ErrorQueueDeleteNoArgs,
 }
 
 impl std::fmt::Display for EmbedOperation {
@@ -160,11 +158,8 @@ impl std::fmt::Display for EmbedOperation {
             EmbedOperation::AddToQueue => "Added to Queue",
             EmbedOperation::NowPlayingNotification | EmbedOperation::NowPlaying => "Now Playing",
             EmbedOperation::SkipSong => "Skipping Song",
-            EmbedOperation::ErrorNotPlaying => "No Songs Playing",
             EmbedOperation::ErrorNotInVoiceChannel => "Not in Voice Channel",
             EmbedOperation::DeleteFromQueue => "Delete From Queue",
-            EmbedOperation::ErrorQueueDeleteNowPlaying => "Deleting Now Playing",
-            EmbedOperation::ErrorQueueDeleteNoArgs => "No Arguments Provided",
         };
         write!(f, "{out}")
     }
@@ -280,13 +275,6 @@ pub fn error_embed(operation: EmbedOperation) -> serenity::CreateEmbed {
                 .push_line(match operation {
                     EmbedOperation::ErrorNotInVoiceChannel => {
                         "Ayaya tells you to join a voice channel to run this command. Hehe."
-                    }
-                    EmbedOperation::ErrorNotPlaying => "Ayaya isn't playing any songs right now...",
-                    EmbedOperation::ErrorQueueDeleteNowPlaying => {
-                        "Sorry, Ayaya can't delete what she is playing."
-                    }
-                    EmbedOperation::ErrorQueueDeleteNoArgs => {
-                        "Ayaya needs to know which song you want to delete, baka."
                     }
                     _ => "Even Ayaya doesn't know what went wrong",
                 })

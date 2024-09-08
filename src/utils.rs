@@ -35,16 +35,6 @@ pub fn get_guild_name(ctx: Context<'_>) -> Result<String, BotError> {
         .unwrap_or("Unknown Guild".to_string()))
 }
 
-pub async fn get_channel_name_id(
-    ctx: Context<'_>,
-    channel_id: serenity::ChannelId,
-) -> Result<String, BotError> {
-    Ok(channel_id
-        .name(ctx)
-        .await
-        .unwrap_or("Unknown Channel".to_string()))
-}
-
 pub fn songbird_channel_to_serenity_channel(
     songbird_voice_channel_id: songbird::id::ChannelId,
 ) -> serenity::ChannelId {
