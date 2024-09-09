@@ -75,7 +75,7 @@ impl PlayParse {
                 // FIXME: this is blocking the thread, need to encapsulate in task
 
                 let mut buffered =
-                    stream::iter(playlist_inputs.into_iter().map(|e| metadata_fut(e))).buffered(5);
+                    stream::iter(playlist_inputs.into_iter().map(metadata_fut)).buffered(5);
 
                 let track_metadata = ctx.data().track_metadata.clone();
                 let serenity_http = ctx.serenity_context().http.clone();
