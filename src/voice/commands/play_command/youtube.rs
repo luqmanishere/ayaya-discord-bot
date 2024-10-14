@@ -10,6 +10,7 @@ use songbird::input::{
 };
 use std::error::Error;
 use symphonia::core::io::MediaSource;
+use tracing::{info, warn};
 use youtube_dl::{Protocol, YoutubeDlOutput};
 
 use crate::{
@@ -85,9 +86,20 @@ impl YoutubeDl {
         }
     }
 
+    pub fn new_url_with_metadata(client: Client, url: String, metadata: AuxMetadata) -> Self {
+        Self {
+            program: &YOUTUBE_DL_COMMAND,
+            client,
+            metadata: Some(metadata),
+            query: QueryType::Url(url),
+        }
+    }
+
     pub async fn new_playlist(client: Client, url: String) -> Result<Vec<Self>, BotError> {
         let youtube_playlist = youtube_dl::YoutubeDl::new(url.clone())
             .flat_playlist(true)
+            .extra_arg("-f")
+            .extra_arg("ba[abr>0][vcodec=none]/best")
             .run_async()
             .await
             .map_err(|e| MusicCommandError::YoutubeDlError {
@@ -102,15 +114,18 @@ impl YoutubeDl {
             YoutubeDlOutput::SingleVideo(video) => vec![*video],
         };
 
-        let urls = videos
+        let metadata = videos
             .iter()
-            .map(|e| format!("https://www.youtube.com/watch?v={}", e.id))
+            .map(|e| {
+                Self::new_url_with_metadata(
+                    client.clone(),
+                    format!("https://www.youtube.com/watch?v={}", e.id),
+                    e.as_youtube_metadata().as_aux_metadata(),
+                )
+            })
             .collect::<Vec<_>>();
 
-        Ok(urls
-            .into_iter()
-            .map(|e| Self::new(client.clone(), e))
-            .collect())
+        Ok(metadata)
     }
 
     /// Runs a search for the given query, returning a list of up to `n_results`
@@ -135,6 +150,7 @@ impl YoutubeDl {
         })
     }
 
+    #[tracing::instrument(skip_all, fields(self.query))]
     async fn query(&mut self, n_results: usize) -> Result<Vec<YoutubeMetadata>, AudioStreamError> {
         let new_query;
         let query_str = match &self.query {
@@ -144,6 +160,7 @@ impl YoutubeDl {
                 &new_query
             }
         };
+        info!("Querying for: {query_str}");
 
         let out = youtube_dl::YoutubeDl::new(query_str)
             .youtube_dl_path(self.program)
@@ -238,6 +255,7 @@ impl Compose for YoutubeDl {
             return Ok(meta.clone());
         }
 
+        warn!("no metadata found");
         self.query(1).await?;
 
         self.metadata.clone().ok_or_else(|| {

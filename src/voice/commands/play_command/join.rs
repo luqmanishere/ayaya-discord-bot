@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use futures::TryFutureExt as _;
+use ::serenity::futures::TryFutureExt as _;
 use poise::serenity_prelude as serenity;
 use serenity::Mentionable;
 use songbird::Event;

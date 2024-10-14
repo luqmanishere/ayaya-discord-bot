@@ -222,4 +222,7 @@ pub enum MusicCommandError {
     #[error("Ayaya has been waiting too long for an input...")]
     #[diagnostic(help("Ayaya waited too long for you... *baka*."))]
     SearchTimeout,
+    #[error("Somehow Ayaya was given an empty source....")]
+    #[diagnostic(help("Try adding the music again"))]
+    EmptySource,
 }

@@ -76,30 +76,34 @@ impl VoiceEventHandler for BotInactiveCounter {
 
             let queue = handler.queue();
             match queue.current() {
-                Some(track) => {
-                    let track_state = track.get_info().await.unwrap();
-                    if track_state.playing == PlayMode::End
-                        || track_state.playing == PlayMode::Pause
-                        || track_state.playing == PlayMode::Stop
-                        || alone_in_channel
-                    {
-                        let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
-                        info!(
-                            "Counter for channel {} in guild {} is {}/5",
-                            self.channel_id,
-                            self.guild_id,
-                            counter_before + 1
-                        );
-                    } else {
-                        self.counter.store(0, Ordering::Relaxed);
-                        info!(
-                            "Counter for channel {} in guild {} is reset to {}/5",
-                            self.channel_id,
-                            self.guild_id,
-                            self.counter.load(Ordering::Relaxed)
-                        );
+                Some(track) => match track.get_info().await {
+                    Ok(track_state) => {
+                        if track_state.playing == PlayMode::End
+                            || track_state.playing == PlayMode::Pause
+                            || track_state.playing == PlayMode::Stop
+                            || alone_in_channel
+                        {
+                            let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
+                            info!(
+                                "Counter for channel {} in guild {} is {}/5",
+                                self.channel_id,
+                                self.guild_id,
+                                counter_before + 1
+                            );
+                        } else {
+                            self.counter.store(0, Ordering::Relaxed);
+                            info!(
+                                "Counter for channel {} in guild {} is reset to {}/5",
+                                self.channel_id,
+                                self.guild_id,
+                                self.counter.load(Ordering::Relaxed)
+                            );
+                        }
                     }
-                }
+                    Err(e) => {
+                        error!("unable to get track info: {e}")
+                    }
+                },
                 None => {
                     let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
                     info!(

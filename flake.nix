@@ -34,7 +34,7 @@
         };
 
         # For `nix develop` (optional, can be skipped):
-        devShell = pkgs.mkShell {
+        devShell.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
             toolchain
             rust-analyzer

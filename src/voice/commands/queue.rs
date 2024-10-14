@@ -87,6 +87,8 @@ pub async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<(), BotEr
             ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
                 .await?
         };
+
+        // BUG: something here is holding locks longer than it should
         // If not empty, remove the songs
         if queue_position != 0 {
             let handler = handler_lock.lock().await;

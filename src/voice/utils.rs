@@ -77,6 +77,20 @@ pub trait AsYoutubeMetadata {
 impl AsYoutubeMetadata for SingleVideo {
     fn as_youtube_metadata(&self) -> YoutubeMetadata {
         let value = self.clone();
+        let thumbnail = if let None = value.thumbnail {
+            if let Some(thumbnails) = value.thumbnails {
+                // grab the last thumbnail which is usually the biggest
+                if let Some(thumbnail) = thumbnails.last() {
+                    thumbnail.url.clone()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            value.thumbnail
+        };
         YoutubeMetadata {
             track: value.track,
             artist: value.artist,
@@ -91,7 +105,7 @@ impl AsYoutubeMetadata for SingleVideo {
             sample_rate: None,
             source_url: value.url.clone(),
             title: value.title,
-            thumbnail: value.thumbnail,
+            thumbnail,
             youtube_id: value.id,
             filesize: value.filesize.map(|e| e as u64),
             http_headers: value.http_headers,

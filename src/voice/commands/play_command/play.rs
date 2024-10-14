@@ -2,17 +2,13 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use futures::{
-    stream::{self},
-    StreamExt,
-};
 use poise::serenity_prelude as serenity;
 use songbird::{input::Compose, Event};
 use tokio::sync::Mutex;
 use tracing::{error, info};
 
 use crate::{
-    error::{command_error_embed, BotError},
+    error::BotError,
     utils::{get_guild_id, OptionExt},
     voice::{
         commands::play_command::youtube,
@@ -51,66 +47,26 @@ impl PlayParse {
         let guild_id = get_guild_id(ctx)?;
         let calling_channel_id = ctx.channel_id();
         let call = manager.get(guild_id);
-        match self {
+        let sources = match self {
             PlayParse::Search(search) => {
                 info!("searching youtube for: {}", search);
-                let source = youtube::YoutubeDl::new_search(ctx.data().http.clone(), search);
-                handle_single_play(call, calling_channel_id, source, ctx).await?;
+                vec![youtube::YoutubeDl::new_search(
+                    ctx.data().http.clone(),
+                    search,
+                )]
             }
             PlayParse::Url(url) => {
                 info!("using provided link: {}", url);
-                let source = youtube::YoutubeDl::new(ctx.data().http.clone(), url);
-                handle_single_play(call, calling_channel_id, source, ctx).await?;
+                vec![youtube::YoutubeDl::new(ctx.data().http.clone(), url)]
             }
             PlayParse::PlaylistUrl(playlist_url) => {
                 info!("using provided playlist link: {playlist_url}");
                 ctx.reply("Handling playlist....").await?;
 
-                let playlist_inputs =
-                    youtube::YoutubeDl::new_playlist(ctx.data().http.clone(), playlist_url).await?;
-
-                let call = manager.get(guild_id);
-
-                // TODO: make it ordered by computing the metadata first and adding in order. This means splitting up the metadata collection and the adding to queue part
-                // FIXME: this is blocking the thread, need to encapsulate in task
-
-                let mut buffered =
-                    stream::iter(playlist_inputs.into_iter().map(metadata_fut)).buffered(5);
-
-                let track_metadata = ctx.data().track_metadata.clone();
-                let serenity_http = ctx.serenity_context().http.clone();
-
-                while let Some(metadata_result) = buffered.next().await {
-                    match metadata_result {
-                        Ok(source) => {
-                            insert_source(
-                                source,
-                                track_metadata.clone(),
-                                call.clone(),
-                                serenity_http.clone(),
-                                calling_channel_id,
-                            )
-                            .await?;
-                        }
-                        Err(error) => {
-                            let cmd = ctx.command().name.clone();
-                            error!("Error executing command ({}): {}", cmd, error);
-
-                            if let Err(e) = ctx
-                                .send(
-                                    poise::CreateReply::default()
-                                        .embed(command_error_embed(cmd, error)),
-                                )
-                                .await
-                            {
-                                error!("Error sending error message: {}", e);
-                            }
-                        }
-                    }
-                }
-                info!("Done adding playlist")
+                youtube::YoutubeDl::new_playlist(ctx.data().http.clone(), playlist_url).await?
             }
-        }
+        };
+        handle_sources(call, calling_channel_id, sources, ctx).await?;
         Ok(())
     }
 }
@@ -128,24 +84,40 @@ pub async fn play_inner(ctx: Context<'_>, input: String) -> Result<(), BotError>
 }
 
 /// Inserts a youtube source, sets events and notifies the calling channel
-#[tracing::instrument(skip(ctx, call, source))]
-async fn handle_single_play(
+#[tracing::instrument(skip(ctx, call, sources))]
+async fn handle_sources(
     call: Option<Arc<Mutex<songbird::Call>>>,
     calling_channel_id: serenity::ChannelId,
-    source: youtube::YoutubeDl,
+    sources: Vec<youtube::YoutubeDl>,
     ctx: Context<'_>,
 ) -> Result<(), BotError> {
-    let metadata = insert_source(
-        source,
-        ctx.data().track_metadata.clone(),
-        call,
-        ctx.serenity_context().http.clone(),
-        calling_channel_id,
-    )
-    .await?;
+    // do not announce if more than 1 track is added
+    if sources.len() == 1 {
+        let metadata = insert_source(
+            sources.first().expect("length should be 1").clone(),
+            ctx.data().track_metadata.clone(),
+            call,
+            ctx.serenity_context().http.clone(),
+            calling_channel_id,
+        )
+        .await?;
 
-    let embed = metadata_to_embed(utils::EmbedOperation::AddToQueue, &metadata, None);
-    ctx.send(poise::CreateReply::default().embed(embed)).await?;
+        let embed = metadata_to_embed(utils::EmbedOperation::AddToQueue, &metadata, None);
+        ctx.send(poise::CreateReply::default().embed(embed)).await?;
+    } else if sources.len() > 1 {
+        for source in sources {
+            insert_source(
+                source,
+                ctx.data().track_metadata.clone(),
+                call.clone(),
+                ctx.serenity_context().http.clone(),
+                calling_channel_id,
+            )
+            .await?;
+        }
+    } else {
+        return Err(BotError::MusicCommandError(MusicCommandError::EmptySource));
+    };
 
     Ok(())
 }
@@ -211,14 +183,5 @@ async fn insert_source(
             error!(err);
             return Err(MusicCommandError::TrackMetadataRetrieveFailed(e).into());
         }
-    }
-}
-
-async fn metadata_fut(mut source: youtube::YoutubeDl) -> Result<youtube::YoutubeDl, BotError> {
-    info!("Gathering metadata for source");
-    // Poll source for metadata
-    match source.aux_metadata().await {
-        Ok(_) => Ok::<youtube::YoutubeDl, BotError>(source),
-        Err(e) => Err(MusicCommandError::TrackMetadataRetrieveFailed(e).into()),
     }
 }
