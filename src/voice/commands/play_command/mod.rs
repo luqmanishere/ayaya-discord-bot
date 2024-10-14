@@ -67,7 +67,6 @@ pub async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<(), Bo
     // let songbird do the searching
     let search = yt_search(&term, Some(10)).await?;
 
-    // TODO: return errors here
     match create_search_interaction(ctx, search).await {
         Ok(youtube_id) => {
             play_inner(ctx, youtube_id).await?;

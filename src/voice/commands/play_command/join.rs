@@ -115,7 +115,6 @@ pub async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), 
                         })
                         .await?;
 
-                    // TODO: Add event to detect inactivity
                     let bot_user_id = { *ctx.data().user_id.read().await };
 
                     // inactive counter bot

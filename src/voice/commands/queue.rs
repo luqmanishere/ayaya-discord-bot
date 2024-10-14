@@ -17,7 +17,6 @@ use crate::{
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, aliases("q"), guild_only)]
 pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
-    // TODO Implement queue viewing
     let guild_id = get_guild_id(ctx)?;
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -33,7 +32,6 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
             let metadata_lock = data.track_metadata.lock().unwrap();
             let mut queue_vec = vec![];
 
-            // TODO: replace with embed
             for (index, track) in tracks.iter().enumerate() {
                 let track_uuid = track.uuid();
                 let metadata = metadata_lock
@@ -51,7 +49,6 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
         } else {
             vec![]
         };
-        // TODO: pagination
         if queue_vec.is_empty() {
             ctx.reply("Queue is empty, add some music to see something")
                 .await?;

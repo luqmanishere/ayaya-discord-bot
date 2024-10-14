@@ -6,7 +6,6 @@ use tracing::error;
 use crate::{voice::error::MusicCommandError, Data};
 
 pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
-    // TODO: log errors and send constructive replies to users
     error!("error error error {}", error);
     match error {
         poise::FrameworkError::ArgumentParse { error, .. } => {
@@ -30,7 +29,6 @@ pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
         poise::FrameworkError::Command { error, ctx, .. } => {
             let cmd = ctx.command().name.clone();
             error!("Error executing command ({}): {}", cmd, error);
-            // TODO: flesh out user facing error message
 
             if let Err(e) = ctx
                 .send(poise::CreateReply::default().embed(command_error_embed(cmd, error)))

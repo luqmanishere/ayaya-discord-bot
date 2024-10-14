@@ -4,7 +4,6 @@ use thiserror::Error;
 
 use crate::utils::{ChannelInfo, GuildInfo};
 
-// TODO: include names of guilds and channels
 #[derive(Error, Diagnostic, Debug)]
 pub enum MusicCommandError {
     #[error("Ayaya has not joined any voice channels in the guild {} ({})", guild_info.guild_id, guild_info.guild_name)]
@@ -85,7 +84,6 @@ pub enum MusicCommandError {
         voice_channel_info: ChannelInfo,
     },
 
-    // TODO: fix this error
     #[error("Ayaya can't find the bond between her and this guild. Time for a reboot perhaps?")]
     #[diagnostic(help("Contact @solemnattic for assistance."))]
     CallDoesNotExist,

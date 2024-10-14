@@ -78,7 +78,6 @@ pub async fn play_inner(ctx: Context<'_>, input: String) -> Result<(), BotError>
     // join a channel first
     join_inner(ctx, false).await?;
 
-    // TODO: check if youtube url
 
     input_type.run(ctx).await
 }
