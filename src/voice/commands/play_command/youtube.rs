@@ -88,7 +88,7 @@ impl YoutubeDl {
 
     pub fn new_url_with_metadata(client: Client, url: String, metadata: AuxMetadata) -> Self {
         Self {
-            program: &YOUTUBE_DL_COMMAND,
+            program: YOUTUBE_DL_COMMAND,
             client,
             metadata: Some(metadata),
             query: QueryType::Url(url),

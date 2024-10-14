@@ -77,7 +77,7 @@ pub trait AsYoutubeMetadata {
 impl AsYoutubeMetadata for SingleVideo {
     fn as_youtube_metadata(&self) -> YoutubeMetadata {
         let value = self.clone();
-        let thumbnail = if let None = value.thumbnail {
+        let thumbnail = if value.thumbnail.is_none() {
             if let Some(thumbnails) = value.thumbnails {
                 // grab the last thumbnail which is usually the biggest
                 if let Some(thumbnail) = thumbnails.last() {

@@ -78,7 +78,6 @@ pub async fn play_inner(ctx: Context<'_>, input: String) -> Result<(), BotError>
     // join a channel first
     join_inner(ctx, false).await?;
 
-
     input_type.run(ctx).await
 }
 
@@ -91,31 +90,35 @@ async fn handle_sources(
     ctx: Context<'_>,
 ) -> Result<(), BotError> {
     // do not announce if more than 1 track is added
-    if sources.len() == 1 {
-        let metadata = insert_source(
-            sources.first().expect("length should be 1").clone(),
-            ctx.data().track_metadata.clone(),
-            call,
-            ctx.serenity_context().http.clone(),
-            calling_channel_id,
-        )
-        .await?;
-
-        let embed = metadata_to_embed(utils::EmbedOperation::AddToQueue, &metadata, None);
-        ctx.send(poise::CreateReply::default().embed(embed)).await?;
-    } else if sources.len() > 1 {
-        for source in sources {
-            insert_source(
-                source,
+    match sources.len() {
+        1 => {
+            let metadata = insert_source(
+                sources.first().expect("length should be 1").clone(),
                 ctx.data().track_metadata.clone(),
-                call.clone(),
+                call,
                 ctx.serenity_context().http.clone(),
                 calling_channel_id,
             )
             .await?;
+
+            let embed = metadata_to_embed(utils::EmbedOperation::AddToQueue, &metadata, None);
+            ctx.send(poise::CreateReply::default().embed(embed)).await?;
         }
-    } else {
-        return Err(BotError::MusicCommandError(MusicCommandError::EmptySource));
+        _num if _num > 1 => {
+            for source in sources {
+                insert_source(
+                    source,
+                    ctx.data().track_metadata.clone(),
+                    call.clone(),
+                    ctx.serenity_context().http.clone(),
+                    calling_channel_id,
+                )
+                .await?;
+            }
+        }
+        _ => {
+            return Err(BotError::MusicCommandError(MusicCommandError::EmptySource));
+        }
     };
 
     Ok(())

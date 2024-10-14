@@ -45,6 +45,15 @@
           ];
           buildInputs = with pkgs; [darwin.apple_sdk.frameworks.SystemConfiguration iconv.dev libopus.dev pkg-config];
         };
+        devShell."aarch64-apple-darwin" = pkgs.mkShell {
+          nativeBuildInputs = with pkgs; [
+            yt-dlp
+            ffmpeg
+            cmake
+            mold
+          ];
+          buildInputs = with pkgs; [darwin.apple_sdk.frameworks.SystemConfiguration iconv.dev libopus.dev pkg-config];
+        };
       }
     );
 }
