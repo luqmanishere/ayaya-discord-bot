@@ -30,7 +30,9 @@ mod queue;
         "undeafen",
         "seek",
         "deafen",
-        "delete"
+        "delete",
+        "loop_track",
+        "stop_loop"
     ),
     aliases("m")
 )]

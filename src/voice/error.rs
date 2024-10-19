@@ -1,5 +1,5 @@
 use miette::Diagnostic;
-use poise::serenity_prelude as serenity;
+use poise::serenity_prelude::{self as serenity};
 use thiserror::Error;
 
 use crate::utils::{ChannelInfo, GuildInfo};
@@ -223,4 +223,12 @@ pub enum MusicCommandError {
     #[error("Somehow Ayaya was given an empty source....")]
     #[diagnostic(help("Try adding the music again"))]
     EmptySource,
+    #[error("Ayaya is unable to loop the current track {} times in voice channel {} ({}) in guild {} ({})", count.unwrap_or(0), voice_channel_info.channel_name, voice_channel_info.channel_id, guild_info.guild_name,guild_info.guild_id)]
+    #[diagnostic(help("Error: {} ; contect the owners", source))]
+    FailedTrackLoop {
+        source: songbird::error::ControlError,
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
+        count: Option<usize>,
+    },
 }

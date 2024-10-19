@@ -239,6 +239,141 @@ pub async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
     Ok(())
 }
 
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(rename = "loop", slash_command, prefix_command, guild_only)]
+pub async fn loop_track(ctx: Context<'_>, count: Option<usize>) -> Result<(), BotError> {
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    if let Some(handler) = manager.get(guild_info.guild_id) {
+        let handler = handler.lock().await;
+        let voice_channel_info =
+            ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
+                .await?;
+        match handler.queue().current() {
+            Some(track) => {
+                let data = ctx.data();
+                let track_uuid = track.uuid();
+                let metadata = {
+                    let lock = data.track_metadata.lock().unwrap();
+                    lock.get(&track_uuid)
+                        .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
+                        .clone()
+                };
+
+                match count {
+                    Some(count) => {
+                        track
+                            .loop_for(count)
+                            .map_err(|e| MusicCommandError::FailedTrackLoop {
+                                source: e,
+                                guild_info,
+                                voice_channel_info,
+                                count: Some(count),
+                            })?;
+
+                        let embed = metadata_to_embed(
+                            utils::EmbedOperation::LoopCount(count),
+                            &metadata,
+                            None,
+                        );
+                        ctx.send(poise::CreateReply::default().embed(embed)).await?;
+                    }
+                    None => {
+                        track
+                            .enable_loop()
+                            .map_err(|e| MusicCommandError::FailedTrackLoop {
+                                source: e,
+                                guild_info,
+                                voice_channel_info,
+                                count: None,
+                            })?;
+
+                        let embed = metadata_to_embed(
+                            utils::EmbedOperation::LoopIndefinite,
+                            &metadata,
+                            None,
+                        );
+                        ctx.send(poise::CreateReply::default().embed(embed)).await?;
+                    }
+                }
+            }
+            None => {
+                let voice_channel_info = ChannelInfo::from_songbird_current_channel(
+                    ctx,
+                    handler.current_channel(),
+                    &guild_info,
+                )
+                .await?;
+                return Err(MusicCommandError::NoTrackToSeek {
+                    guild_info,
+                    voice_channel_info,
+                }
+                .into());
+            }
+        };
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+    Ok(())
+}
+
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(rename = "stoploop", slash_command, prefix_command, guild_only)]
+pub async fn stop_loop(ctx: Context<'_>) -> Result<(), BotError> {
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    if let Some(handler) = manager.get(guild_info.guild_id) {
+        let handler = handler.lock().await;
+        let voice_channel_info =
+            ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
+                .await?;
+        match handler.queue().current() {
+            Some(track) => {
+                let data = ctx.data();
+                let track_uuid = track.uuid();
+                let metadata = {
+                    let lock = data.track_metadata.lock().unwrap();
+                    lock.get(&track_uuid)
+                        .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
+                        .clone()
+                };
+
+                track
+                    .disable_loop()
+                    .map_err(|e| MusicCommandError::FailedTrackLoop {
+                        source: e,
+                        guild_info,
+                        voice_channel_info,
+                        count: None,
+                    })?;
+
+                let embed = metadata_to_embed(utils::EmbedOperation::StopLoop, &metadata, None);
+                ctx.send(poise::CreateReply::default().embed(embed)).await?;
+            }
+            None => {
+                let voice_channel_info = ChannelInfo::from_songbird_current_channel(
+                    ctx,
+                    handler.current_channel(),
+                    &guild_info,
+                )
+                .await?;
+                return Err(MusicCommandError::NoTrackToSeek {
+                    guild_info,
+                    voice_channel_info,
+                }
+                .into());
+            }
+        };
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+    Ok(())
+}
+
 /// Leaves the current voice channel. Ever wonder what happens to Ayaya then?
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only)]

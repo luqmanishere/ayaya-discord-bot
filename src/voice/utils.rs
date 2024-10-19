@@ -162,6 +162,9 @@ pub enum EmbedOperation {
     NowPlaying,
     SkipSong,
     DeleteFromQueue,
+    LoopCount(usize),
+    LoopIndefinite,
+    StopLoop,
 }
 
 impl std::fmt::Display for EmbedOperation {
@@ -172,6 +175,9 @@ impl std::fmt::Display for EmbedOperation {
             EmbedOperation::NowPlayingNotification | EmbedOperation::NowPlaying => "Now Playing",
             EmbedOperation::SkipSong => "Skipping Song",
             EmbedOperation::DeleteFromQueue => "Delete From Queue",
+            EmbedOperation::LoopCount(count) => &format!("Looping {count} times"),
+            EmbedOperation::LoopIndefinite => "Indefinite Track Loop",
+            EmbedOperation::StopLoop => "Stop Track Loop",
         };
         write!(f, "{out}")
     }
@@ -267,6 +273,7 @@ pub fn metadata_to_embed(
                 serenity::Color::DARK_GREEN
             }
             EmbedOperation::SkipSong => serenity::Color::ORANGE,
+            _ => serenity::Color::MEIBE_PINK,
         });
 
     embed
