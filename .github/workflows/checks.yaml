@@ -6,11 +6,11 @@ on:
     paths:
       - "**.rs"
 
-name: Continuous integration
+name: Rust CI
 
 jobs:
   rustcheck:
-    name: Rust Check Suite
+    name: Cargo Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
