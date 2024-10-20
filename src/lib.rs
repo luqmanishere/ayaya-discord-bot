@@ -7,6 +7,7 @@ use std::{
 use anyhow::{Context as _, Result};
 use base64::Engine as _;
 use error::{error_handler, BotError};
+use memes::gay;
 use poise::{
     serenity_prelude::{self as serenity},
     FrameworkError,
@@ -23,6 +24,7 @@ use uuid::Uuid;
 use crate::voice::commands::music;
 
 pub(crate) mod error;
+pub(crate) mod memes;
 pub(crate) mod utils;
 pub(crate) mod voice;
 
@@ -53,7 +55,7 @@ pub async fn client(token: String, loki: Option<LokiOpts>) -> Result<serenity::C
     let manager_clone = manager.clone();
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![about(), help(), ping(), music()],
+            commands: vec![about(), help(), ping(), music(), gay()],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some(prefix.into()),
                 /* non_command_message: Some(|_, _, msg| {

@@ -217,6 +217,7 @@ dependencies = [
  "humantime",
  "miette",
  "poise",
+ "rand",
  "reqwest 0.11.27",
  "serenity 0.12.2 (git+https://github.com/serenity-rs/serenity.git?rev=c3d4a3386ea0710a81618f07771c83912c5f6196)",
  "shuttle-runtime",
