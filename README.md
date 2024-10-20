@@ -1,6 +1,6 @@
 # Ayaya
 
-[![CI](https://github.com/luqmanishere/ayaya-discord-bot/actions/workflows/checks.yaml/badge.svg)](https://github.com/luqmanishere/ayaya-discord-bot/actions/workflows/checks.yaml)
+[![Rust CI](https://github.com/luqmanishere/ayaya-discord-bot/actions/workflows/checks.yaml/badge.svg)](https://github.com/luqmanishere/ayaya-discord-bot/actions/workflows/checks.yaml)
 
 A Discord music bot (for now)
 
