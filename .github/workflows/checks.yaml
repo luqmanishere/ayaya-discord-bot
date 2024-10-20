@@ -1,10 +1,16 @@
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - "**.rs"
+  pull_request:
+    paths:
+      - "**.rs"
 
 name: Continuous integration
 
 jobs:
-  check:
-    name: Check
+  rustcheck:
+    name: Rust Check Suite
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
