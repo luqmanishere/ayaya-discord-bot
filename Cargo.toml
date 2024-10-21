@@ -17,7 +17,7 @@ tracing-error = { version = "0.2", features = ["traced-error"] }
 # color-eyre = "0.6"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 poise = { version = "0.6" }
-dotenv = { version = "0.15" }
+dotenvy = { version = "0.15" }
 reqwest = { version = "0.11" }
 uuid = { version = "*" }
 humantime = { version = "2" }
