@@ -3,12 +3,31 @@ use play_command::*;
 use playback_control::*;
 use queue::*;
 
-use crate::{error::BotError, Context};
+use crate::{error::BotError, Commands, Context};
 
 mod admin;
 mod play_command;
 mod playback_control;
 mod queue;
+
+pub fn voice_commands() -> Commands {
+    vec![
+        join(),
+        play(),
+        leave(),
+        queue(),
+        nowplaying(),
+        search(),
+        skip(),
+        pause(),
+        resume(),
+        stop(),
+        seek(),
+        delete(),
+        loop_track(),
+        stop_loop(),
+    ]
+}
 
 /// This command must be called with a subcommmand.
 #[poise::command(

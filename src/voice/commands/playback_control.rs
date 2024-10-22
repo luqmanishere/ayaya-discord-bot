@@ -12,7 +12,7 @@ use crate::{
 
 /// Pause the party. Time is frozen in this bubble universe."
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
+#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
 pub async fn pause(ctx: Context<'_>, _args: String) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -63,7 +63,7 @@ pub async fn pause(ctx: Context<'_>, _args: String) -> Result<(), BotError> {
 
 /// Resume the party. You hear a wind up sound as time speeds up.
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
+#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
 pub async fn resume(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -108,7 +108,7 @@ pub async fn resume(ctx: Context<'_>) -> Result<(), BotError> {
 
 /// Stop all music and clear the queue. Will you stop by again?
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(prefix_command, slash_command, guild_only)]
+#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
 pub async fn stop(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -129,7 +129,7 @@ pub async fn stop(ctx: Context<'_>) -> Result<(), BotError> {
 
 /// Skips the currently playing song. Ayaya wonders why you abandoned your summon so easily.
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
+#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
 pub async fn skip(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -170,7 +170,7 @@ pub async fn skip(ctx: Context<'_>) -> Result<(), BotError> {
 
 /// Seeks the track to a position given in seconds
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
+#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
 pub async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -240,7 +240,13 @@ pub async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
 }
 
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(rename = "loop", slash_command, prefix_command, guild_only)]
+#[poise::command(
+    rename = "loop",
+    slash_command,
+    prefix_command,
+    guild_only,
+    category = "Music"
+)]
 pub async fn loop_track(ctx: Context<'_>, count: Option<usize>) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -320,7 +326,7 @@ pub async fn loop_track(ctx: Context<'_>, count: Option<usize>) -> Result<(), Bo
 }
 
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(rename = "stoploop", slash_command, prefix_command, guild_only)]
+#[poise::command(rename = "stoploop", slash_command, prefix_command, guild_only, category = "Music")]
 pub async fn stop_loop(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -376,7 +382,7 @@ pub async fn stop_loop(ctx: Context<'_>) -> Result<(), BotError> {
 
 /// Leaves the current voice channel. Ever wonder what happens to Ayaya then?
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
+#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
 pub async fn leave(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 

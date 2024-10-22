@@ -11,7 +11,7 @@ use crate::{
 
 /// Undeafens the bot. Finally, Ayaya pulls out her earplugs.
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
+#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
 pub async fn undeafen(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -41,7 +41,13 @@ pub async fn undeafen(ctx: Context<'_>) -> Result<(), BotError> {
 
 /// Unmutes Ayaya. Poor Ayaya has been talking to herself unnoticed.
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only, aliases("um"))]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    aliases("um"),
+    category = "Music"
+)]
 pub async fn unmute(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -71,7 +77,7 @@ pub async fn unmute(ctx: Context<'_>) -> Result<(), BotError> {
 
 /// Mutes Ayaya. Mmmhh mmhh mmmhhh????
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
+#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
 pub async fn mute(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
 
@@ -103,7 +109,7 @@ pub async fn mute(ctx: Context<'_>) -> Result<(), BotError> {
 
 /// Deafens Ayaya. She knows how to read lips, you know.
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only)]
+#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
 pub async fn deafen(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
 

@@ -20,6 +20,7 @@ use tracing::{debug, info, level_filters::LevelFilter, subscriber::set_global_de
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{fmt::time::OffsetTime, layer::SubscriberExt, EnvFilter};
 use uuid::Uuid;
+use voice::voice_commands;
 
 use crate::voice::commands::music;
 
@@ -29,6 +30,7 @@ pub(crate) mod utils;
 pub(crate) mod voice;
 
 pub type Context<'a> = poise::Context<'a, Data, BotError>;
+pub type Commands = Vec<poise::Command<Data, BotError>>;
 
 // User data, which is stored and accessible in all command invocations
 #[derive(Debug)]
@@ -52,10 +54,14 @@ pub async fn client(token: String, loki: Option<LokiOpts>) -> Result<serenity::C
 
     let manager = songbird::Songbird::serenity();
 
+    // we do this for
+    let mut commands = vec![about(), help(), ping(), music(), gay()];
+    commands.append(&mut voice_commands());
+
     let manager_clone = manager.clone();
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![about(), help(), ping(), music(), gay()],
+            commands,
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some(prefix.into()),
                 /* non_command_message: Some(|_, _, msg| {

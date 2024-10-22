@@ -15,7 +15,13 @@ use crate::{
 
 /// Shows the queue. The only kind of acceptable spoilers.
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, aliases("q"), guild_only)]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    aliases("q"),
+    guild_only,
+    category = "Music"
+)]
 pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_id = get_guild_id(ctx)?;
     let guild_info = GuildInfo::from_ctx(ctx)?;
@@ -72,7 +78,13 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
 
 /// Delete song from queue. Being able to make things go *poof* makes you feel like a Kami-sama, right?
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only, aliases("d"))]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    aliases("d"),
+    category = "Music"
+)]
 pub async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -148,7 +160,13 @@ pub async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<(), BotEr
 
 /// "Shows what song is currently playing. Ayaya really knows everything about herself."
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, aliases("np"), guild_only)]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    aliases("np"),
+    guild_only,
+    category = "Music"
+)]
 pub async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 

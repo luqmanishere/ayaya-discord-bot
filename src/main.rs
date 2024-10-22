@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
             std::fs::read_to_string(token_file)?
         } else {
             #[cfg(debug_assertions)]
-            dotenv::dotenv().expect("works");
+            dotenvy::dotenv().expect("works");
             env::var("DISCORD_TOKEN").context("Expected a token in the environment")?
         }
     };

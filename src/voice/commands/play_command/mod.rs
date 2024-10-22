@@ -20,7 +20,13 @@ mod youtube;
 
 /// Joins the voice channel the user is currently in. PARTY TIME!
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only, aliases("j"))]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    aliases("j"),
+    category = "Music"
+)]
 pub async fn join(ctx: Context<'_>) -> Result<(), BotError> {
     join_inner(ctx, true).await
 }
@@ -45,7 +51,7 @@ pub async fn play(
 
 /// Search YT and get metadata
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Music")]
 // #[usage("<search term>")]
 // #[example("ayaya intensifies")]
 pub async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<(), BotError> {
