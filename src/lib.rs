@@ -224,6 +224,7 @@ async fn event_handler(
     Ok(())
 }
 
+/// Pong!
 #[poise::command(prefix_command, slash_command)]
 async fn ping(ctx: Context<'_>) -> Result<(), BotError> {
     ctx.reply("Pong!").await?;
@@ -250,6 +251,7 @@ Consider leaving a star on the Github page!
     Ok(())
 }
 
+/// Ayaya is ready to help whenever...
 #[poise::command(slash_command, prefix_command)]
 pub async fn help(
     ctx: Context<'_>,

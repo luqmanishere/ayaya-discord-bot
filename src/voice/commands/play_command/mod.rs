@@ -33,7 +33,13 @@ pub async fn join(ctx: Context<'_>) -> Result<(), BotError> {
 
 /// Plays music from YT url or search term. We are getting help from a higher being...
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, aliases("p"), guild_only)]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    aliases("p"),
+    guild_only,
+    category = "Music"
+)]
 pub async fn play(
     ctx: Context<'_>,
     #[description = "A url or a search term for youtube"]

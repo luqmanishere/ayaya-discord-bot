@@ -239,6 +239,9 @@ pub async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
     Ok(())
 }
 
+/// Loops the current track. Leave empty for an indefinite loop.
+///
+/// Round and round the Ayaya goes...
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(
     rename = "loop",
@@ -325,6 +328,9 @@ pub async fn loop_track(ctx: Context<'_>, count: Option<usize>) -> Result<(), Bo
     Ok(())
 }
 
+/// Stops the current track from any loops.
+///
+/// Ayaya is already dizzy...
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(
     rename = "stoploop",

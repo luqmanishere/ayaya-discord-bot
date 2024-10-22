@@ -4,6 +4,9 @@ use rand::seq::SliceRandom;
 
 use crate::{error::BotError, Context};
 
+/// Unleash the gay memes on a user.
+///
+/// U are gay.
 #[poise::command(guild_only, slash_command, prefix_command, category = "Memes")]
 pub async fn gay(
     ctx: Context<'_>,
