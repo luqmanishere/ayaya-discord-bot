@@ -326,7 +326,13 @@ pub async fn loop_track(ctx: Context<'_>, count: Option<usize>) -> Result<(), Bo
 }
 
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(rename = "stoploop", slash_command, prefix_command, guild_only, category = "Music")]
+#[poise::command(
+    rename = "stoploop",
+    slash_command,
+    prefix_command,
+    guild_only,
+    category = "Music"
+)]
 pub async fn stop_loop(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 

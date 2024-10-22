@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.4.0] - 2024-10-22
+
+### Changed
+
+- Make the commands under `music` available without the music namespace. These are commonly used.
+- Updated `anyhow` and `thiserror` to their latest version
+- Changed `dotenv` to `dotenvy` due to unmaintained
+
 ## [0.3.0] - 2024-10-20
 
 ### Added
@@ -15,5 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Meme command category. The only available command is `gay`.
 - New dependency: crate `rand`.
 
-[unreleased]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.3.0...HEAD
+[unreleased]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.2.0...v0.3.0
