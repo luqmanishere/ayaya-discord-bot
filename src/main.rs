@@ -1,5 +1,3 @@
-use ayaya_discord_bot::client;
-
 #[cfg(feature = "normal")]
 #[tracing::instrument]
 #[tokio::main]
@@ -26,12 +24,14 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[cfg(feature = "shuttle")]
+use ayaya_discord_bot::service::AyayaDiscordBot;
+#[cfg(feature = "shuttle")]
 #[shuttle_runtime::main]
 async fn shuttle_main(
     #[shuttle_runtime::Secrets] secret_store: shuttle_runtime::SecretStore,
-) -> shuttle_serenity::ShuttleSerenity {
+) -> Result<AyayaDiscordBot, shuttle_runtime::Error> {
     use anyhow::Context as _;
-    use ayaya_discord_bot::LokiOpts;
+    use ayaya_discord_bot::{ayayabot, LokiOpts};
 
     // Install external dependency (in the shuttle container only)
     use std::env;
@@ -136,6 +136,6 @@ async fn shuttle_main(
         }
     };
 
-    let client = client(token, loki).await?;
+    let client = ayayabot(token, loki).await?;
     Ok(client.into())
 }

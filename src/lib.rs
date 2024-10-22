@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use base64::Engine as _;
 use error::{error_handler, BotError};
 use memes::gay;
@@ -13,6 +13,7 @@ use poise::{
     FrameworkError,
 };
 use reqwest::Client as HttpClient;
+use service::{AyayaDiscordBot, Discord};
 use songbird::input::AuxMetadata;
 use time::UtcOffset;
 use tokio::sync::RwLock;
@@ -26,6 +27,7 @@ use crate::voice::commands::music;
 
 pub(crate) mod error;
 pub(crate) mod memes;
+pub mod service;
 pub(crate) mod utils;
 pub(crate) mod voice;
 
@@ -41,7 +43,7 @@ pub struct Data {
     user_id: RwLock<serenity::UserId>,
 }
 
-pub async fn client(token: String, loki: Option<LokiOpts>) -> Result<serenity::Client> {
+pub async fn ayayabot(token: String, loki: Option<LokiOpts>) -> Result<AyayaDiscordBot> {
     // color_eyre::install()?;
 
     setup_logging(loki).await?;
@@ -107,11 +109,15 @@ pub async fn client(token: String, loki: Option<LokiOpts>) -> Result<serenity::C
         | serenity::GatewayIntents::MESSAGE_CONTENT
         | serenity::GatewayIntents::GUILD_VOICE_STATES;
 
-    serenity::Client::builder(&token, intents)
-        .voice_manager_arc(manager)
-        .framework(framework)
-        .await
-        .context("Error creating client")
+    let discord = Discord {
+        framework,
+        token,
+        intents,
+        voice_manager_arc: manager,
+    };
+
+    let router = axum::Router::new().route("/", axum::routing::get(hello_world));
+    Ok(AyayaDiscordBot { discord, router })
 }
 
 async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
@@ -275,4 +281,8 @@ impl LokiOpts {
         let basic_auth = format!("{}:{}", self.grafana_user, self.grafana_api_key);
         base64::engine::general_purpose::STANDARD.encode(basic_auth.as_bytes())
     }
+}
+
+async fn hello_world() -> &'static str {
+    "Hello, world!"
 }

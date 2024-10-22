@@ -32,6 +32,7 @@ tracing-loki = "0.2.5"
 base64 = "0.22.1"
 url = "2.5.2"
 rand = "0.8"
+axum = { version = "0.7" }
 
 [dependencies.songbird]
 version = "0.4.3"
