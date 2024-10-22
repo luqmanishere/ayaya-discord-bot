@@ -64,12 +64,6 @@ pub async fn client(token: String, loki: Option<LokiOpts>) -> Result<serenity::C
             commands,
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some(prefix.into()),
-                /* non_command_message: Some(|_, _, msg| {
-                    Box::pin(async move  {
-                        println!("non command message!: {}", msg.content);
-                        Ok(())
-                    })
-                }),*/
                 mention_as_prefix: true,
                 case_insensitive_commands: true,
                 execute_untracked_edits:true,
