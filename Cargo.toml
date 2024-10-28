@@ -46,7 +46,6 @@ rand = "0.8"
 axum = { version = "0.7" }
 sea-orm = { workspace = true }
 strum = { version = "0.26", features = ["derive"] }
-futures = { version = "*" }
 entity = { path = "entity" }
 migration = { path = "migration" }
 
