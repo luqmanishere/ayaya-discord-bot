@@ -54,6 +54,7 @@ pub struct BotInactiveCounter {
     pub ctx: SerenityContext,
     pub manager: Arc<Songbird>,
     pub counter: Arc<AtomicUsize>,
+    pub only_alone: bool,
 }
 
 #[async_trait]
@@ -79,8 +80,8 @@ impl VoiceEventHandler for BotInactiveCounter {
                 Some(track) => match track.get_info().await {
                     Ok(track_state) => {
                         if track_state.playing == PlayMode::End
-                            || track_state.playing == PlayMode::Pause
-                            || track_state.playing == PlayMode::Stop
+                            || (track_state.playing == PlayMode::Pause && !self.only_alone)
+                            || (track_state.playing == PlayMode::Stop && !self.only_alone)
                             || alone_in_channel
                         {
                             let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);

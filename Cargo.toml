@@ -4,8 +4,21 @@ version = "0.3.0"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
+members = [".", "entity", "migration"]
+
+[workspace.dependencies]
+sea-orm = { version = "1", features = [
+  "sqlx-mysql",
+  "runtime-tokio-rustls",
+  "macros",
+  "with-time",
+  "with-json",
+  "with-uuid",
+] }
 
 [dependencies]
+shuttle-serenity = { version = "0.47" }
 tracing-subscriber = { version = "0.3", features = [
   "env-filter",
   "fmt",
@@ -15,8 +28,8 @@ tracing-subscriber = { version = "0.3", features = [
 tracing = "0.1"
 tracing-error = { version = "0.2", features = ["traced-error"] }
 # color-eyre = "0.6"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-poise = { version = "0.6" }
+shuttle-runtime = { version = "0.47", default-features = false }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "tracing"] }
 dotenvy = { version = "0.15" }
 reqwest = { version = "0.11" }
 uuid = { version = "*" }
@@ -24,8 +37,6 @@ humantime = { version = "2" }
 youtube_dl = { version = "0.10", features = ["tokio"] }
 thiserror = { version = "1" }
 time = { version = "0.3", features = ["local-offset"] }
-shuttle-runtime = { version = "0.47", default-features = false, optional = true }
-shuttle-serenity = { version = "0.47", optional = true }
 anyhow = "1"
 miette = { version = "7" }
 tracing-loki = "0.2.5"
@@ -33,6 +44,11 @@ base64 = "0.22.1"
 url = "2.5.2"
 rand = "0.8"
 axum = { version = "0.7" }
+sea-orm = { workspace = true }
+strum = { version = "0.26", features = ["derive"] }
+futures = { version = "*" }
+entity = { path = "entity" }
+migration = { path = "migration" }
 
 [dependencies.songbird]
 version = "0.4.3"
@@ -53,6 +69,10 @@ features = [
   "collector",
 ]
 
+[dependencies.poise]
+git = "https://github.com/serenity-rs/poise.git"
+rev = "bbc837a1dd170d6ebb5c9208d7a9fd8b3dc27a27"
+
 [dependencies.symphonia]
 version = "0.5"
 features = ["aac", "mp3", "isomp4", "alac"]
@@ -60,4 +80,4 @@ features = ["aac", "mp3", "isomp4", "alac"]
 [features]
 default = ["normal"]
 normal = []
-shuttle = ["dep:shuttle-runtime", "dep:shuttle-serenity"]
+shuttle = []

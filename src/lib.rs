@@ -8,18 +8,23 @@ use anyhow::Result;
 use base64::Engine as _;
 use error::{error_handler, BotError};
 use memes::gay;
+use migration::{Migrator, MigratorTrait};
+use owner::owner_commands;
 use poise::{
     serenity_prelude::{self as serenity},
     FrameworkError,
 };
 use reqwest::Client as HttpClient;
+use sea_orm::{ActiveValue, Database, DatabaseConnection, IntoActiveModel};
 use service::{AyayaDiscordBot, Discord};
 use songbird::input::AuxMetadata;
+use stats::stats_commands;
 use time::UtcOffset;
 use tokio::sync::RwLock;
-use tracing::{debug, info, level_filters::LevelFilter, subscriber::set_global_default};
+use tracing::{debug, error, info, level_filters::LevelFilter, subscriber::set_global_default};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{fmt::time::OffsetTime, layer::SubscriberExt, EnvFilter};
+use utils::GuildInfo;
 use uuid::Uuid;
 use voice::voice_commands;
 
@@ -27,9 +32,12 @@ use crate::voice::commands::music;
 
 pub(crate) mod error;
 pub(crate) mod memes;
-pub mod service;
+pub(crate) mod owner;
+pub(crate) mod stats;
 pub(crate) mod utils;
 pub(crate) mod voice;
+
+pub mod service;
 
 pub type Context<'a> = poise::Context<'a, Data, BotError>;
 pub type Commands = Vec<poise::Command<Data, BotError>>;
@@ -41,12 +49,20 @@ pub struct Data {
     songbird: Arc<songbird::Songbird>,
     track_metadata: Arc<Mutex<HashMap<Uuid, AuxMetadata>>>,
     user_id: RwLock<serenity::UserId>,
+    db: DatabaseConnection,
 }
 
-pub async fn ayayabot(token: String, loki: Option<LokiOpts>) -> Result<AyayaDiscordBot> {
+pub async fn ayayabot(
+    token: String,
+    db_str: String,
+    loki: Option<LokiOpts>,
+) -> Result<AyayaDiscordBot> {
     // color_eyre::install()?;
 
     setup_logging(loki).await?;
+
+    let db: DatabaseConnection = Database::connect(db_str).await?;
+    Migrator::up(&db, None).await?; // always upgrade db to the latest version
 
     #[cfg(debug_assertions)]
     let prefix = "~";
@@ -59,6 +75,8 @@ pub async fn ayayabot(token: String, loki: Option<LokiOpts>) -> Result<AyayaDisc
     // we do this for
     let mut commands = vec![about(), help(), ping(), music(), gay()];
     commands.append(&mut voice_commands());
+    commands.append(&mut owner_commands());
+    commands.append(&mut stats_commands());
 
     let manager_clone = manager.clone();
     let framework = poise::Framework::builder()
@@ -68,26 +86,16 @@ pub async fn ayayabot(token: String, loki: Option<LokiOpts>) -> Result<AyayaDisc
                 prefix: Some(prefix.into()),
                 mention_as_prefix: true,
                 case_insensitive_commands: true,
-                execute_untracked_edits:true,
-                edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(std::time::Duration::from_secs(20)))),
+                execute_untracked_edits: true,
+                edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
+                    std::time::Duration::from_secs(20),
+                ))),
                 ..Default::default()
             },
-            pre_command: |ctx: Context<'_>| {
-                Box::pin(async move {
-                    let command_name = ctx.command().qualified_name.clone();
-                    let author = ctx.author();
-                    let channel_id = ctx.channel_id();
-                    let guild_id = ctx.guild_id();
-                    info!("Command \"{command_name}\" called from channel {channel_id} in guild {guild_id:?} by {} ({})", author.name, author);
-                })
-            },
-            on_error: |error: FrameworkError<'_, Data, BotError>| {
-                Box::pin(
-                    error_handler(error)
-                )
-            },
-            event_handler: |ctx, event, framework,  data| {
-                Box::pin(event_handler(ctx, event, framework,   data))
+            pre_command: |ctx: Context<'_>| Box::pin(pre_command(ctx)),
+            on_error: |error: FrameworkError<'_, Data, BotError>| Box::pin(error_handler(error)),
+            event_handler: |ctx, event, framework, data| {
+                Box::pin(event_handler(ctx, event, framework, data))
             },
             ..Default::default()
         })
@@ -100,6 +108,7 @@ pub async fn ayayabot(token: String, loki: Option<LokiOpts>) -> Result<AyayaDisc
                     songbird: manager_clone,
                     track_metadata: Default::default(),
                     user_id: Default::default(),
+                    db,
                 })
             })
         })
@@ -107,7 +116,9 @@ pub async fn ayayabot(token: String, loki: Option<LokiOpts>) -> Result<AyayaDisc
 
     let intents = serenity::GatewayIntents::non_privileged()
         | serenity::GatewayIntents::MESSAGE_CONTENT
-        | serenity::GatewayIntents::GUILD_VOICE_STATES;
+        | serenity::GatewayIntents::GUILD_VOICE_STATES
+        | serenity::GatewayIntents::GUILD_PRESENCES
+        | serenity::GatewayIntents::GUILD_MEMBERS;
 
     let discord = Discord {
         framework,
@@ -120,12 +131,82 @@ pub async fn ayayabot(token: String, loki: Option<LokiOpts>) -> Result<AyayaDisc
     Ok(AyayaDiscordBot { discord, router })
 }
 
+async fn pre_command(ctx: poise::Context<'_, Data, BotError>) {
+    // logging span
+    let span = tracing::span!(tracing::Level::TRACE, "pre_command");
+    let _guard = span.enter();
+
+    let command_name = ctx.command().name.clone();
+    let author = ctx.author();
+    let channel_id = ctx.channel_id();
+    let guild_id = ctx.guild_id();
+    info!("Command \"{command_name}\" called from channel {channel_id} in guild {guild_id:?} by {} ({})", author.name, author);
+
+    // log to database
+    let db = ctx.data().db.clone();
+    let now_odt = time::OffsetDateTime::now_utc()
+        .to_offset(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
+    let call_log = entity::command_call_log::ActiveModel {
+        log_id: sea_orm::ActiveValue::Set(uuid::Uuid::new_v4()),
+        server_id: sea_orm::ActiveValue::Set(GuildInfo::guild_id_or_0(ctx)),
+        user_id: sea_orm::ActiveValue::Set(author.id.get()),
+        command: sea_orm::ActiveValue::Set(command_name.clone()),
+        command_time_stamp: sea_orm::ActiveValue::Set(now_odt),
+    };
+    use sea_orm::prelude::*;
+    match call_log.insert(&db).await {
+        Ok(_) => {}
+        Err(e) => {
+            use tracing::error;
+            error!("error inserting call log: {}", e);
+        }
+    };
+
+    use entity::prelude::*;
+    // all time user counter
+    use entity::user_command_all_time_statistics;
+    let user: Option<user_command_all_time_statistics::Model> =
+        match UserCommandAllTimeStatistics::find()
+            .filter(
+                user_command_all_time_statistics::Column::ServerId
+                    .eq(GuildInfo::guild_id_or_0(ctx)),
+            )
+            .filter(user_command_all_time_statistics::Column::UserId.eq(author.id.get()))
+            .filter(user_command_all_time_statistics::Column::Command.eq(command_name.clone()))
+            .one(&db)
+            .await
+        {
+            Ok(res) => res,
+            Err(e) => {
+                error!("error getting all time stats: {}", e);
+                None
+            }
+        };
+
+    if let Some(stats) = user {
+        let count = stats.count + 1;
+        let mut model = stats.into_active_model();
+        model.count = ActiveValue::set(count);
+        model.save(&db).await.unwrap();
+    } else {
+        user_command_all_time_statistics::ActiveModel {
+            server_id: sea_orm::ActiveValue::Set(GuildInfo::guild_id_or_0(ctx)),
+            user_id: sea_orm::ActiveValue::Set(author.id.get()),
+            command: sea_orm::ActiveValue::Set(command_name),
+            count: sea_orm::ActiveValue::Set(1),
+        }
+        .insert(&db)
+        .await
+        .unwrap();
+    };
+}
+
 async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
     // Init tracing with malaysian offset cause thats where i live and read timestamps
     let offset = UtcOffset::current_local_offset()
         .unwrap_or(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
 
-    // TODO: simplify
+    // TODO: revamp. this is way too confusing
     match loki {
         Some(loki) => {
             let url = url::Url::parse("https://logs-prod-020.grafana.net")?;
@@ -204,10 +285,11 @@ async fn event_handler(
             }
 
             // test yt-dlp
-            let stdout = std::process::Command::new("yt-dlp")
-                .arg("-J")
+            let stderr = std::process::Command::new("yt-dlp")
                 .arg("-v")
-                .arg("https://www.youtube.com/watch?v=KId6eunoiWk")
+                .arg("-O")
+                .arg("title,channel")
+                .arg("https://www.youtube.com/watch?v=1aPOj0ERTEc")
                 .stderr(std::process::Stdio::piped())
                 .spawn()
                 .expect("yt-dlp runs")
@@ -215,12 +297,13 @@ async fn event_handler(
                 .ok_or_else(|| std::io::Error::new(ErrorKind::Other, "Could not capture stdout"))
                 .expect("cant get yt-dlp stdout");
 
-            let reader = BufReader::new(stdout);
+            let reader = BufReader::new(stderr);
 
             reader
                 .lines()
                 .map_while(Result::ok)
                 .for_each(|line| info!("yt-dlp setup: {}", line));
+            info!("yt-dlp checks done");
         }
         serenity::FullEvent::CacheReady { guilds } => {
             info!("Cached guild info is ready for {} guilds.", guilds.len());
@@ -263,11 +346,13 @@ pub async fn help(
     ctx: Context<'_>,
     #[description = "Specific command to show help about"] command: Option<String>,
 ) -> Result<(), BotError> {
-    let configuration = poise::builtins::HelpConfiguration {
+    let configuration = poise::builtins::PrettyHelpConfiguration {
         // [configure aspects about the help message here]
+        color: serenity::Color::DARK_GREEN.tuple(),
+        ephemeral: true,
         ..Default::default()
     };
-    poise::builtins::help(ctx, command.as_deref(), configuration).await?;
+    poise::builtins::pretty_help(ctx, command.as_deref(), configuration).await?;
     Ok(())
 }
 

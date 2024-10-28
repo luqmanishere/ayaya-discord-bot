@@ -57,6 +57,14 @@ impl GuildInfo {
             guild_id,
         })
     }
+
+    pub fn guild_id_or_0(ctx: Context<'_>) -> u64 {
+        if let Ok(guild_id) = get_guild_id(ctx) {
+            guild_id.get()
+        } else {
+            0
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

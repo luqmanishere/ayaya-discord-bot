@@ -127,6 +127,7 @@ pub async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), 
                             bot_user_id,
                             manager: ctx.data().songbird.clone(),
                             ctx: ctx.serenity_context().to_owned(),
+                            only_alone: false,
                         },
                     );
                 }

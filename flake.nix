@@ -29,30 +29,30 @@
         naersk' = pkgs.callPackage naersk {};
       in rec {
         # For `nix build` & `nix run`:
-        defaultPackage = naersk'.buildPackage {
-          src = ./.;
-        };
+        # defaultPackage = naersk'.buildPackage {
+        #   src = ./.;
+        # };
 
         # For `nix develop` (optional, can be skipped):
-        devShell.default = pkgs.mkShell {
+        # devShells.default = pkgs.mkShell {
+        #   nativeBuildInputs = with pkgs; [
+        #     toolchain
+        #     rust-analyzer
+        #     yt-dlp
+        #     ffmpeg
+        #     cmake
+        #     mold
+        #   ];
+        #   buildInputs = with pkgs; [darwin.apple_sdk.frameworks.SystemConfiguration iconv.dev libopus.dev pkg-config];
+        # };
+        devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
-            toolchain
-            rust-analyzer
             yt-dlp
             ffmpeg
             cmake
             mold
           ];
-          buildInputs = with pkgs; [darwin.apple_sdk.frameworks.SystemConfiguration iconv.dev libopus.dev pkg-config];
-        };
-        devShell."aarch64-apple-darwin" = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [
-            yt-dlp
-            ffmpeg
-            cmake
-            mold
-          ];
-          buildInputs = with pkgs; [darwin.apple_sdk.frameworks.SystemConfiguration iconv.dev libopus.dev pkg-config];
+          buildInputs = with pkgs; [iconv.dev libopus.dev pkg-config];
         };
       }
     );

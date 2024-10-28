@@ -13,7 +13,34 @@ pub struct Discord {
     pub framework: poise::Framework<Data, BotError>,
     pub token: String,
     pub intents: serenity::GatewayIntents,
-    pub voice_manager_arc: Arc<songbird::Songbird>
+    pub voice_manager_arc: Arc<songbird::Songbird>,
+}
+
+use anyhow::Result;
+impl AyayaDiscordBot {
+    pub async fn local_bind(self, addr: std::net::SocketAddr) -> Result<()> {
+        use std::future::IntoFuture;
+
+        let serve = axum::serve(
+            shuttle_runtime::tokio::net::TcpListener::bind(addr)
+                .await
+                .map_err(shuttle_runtime::CustomError::new)?,
+            self.router,
+        )
+        .into_future();
+
+        let mut client = serenity::ClientBuilder::new(self.discord.token, self.discord.intents)
+            .voice_manager_arc(self.discord.voice_manager_arc)
+            .framework(self.discord.framework)
+            .await?;
+
+        tokio::select! {
+            _ = client.start_autosharded() => {},
+            _ = serve => {},
+        };
+
+        Ok(())
+    }
 }
 
 #[shuttle_runtime::async_trait]

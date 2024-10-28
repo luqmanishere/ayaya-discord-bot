@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Introduction of database to track persistent data.
+- Keep track of command call count per user per server.
+- Log command calls to database.
+- Add commands to show stored stats.
+- Preliminary work to serve a dashboard alongside the bot
+
+### Changed
+
+- Changed help generation to a prettier one
+
 ## [0.4.0] - 2024-10-22
 
 ### Changed
@@ -23,6 +35,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Meme command category. The only available command is `gay`.
 - New dependency: crate `rand`.
 
-[unreleased]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.4.0...HEAD
 [0.4.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.2.0...v0.3.0

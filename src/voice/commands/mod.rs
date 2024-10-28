@@ -26,6 +26,7 @@ pub fn voice_commands() -> Commands {
         delete(),
         loop_track(),
         stop_loop(),
+        ting(),
     ]
 }
 
@@ -61,5 +62,21 @@ pub async fn music(ctx: Context<'_>) -> Result<(), BotError> {
         ..Default::default()
     };
     poise::builtins::help(ctx, Some(&ctx.command().name), configuration).await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command, hide_in_help, ephemeral)]
+pub async fn ting(ctx: Context<'_>) -> Result<(), BotError> {
+    join::join_inner(ctx, false).await?;
+
+    let manager = ctx.data().songbird.clone();
+    let guild_id = crate::utils::get_guild_id(ctx)?;
+    let call = manager.get(guild_id).expect("exists");
+    let input = songbird::input::File::new("ting.wav");
+
+    {
+        let mut lock = call.lock().await;
+        lock.play(input.into());
+    }
     Ok(())
 }

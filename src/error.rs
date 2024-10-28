@@ -61,6 +61,8 @@ pub enum BotError {
     GuildMismatch,
     #[error("An error occured with serenity: {0}")]
     GeneralSerenityError(#[from] serenity::Error),
+    #[error("An error occured with the database: {0}")]
+    DatabaseOperationError(#[from] sea_orm::DbErr),
 }
 
 pub fn command_error_embed(command: String, error: BotError) -> serenity::CreateEmbed {

@@ -3,8 +3,12 @@
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     use anyhow::Context as _;
+    use ayaya_discord_bot::ayayabot;
 
-    use std::env;
+    use std::{
+        env,
+        net::{Ipv4Addr, SocketAddrV4},
+    };
 
     // Configure the client with your Discord bot token in the environment.
     // DISCORD_TOKEN_FILE is searched first, then DISCORD_TOKEN.
@@ -19,8 +23,23 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let mut client = client(token, None).await?;
-    Ok(client.start().await?)
+    let db_str = {
+        if let Ok(token_file) = env::var("DATABASE_URL_FILE") {
+            std::fs::read_to_string(token_file)?
+        } else {
+            #[cfg(debug_assertions)]
+            dotenvy::dotenv().expect("works");
+            env::var("DATABASE_URL").context("Expected a token in the environment")?
+        }
+    };
+
+    let ayayadc = ayayabot(token, db_str, None).await?;
+    ayayadc
+        .local_bind(std::net::SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::new(127, 0, 0, 1),
+            8000,
+        )))
+        .await
 }
 
 #[cfg(feature = "shuttle")]
@@ -115,6 +134,10 @@ async fn shuttle_main(
         .get("DISCORD_TOKEN")
         .context("'DISCORD_TOKEN' was not found")?;
 
+    let db_str = secret_store
+        .get("DATABASE_URL")
+        .context("'DATABASE_URL' was not found")?;
+
     let loki = match secret_store.get("GRAFANA_USER") {
         Some(grafana_user) => {
             let grafana_api_key = secret_store
@@ -136,6 +159,6 @@ async fn shuttle_main(
         }
     };
 
-    let client = ayayabot(token, loki).await?;
+    let client = ayayabot(token, db_str, loki).await?;
     Ok(client.into())
 }

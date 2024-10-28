@@ -76,7 +76,7 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
     Ok(())
 }
 
-/// Delete song from queue. Being able to make things go *poof* makes you feel like a Kami-sama, right?
+/// Delete song from queue. Being able to make things go POOF makes you feel like a Kami-sama, right?
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(
     slash_command,

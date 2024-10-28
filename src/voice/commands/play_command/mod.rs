@@ -14,7 +14,7 @@ use crate::{
     Context,
 };
 
-mod join;
+pub mod join;
 mod play;
 mod youtube;
 
