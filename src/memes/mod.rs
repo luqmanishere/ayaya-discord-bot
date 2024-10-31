@@ -22,18 +22,18 @@ pub async fn gay(
 }
 
 fn random_gay(user: serenity::User) -> String {
-    const GAY: [&str; 4] = [
-        "<user> is gay",
-        "<@508510863108472858> raeesgay",
-        "<user> gay balls",
-        "why are u gay <user>",
+    const GAY: [(&str, u32); 4] = [
+        ("<user> is gay", 33),
+        ("<@508510863108472858> raeesgay", 1),
+        ("<user> gay balls", 33),
+        ("why are u gay <user>", 33),
     ];
 
     let mut rng = rand::thread_rng();
-    match GAY.choose(&mut rng) {
-        Some(choosen) => choosen
+    match GAY.choose_weighted(&mut rng, |item| item.1) {
+        Ok((choosen, _)) => choosen
             .replace("<user>", user.mention().to_string().as_str())
             .to_string(),
-        None => GAY[0].to_string(),
+        Err(_e) => GAY[0].0.to_string(),
     }
 }
