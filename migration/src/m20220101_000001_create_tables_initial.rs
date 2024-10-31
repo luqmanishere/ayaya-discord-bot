@@ -33,9 +33,37 @@ impl MigrationTrait for Migration {
                     .table(RequireCommandRole::Table)
                     .if_not_exists()
                     .col(pk_uuid(RequireCommandRole::EntryId))
-                    .col(big_unsigned(RequireCommandRole::ServerId))
-                    .col(big_unsigned(RequireCommandRole::RoleId))
-                    .col(string(RequireCommandRole::Command))
+                    .col(big_unsigned(RequireCommandRole::ServerId).not_null())
+                    .col(big_unsigned(RequireCommandRole::RoleId).not_null())
+                    .col(string(RequireCommandRole::Command).not_null())
+                    .index(
+                        Index::create()
+                            .col(RequireCommandRole::ServerId)
+                            .col(RequireCommandRole::RoleId)
+                            .col(RequireCommandRole::Command)
+                            .unique(),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        // allow a user to use a command regardless of role
+        manager
+            .create_table(
+                Table::create()
+                    .table(CommandAllowUser::Table)
+                    .if_not_exists()
+                    .col(pk_uuid(CommandAllowUser::EntryId))
+                    .col(big_unsigned(CommandAllowUser::ServerId).not_null())
+                    .col(big_unsigned(CommandAllowUser::UserId).not_null())
+                    .col(string(CommandAllowUser::Command).not_null())
+                    .index(
+                        Index::create()
+                            .col(CommandAllowUser::ServerId)
+                            .col(CommandAllowUser::UserId)
+                            .col(CommandAllowUser::Command)
+                            .unique(),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -103,6 +131,10 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
+            .drop_table(Table::drop().table(CommandAllowUser::Table).to_owned())
+            .await?;
+
+        manager
             .drop_table(Table::drop().table(CommandCallLog::Table).to_owned())
             .await?;
 
@@ -141,6 +173,16 @@ enum RequireCommandRole {
     EntryId,
     ServerId,
     RoleId,
+    Command,
+}
+
+/// Permit a user to use a command that would normally require a role
+#[derive(DeriveIden)]
+enum CommandAllowUser {
+    Table,
+    EntryId,
+    ServerId,
+    UserId,
     Command,
 }
 

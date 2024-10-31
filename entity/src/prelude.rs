@@ -2,6 +2,7 @@
 
 pub use super::ban_shit_music::Entity as BanShitMusic;
 pub use super::ban_user_command_use::Entity as BanUserCommandUse;
+pub use super::command_allow_user::Entity as CommandAllowUser;
 pub use super::command_call_log::Entity as CommandCallLog;
 pub use super::require_command_role::Entity as RequireCommandRole;
 pub use super::user_command_all_time_statistics::Entity as UserCommandAllTimeStatistics;

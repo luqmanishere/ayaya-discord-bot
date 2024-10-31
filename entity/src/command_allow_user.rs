@@ -3,12 +3,12 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "require_command_role")]
+#[sea_orm(table_name = "command_allow_user")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, column_type = "Binary(16)")]
     pub entry_id: Uuid,
     pub server_id: u64,
-    pub role_id: u64,
+    pub user_id: u64,
     pub command: String,
 }
 
