@@ -123,7 +123,7 @@ async fn shuttle_main(
             }
 
             let yt_dlp_config = "--netrc";
-            let netrc_config = "machine youtube login oauth2 password \"\"";
+            let netrc_config = "machine youtube login oauth password \"\"";
             std::fs::write(yt_dlp_config_dir.join("config"), yt_dlp_config)?;
             std::fs::write(home.join(".netrc"), netrc_config)?;
         }
