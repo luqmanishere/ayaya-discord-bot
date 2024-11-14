@@ -88,16 +88,18 @@ async fn shuttle_main(
             panic!("failed to install dependencies")
         }
 
-        if !std::process::Command::new("pipx")
-            .arg("inject")
-            .arg("yt-dlp")
-            .arg("https://github.com/coletdjnz/yt-dlp-youtube-oauth2/archive/refs/heads/master.zip")
-            .status()
-            .expect("failed to run pipx")
-            .success()
-        {
-            panic!("failed to install dependencies")
-        }
+        // INFO: Oauth external plugin is now in yt-dlp, to remove
+        //
+        // if !std::process::Command::new("pipx")
+        //     .arg("inject")
+        //     .arg("yt-dlp")
+        //     .arg("https://github.com/coletdjnz/yt-dlp-youtube-oauth2/archive/refs/heads/master.zip")
+        //     .status()
+        //     .expect("failed to run pipx")
+        //     .success()
+        // {
+        //     panic!("failed to install dependencies")
+        // }
 
         // prepend pipx path
         if let Some(path) = env::var_os("PATH") {
