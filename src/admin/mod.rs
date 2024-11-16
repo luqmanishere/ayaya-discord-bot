@@ -1,5 +1,4 @@
 //! Command reserved for admins or specific users
-#[expect(unused_imports)]
 use entity::prelude::*;
 use poise::serenity_prelude as serenity;
 use sea_orm::prelude::*;
