@@ -1,4 +1,4 @@
-use poise::serenity_prelude as serenity;
+use poise::serenity_prelude::{self as serenity};
 use serenity::{model::channel::Message, Result as SerenityResult};
 use tracing::error;
 
@@ -114,5 +114,105 @@ impl ChannelInfo {
             channel_id,
             is_voice,
         })
+    }
+}
+
+/// Autocomplete function for command names
+pub async fn autocomplete_command_names<'a>(ctx: Context<'_>, partial: &'a str) -> Vec<String> {
+    let partial = partial.to_lowercase();
+    let command_names = &ctx.data().command_names;
+    command_names
+        .iter()
+        .filter(|s| s.contains(&partial))
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+}
+
+/// Check command to determine if a commmand is allowed for a user.
+///
+/// This checks for the following:
+/// 1. Whether a user is explicitly allowed.
+/// 2. Whether the user possesses a role that is allowed for the command.
+/// 3. Whether the user possesses a role that is allowed for the command category.
+///
+/// If the command is restricted, and the user does not meet the above requirement, then the
+/// command use is not allowed.
+pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
+    // TODO: cache
+    use entity::command_allow_user;
+    use entity::prelude::*;
+    use entity::require_category_role;
+    use entity::require_command_role;
+    use sea_orm::prelude::*;
+
+    let db = ctx.data().db.clone();
+    let user_id = ctx.author().id.get();
+    let guild_id = GuildInfo::guild_id_or_0(ctx);
+    let command = ctx.command().name.clone();
+    let command_category = ctx
+        .command()
+        .category
+        .clone()
+        .unwrap_or("Unknown".to_string());
+
+    // TODO: cache
+
+    // check first if user is allowed to use the command
+    let user_allowed = CommandAllowUser::find()
+        .filter(command_allow_user::Column::ServerId.eq(guild_id))
+        .filter(command_allow_user::Column::UserId.eq(user_id))
+        .filter(command_allow_user::Column::Command.eq(&command))
+        .one(&db)
+        .await?;
+    if let Some(_model) = user_allowed {
+        return Ok(true);
+    }
+
+    // check for roles. if present, then iter, else allow the command
+    let roles_allowed = RequireCommandRole::find()
+        .filter(require_command_role::Column::ServerId.eq(guild_id))
+        .filter(require_command_role::Column::Command.eq(&command))
+        .all(&db)
+        .await?;
+    if !roles_allowed.is_empty() {
+        for role in roles_allowed {
+            let role_id = role.role_id;
+            if ctx.author().has_role(ctx, guild_id, role_id).await? {
+                return Ok(true);
+            }
+        }
+        // TODO: explanation
+        ctx.reply(format!(
+            "You are not allowed to use the command `{}` due not having the required roles.",
+            &command
+        ))
+        .await?;
+        #[expect(clippy::needless_return)]
+        return Ok(false);
+    } else {
+        // check for role restrictions
+        let category_roles_allowed = RequireCategoryRole::find()
+            .filter(require_category_role::Column::ServerId.eq(guild_id))
+            .filter(require_category_role::Column::Category.eq(command_category))
+            .all(&db)
+            .await?;
+        if !category_roles_allowed.is_empty() {
+            for role in category_roles_allowed {
+                let role_id = role.role_id;
+                if ctx.author().has_role(ctx, guild_id, role_id).await? {
+                    return Ok(true);
+                }
+            }
+            // TODO: explanation
+            ctx.reply(format!(
+                "You are not allowed to use the command `{}` due not having the required roles.",
+                &command
+            ))
+            .await?;
+            return Ok(false);
+        }
+
+        // allow the command if not restricted to a role
+        Ok(true)
     }
 }

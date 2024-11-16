@@ -2,14 +2,11 @@
 //!
 use entity::{prelude::*, user_command_all_time_statistics};
 use poise::serenity_prelude::{self as serenity, Mentionable};
-use sea_orm::{
-    prelude::*,
-    strum::{Display, VariantNames},
-};
+use sea_orm::prelude::*;
 
 use crate::{
     error::BotError,
-    utils::{get_guild_name, GuildInfo},
+    utils::{autocomplete_command_names, get_guild_name, GuildInfo},
     Commands, Context,
 };
 
@@ -18,7 +15,12 @@ pub fn stats_commands() -> Commands {
 }
 
 /// Shows the total amount of specific command invocations for a user.
-#[poise::command(slash_command, prefix_command, category = "Statistics")]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    rename = "uats",
+    category = "Statistics"
+)]
 pub async fn user_all_time_single(
     ctx: Context<'_>,
     user: serenity::User,
@@ -63,28 +65,4 @@ pub async fn user_all_time_single(
     }
 
     Ok(())
-}
-
-async fn autocomplete_command_names<'a>(_ctx: Context<'_>, partial: &'a str) -> Vec<String> {
-    let partial = partial.to_lowercase();
-    CommandList::VARIANTS
-        .iter()
-        .filter(|s| s.starts_with(&partial))
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>()
-}
-
-#[derive(Display, EnumIter, VariantNames)]
-#[non_exhaustive]
-#[strum(serialize_all = "snake_case")]
-enum CommandList {
-    Play,
-    Join,
-    Skip,
-    Delete,
-    Queue,
-    Search,
-    Help,
-    UserAllTimeSingle,
-    UserAllTime,
 }

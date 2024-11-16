@@ -4,6 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use admin::admin_commands;
 use anyhow::Result;
 use base64::Engine as _;
 use error::{error_handler, BotError};
@@ -30,6 +31,7 @@ use voice::voice_commands;
 
 use crate::voice::commands::music;
 
+pub(crate) mod admin;
 pub(crate) mod error;
 pub(crate) mod memes;
 pub(crate) mod owner;
@@ -41,6 +43,7 @@ pub mod service;
 
 pub type Context<'a> = poise::Context<'a, Data, BotError>;
 pub type Commands = Vec<poise::Command<Data, BotError>>;
+pub type CommandResult = Result<(), BotError>;
 
 // User data, which is stored and accessible in all command invocations
 #[derive(Debug)]
@@ -50,6 +53,9 @@ pub struct Data {
     track_metadata: Arc<Mutex<HashMap<Uuid, AuxMetadata>>>,
     user_id: RwLock<serenity::UserId>,
     db: DatabaseConnection,
+    command_names: Vec<String>,
+    command_categories: Vec<String>,
+    command_categories_map: HashMap<String, Option<String>>,
 }
 
 pub async fn ayayabot(
@@ -77,6 +83,7 @@ pub async fn ayayabot(
     commands.append(&mut voice_commands());
     commands.append(&mut owner_commands());
     commands.append(&mut stats_commands());
+    commands.append(&mut admin_commands());
 
     let manager_clone = manager.clone();
     let framework = poise::Framework::builder()
@@ -93,6 +100,7 @@ pub async fn ayayabot(
                 ..Default::default()
             },
             pre_command: |ctx: Context<'_>| Box::pin(pre_command(ctx)),
+            command_check: Some(|ctx: Context<'_>| Box::pin(global_checks(ctx))),
             on_error: |error: FrameworkError<'_, Data, BotError>| Box::pin(error_handler(error)),
             event_handler: |ctx, event, framework, data| {
                 Box::pin(event_handler(ctx, event, framework, data))
@@ -103,12 +111,35 @@ pub async fn ayayabot(
             Box::pin(async move {
                 info!("Setup...");
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                let command_names = framework
+                    .options()
+                    .commands
+                    .iter()
+                    .map(|e| e.name.to_string())
+                    .collect::<Vec<_>>();
+                let mut command_categories = framework
+                    .options()
+                    .commands
+                    .iter()
+                    .filter_map(|e| e.category.clone())
+                    .collect::<Vec<_>>();
+                command_categories.sort(); // sort to search for dupes
+                command_categories.dedup(); // remove duplicates
+                let command_categories_map = framework
+                    .options()
+                    .commands
+                    .iter()
+                    .map(|e| (e.name.clone(), e.category.clone()))
+                    .collect::<HashMap<_, _>>();
                 Ok(Data {
                     http: HttpClient::new(),
                     songbird: manager_clone,
                     track_metadata: Default::default(),
                     user_id: Default::default(),
                     db,
+                    command_names,
+                    command_categories,
+                    command_categories_map,
                 })
             })
         })
@@ -129,6 +160,12 @@ pub async fn ayayabot(
 
     let router = axum::Router::new().route("/", axum::routing::get(hello_world));
     Ok(AyayaDiscordBot { discord, router })
+}
+
+/// Global checks applied to all commands, unless command is excluded
+async fn global_checks(ctx: poise::Context<'_, Data, BotError>) -> Result<bool, BotError> {
+    // check if a command is allowed to be called
+    utils::check_command_allowed(ctx).await
 }
 
 async fn pre_command(ctx: poise::Context<'_, Data, BotError>) {
