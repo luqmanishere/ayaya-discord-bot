@@ -63,6 +63,8 @@ pub enum BotError {
     GeneralSerenityError(#[from] serenity::Error),
     #[error("An error occured with the database: {0}")]
     DatabaseOperationError(#[from] sea_orm::DbErr),
+    #[error("An error occured within the data manager: {0}")]
+    DataManagerError(#[from] crate::data::error::DataError),
 }
 
 pub fn command_error_embed(command: String, error: BotError) -> serenity::CreateEmbed {

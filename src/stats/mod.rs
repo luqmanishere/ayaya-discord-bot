@@ -1,8 +1,6 @@
 //! Commands for stats
 //!
-use entity::{prelude::*, user_command_all_time_statistics};
 use poise::serenity_prelude::{self as serenity, Mentionable};
-use sea_orm::prelude::*;
 
 use crate::{
     error::BotError,
@@ -28,15 +26,12 @@ pub async fn user_all_time_single(
 ) -> Result<(), BotError> {
     ctx.defer().await?;
 
-    let db = ctx.data().db.clone();
+    let data_manager = ctx.data().data_manager.clone();
     let user_id = user.id.get();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
 
-    match UserCommandAllTimeStatistics::find()
-        .filter(user_command_all_time_statistics::Column::ServerId.eq(guild_id))
-        .filter(user_command_all_time_statistics::Column::UserId.eq(user_id))
-        .filter(user_command_all_time_statistics::Column::Command.eq(command.clone()))
-        .one(&db)
+    match data_manager
+        .find_user_all_time_command_stats(guild_id, user_id, &command)
         .await?
     {
         Some(model) => {

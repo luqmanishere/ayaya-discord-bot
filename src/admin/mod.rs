@@ -1,13 +1,8 @@
 //! Command reserved for admins or specific users
-use entity::prelude::*;
 use poise::serenity_prelude as serenity;
-use sea_orm::prelude::*;
-use tracing::error;
-use uuid::Uuid;
 
 use crate::{
-    error::BotError,
-    utils::{autocomplete_command_names, get_guild_id, GuildInfo},
+    utils::{autocomplete_command_names, GuildInfo},
     CommandResult, Commands, Context,
 };
 
@@ -36,17 +31,10 @@ pub async fn restrict_command_role(
     role: serenity::Role,
 ) -> CommandResult {
     ctx.defer().await?;
-    let db = ctx.data().db.clone();
-    let guild_id = get_guild_id(ctx)?;
+    let mut data_manager = ctx.data().data_manager.clone();
+    let guild_id = GuildInfo::guild_id_or_0(ctx);
 
-    use entity::require_command_role;
-    let model = require_command_role::ActiveModel {
-        entry_id: sea_orm::ActiveValue::Set(Uuid::now_v7()),
-        server_id: sea_orm::ActiveValue::Set(guild_id.get()),
-        role_id: sea_orm::ActiveValue::Set(role.id.get()),
-        command: sea_orm::ActiveValue::Set(command.clone()),
-    }
-    .insert(&db);
+    let model = data_manager.new_command_role_restriction(guild_id, &role, &command);
 
     match model.await {
         Ok(res) => {
@@ -57,14 +45,12 @@ pub async fn restrict_command_role(
             .await?;
         }
         Err(e) => {
-            error!("Error inserting record: {}", e);
-            // TODO: proper error for this
             ctx.reply(format!(
-                "Error inserting restriction for role `{}` and command `{}` into database",
-                role.name, command
+                "Error inserting restriction for role `{}` and command `{}` into database, {}",
+                role.name, command, "Maybe it already exists?"
             ))
             .await?;
-            return Err(BotError::from(e));
+            return Err(e.into());
         }
     }
 
@@ -85,17 +71,10 @@ pub async fn restrict_category_role(
     role: serenity::Role,
 ) -> CommandResult {
     ctx.defer().await?;
-    let db = ctx.data().db.clone();
-    let guild_id = get_guild_id(ctx)?;
+    let mut data_manager = ctx.data().data_manager.clone();
+    let guild_id = GuildInfo::guild_id_or_0(ctx);
 
-    use entity::require_category_role;
-    let model = require_category_role::ActiveModel {
-        entry_id: sea_orm::ActiveValue::Set(Uuid::now_v7()),
-        server_id: sea_orm::ActiveValue::Set(guild_id.get()),
-        role_id: sea_orm::ActiveValue::Set(role.id.get()),
-        category: sea_orm::ActiveValue::Set(category.clone()),
-    }
-    .insert(&db);
+    let model = data_manager.new_category_role_restriction(guild_id, &role, &category);
 
     match model.await {
         Ok(res) => {
@@ -106,14 +85,13 @@ pub async fn restrict_category_role(
             .await?;
         }
         Err(e) => {
-            error!("Error inserting record: {}", e);
             // TODO: proper error for this
             ctx.reply(format!(
                 "Error inserting restriction for role `{}` and category `{}` into database",
                 role.name, category
             ))
             .await?;
-            return Err(BotError::from(e));
+            return Err(e.into());
         }
     }
 
@@ -134,17 +112,10 @@ pub async fn allow_user_command(
     user: serenity::User,
 ) -> CommandResult {
     ctx.defer().await?;
-    let db = ctx.data().db.clone();
-    let guild_id = get_guild_id(ctx)?;
+    let mut data_manager = ctx.data().data_manager.clone();
+    let guild_id = GuildInfo::guild_id_or_0(ctx);
 
-    use entity::command_allow_user;
-    let model = command_allow_user::ActiveModel {
-        entry_id: sea_orm::ActiveValue::Set(Uuid::now_v7()),
-        server_id: sea_orm::ActiveValue::Set(guild_id.get()),
-        user_id: sea_orm::ActiveValue::Set(user.id.get()),
-        command: sea_orm::ActiveValue::Set(command.clone()),
-    }
-    .insert(&db);
+    let model = data_manager.new_command_user_allowed(guild_id, user.id.get(), &command);
 
     match model.await {
         Ok(res) => {
@@ -155,14 +126,13 @@ pub async fn allow_user_command(
             .await?;
         }
         Err(e) => {
-            error!("Error inserting record: {}", e);
             // TODO: proper error for this
             ctx.reply(format!(
                 "Error inserting allowance for user `{}` and command `{}` into database",
                 user.name, command
             ))
             .await?;
-            return Err(BotError::from(e));
+            return Err(e.into());
         }
     }
 
@@ -181,7 +151,7 @@ pub async fn list_command_restrictions(
     #[autocomplete = "autocomplete_command_names"] command: String,
 ) -> CommandResult {
     ctx.defer().await?;
-    let db = ctx.data().db.clone();
+    let mut data_manager = ctx.data().data_manager.clone();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
     // TODO: properly store command categories
     let command_category =
@@ -191,25 +161,16 @@ pub async fn list_command_restrictions(
             "Uncategorized".to_string()
         };
 
-    use entity::command_allow_user;
-    let allowed_users = CommandAllowUser::find()
-        .filter(command_allow_user::Column::ServerId.eq(guild_id))
-        .filter(command_allow_user::Column::Command.eq(&command))
-        .all(&db)
+    let allowed_users = data_manager
+        .findall_user_allowed(guild_id, &command)
         .await?;
 
-    use entity::require_command_role;
-    let required_roles_command = RequireCommandRole::find()
-        .filter(require_command_role::Column::ServerId.eq(guild_id))
-        .filter(require_command_role::Column::Command.eq(&command))
-        .all(&db)
+    let required_roles_command = data_manager
+        .find_command_roles_allowed(guild_id, &command)
         .await?;
 
-    use entity::require_category_role;
-    let required_roles_category = RequireCategoryRole::find()
-        .filter(require_category_role::Column::ServerId.eq(guild_id))
-        .filter(require_category_role::Column::Category.eq(command_category))
-        .all(&db)
+    let required_roles_category = data_manager
+        .find_category_roles_allowed(guild_id, &command_category)
         .await?;
 
     let mut message = serenity::MessageBuilder::default();

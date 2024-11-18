@@ -138,14 +138,7 @@ pub async fn autocomplete_command_names<'a>(ctx: Context<'_>, partial: &'a str) 
 /// If the command is restricted, and the user does not meet the above requirement, then the
 /// command use is not allowed.
 pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
-    // TODO: cache
-    use entity::command_allow_user;
-    use entity::prelude::*;
-    use entity::require_category_role;
-    use entity::require_command_role;
-    use sea_orm::prelude::*;
-
-    let db = ctx.data().db.clone();
+    let mut data_manager = ctx.data().data_manager.clone();
     let user_id = ctx.author().id.get();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
     let command = ctx.command().name.clone();
@@ -158,24 +151,19 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
     // TODO: cache
 
     // check first if user is allowed to use the command
-    let user_allowed = CommandAllowUser::find()
-        .filter(command_allow_user::Column::ServerId.eq(guild_id))
-        .filter(command_allow_user::Column::UserId.eq(user_id))
-        .filter(command_allow_user::Column::Command.eq(&command))
-        .one(&db)
+    let user_allowed = data_manager
+        .find_user_allowed(guild_id, user_id, &command)
         .await?;
     if let Some(_model) = user_allowed {
         return Ok(true);
     }
 
-    // check for roles. if present, then iter, else allow the command
-    let roles_allowed = RequireCommandRole::find()
-        .filter(require_command_role::Column::ServerId.eq(guild_id))
-        .filter(require_command_role::Column::Command.eq(&command))
-        .all(&db)
+    // check for roles. if present, then iter, else check for catgory role
+    let command_roles_allowed = data_manager
+        .find_command_roles_allowed(guild_id, &command)
         .await?;
-    if !roles_allowed.is_empty() {
-        for role in roles_allowed {
+    if !command_roles_allowed.is_empty() {
+        for role in command_roles_allowed {
             let role_id = role.role_id;
             if ctx.author().has_role(ctx, guild_id, role_id).await? {
                 return Ok(true);
@@ -190,11 +178,9 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
         #[expect(clippy::needless_return)]
         return Ok(false);
     } else {
-        // check for role restrictions
-        let category_roles_allowed = RequireCategoryRole::find()
-            .filter(require_category_role::Column::ServerId.eq(guild_id))
-            .filter(require_category_role::Column::Category.eq(command_category))
-            .all(&db)
+        // check for category roles. if present, iter, else allow
+        let category_roles_allowed = data_manager
+            .find_category_roles_allowed(guild_id, &command_category)
             .await?;
         if !category_roles_allowed.is_empty() {
             for role in category_roles_allowed {

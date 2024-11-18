@@ -1,8 +1,5 @@
 //! Contains commands reserved for the bot's owner: ie me.
 
-use entity::prelude::*;
-use sea_orm::{prelude::*, QuerySelect};
-
 use crate::{error::BotError, Commands, Context};
 
 pub fn owner_commands() -> Commands {
@@ -21,10 +18,10 @@ pub fn owner_commands() -> Commands {
 pub async fn command_log_raw(ctx: Context<'_>) -> Result<(), BotError> {
     ctx.defer().await?;
 
-    let db = ctx.data().db.clone();
+    let data_manager = ctx.data().data_manager.clone();
 
-    let logs = CommandCallLog::find().limit(5).all(&db).await?;
+    let logs = data_manager.find5_command_log().await?;
 
-    ctx.reply(format!("{:#?}", logs)).await?;
+    ctx.reply(format!("```\n{:#?}\n```", logs)).await?;
     Ok(())
 }

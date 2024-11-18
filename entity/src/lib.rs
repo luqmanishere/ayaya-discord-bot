@@ -9,3 +9,4 @@ pub mod command_call_log;
 pub mod require_category_role;
 pub mod require_command_role;
 pub mod user_command_all_time_statistics;
+pub mod youtube_cookies;

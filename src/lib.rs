@@ -7,16 +7,15 @@ use std::{
 use admin::admin_commands;
 use anyhow::Result;
 use base64::Engine as _;
+use data::DataManager;
 use error::{error_handler, BotError};
 use memes::gay;
-use migration::{Migrator, MigratorTrait};
 use owner::owner_commands;
 use poise::{
     serenity_prelude::{self as serenity},
     FrameworkError,
 };
 use reqwest::Client as HttpClient;
-use sea_orm::{ActiveValue, Database, DatabaseConnection, IntoActiveModel};
 use service::{AyayaDiscordBot, Discord};
 use songbird::input::AuxMetadata;
 use stats::stats_commands;
@@ -32,6 +31,7 @@ use voice::voice_commands;
 use crate::voice::commands::music;
 
 pub(crate) mod admin;
+pub(crate) mod data;
 pub(crate) mod error;
 pub(crate) mod memes;
 pub(crate) mod owner;
@@ -52,7 +52,7 @@ pub struct Data {
     songbird: Arc<songbird::Songbird>,
     track_metadata: Arc<Mutex<HashMap<Uuid, AuxMetadata>>>,
     user_id: RwLock<serenity::UserId>,
-    db: DatabaseConnection,
+    data_manager: DataManager,
     command_names: Vec<String>,
     command_categories: Vec<String>,
     command_categories_map: HashMap<String, Option<String>>,
@@ -67,8 +67,9 @@ pub async fn ayayabot(
 
     setup_logging(loki).await?;
 
-    let db: DatabaseConnection = Database::connect(db_str).await?;
-    Migrator::up(&db, None).await?; // always upgrade db to the latest version
+    let data_manager = DataManager::new(&db_str)
+        .await
+        .map_err(|e| anyhow::anyhow!("database error: {}", e))?;
 
     #[cfg(debug_assertions)]
     let prefix = "~";
@@ -136,7 +137,7 @@ pub async fn ayayabot(
                     songbird: manager_clone,
                     track_metadata: Default::default(),
                     user_id: Default::default(),
-                    db,
+                    data_manager,
                     command_names,
                     command_categories,
                     command_categories_map,
@@ -176,65 +177,22 @@ async fn pre_command(ctx: poise::Context<'_, Data, BotError>) {
     let command_name = ctx.command().name.clone();
     let author = ctx.author();
     let channel_id = ctx.channel_id();
-    let guild_id = ctx.guild_id();
+    let guild_id = GuildInfo::guild_id_or_0(ctx);
     info!("Command \"{command_name}\" called from channel {channel_id} in guild {guild_id:?} by {} ({})", author.name, author);
 
     // log to database
-    let db = ctx.data().db.clone();
-    let now_odt = time::OffsetDateTime::now_utc()
-        .to_offset(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
-    let call_log = entity::command_call_log::ActiveModel {
-        log_id: sea_orm::ActiveValue::Set(uuid::Uuid::new_v4()),
-        server_id: sea_orm::ActiveValue::Set(GuildInfo::guild_id_or_0(ctx)),
-        user_id: sea_orm::ActiveValue::Set(author.id.get()),
-        command: sea_orm::ActiveValue::Set(command_name.clone()),
-        command_time_stamp: sea_orm::ActiveValue::Set(now_odt),
-    };
-    use sea_orm::prelude::*;
-    match call_log.insert(&db).await {
-        Ok(_) => {}
-        Err(e) => {
-            use tracing::error;
-            error!("error inserting call log: {}", e);
-        }
-    };
-
-    use entity::prelude::*;
-    // all time user counter
-    use entity::user_command_all_time_statistics;
-    let user: Option<user_command_all_time_statistics::Model> =
-        match UserCommandAllTimeStatistics::find()
-            .filter(
-                user_command_all_time_statistics::Column::ServerId
-                    .eq(GuildInfo::guild_id_or_0(ctx)),
-            )
-            .filter(user_command_all_time_statistics::Column::UserId.eq(author.id.get()))
-            .filter(user_command_all_time_statistics::Column::Command.eq(command_name.clone()))
-            .one(&db)
-            .await
-        {
-            Ok(res) => res,
-            Err(e) => {
-                error!("error getting all time stats: {}", e);
-                None
-            }
-        };
-
-    if let Some(stats) = user {
-        let count = stats.count + 1;
-        let mut model = stats.into_active_model();
-        model.count = ActiveValue::set(count);
-        model.save(&db).await.unwrap();
-    } else {
-        user_command_all_time_statistics::ActiveModel {
-            server_id: sea_orm::ActiveValue::Set(GuildInfo::guild_id_or_0(ctx)),
-            user_id: sea_orm::ActiveValue::Set(author.id.get()),
-            command: sea_orm::ActiveValue::Set(command_name),
-            count: sea_orm::ActiveValue::Set(1),
-        }
-        .insert(&db)
+    match ctx
+        .data()
+        .data_manager
+        .clone()
+        .log_command_call(guild_id, author, command_name)
         .await
-        .unwrap();
+    {
+        Ok(_) => {}
+        Err(error) => {
+            // log the error
+            error!("{error}");
+        }
     };
 }
 

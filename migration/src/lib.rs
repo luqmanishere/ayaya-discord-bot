@@ -2,6 +2,7 @@ pub use sea_orm_migration::prelude::*;
 
 mod m20220101_000001_create_tables_initial;
 mod m20241115_044942_require_category_role;
+mod m20241117_051009_youtube_cookies;
 
 pub struct Migrator;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20220101_000001_create_tables_initial::Migration),
             Box::new(m20241115_044942_require_category_role::Migration),
+            Box::new(m20241117_051009_youtube_cookies::Migration),
         ]
     }
 }

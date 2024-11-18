@@ -7,3 +7,4 @@ pub use super::command_call_log::Entity as CommandCallLog;
 pub use super::require_category_role::Entity as RequireCategoryRole;
 pub use super::require_command_role::Entity as RequireCommandRole;
 pub use super::user_command_all_time_statistics::Entity as UserCommandAllTimeStatistics;
+pub use super::youtube_cookies::Entity as YoutubeCookies;
