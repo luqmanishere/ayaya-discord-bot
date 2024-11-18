@@ -6,7 +6,7 @@ use entity::prelude::*;
 use error::DataError;
 use migration::{Migrator, MigratorTrait};
 use poise::serenity_prelude as serenity;
-use sea_orm::{prelude::*, ActiveValue, IntoActiveModel, QuerySelect};
+use sea_orm::{prelude::*, ActiveValue, EntityOrSelect, IntoActiveModel, QueryOrder, QuerySelect};
 use sea_orm::{Database, DatabaseConnection};
 use time::UtcOffset;
 
@@ -327,6 +327,30 @@ impl DataManager {
             .await
             .map_err(DataError::FindUserAllTimeCommandStatsDatabaseError)
     }
+
+    pub async fn get_latest_cookies(&self) -> DataResult<Option<entity::youtube_cookies::Model>> {
+        use entity::youtube_cookies;
+        YoutubeCookies::find()
+            .select()
+            .order_by(youtube_cookies::Column::EntryId, sea_orm::Order::Desc)
+            .limit(1)
+            .one(&self.db)
+            .await
+            .map_err(DataError::GetLatestCookiesDatabaseError)
+    }
+
+    pub async fn add_new_cookie(&self, file: Vec<u8>) -> DataResult<()> {
+        use entity::youtube_cookies;
+        let model = youtube_cookies::ActiveModel {
+            entry_id: ActiveValue::NotSet,
+            date: ActiveValue::Set(time::OffsetDateTime::now_utc()),
+            cookies: ActiveValue::Set(file),
+        }
+        .save(&self.db)
+        .await
+        .map_err(DataError::AddNewCookieDatabaseError)?;
+        Ok(())
+    }
 }
 
 pub mod error {
@@ -366,5 +390,9 @@ pub mod error {
         Find5CommandCallLogDatabaseError(DbErr),
         #[error("Database error while finding user all time command stats: {0}")]
         FindUserAllTimeCommandStatsDatabaseError(DbErr),
+        #[error("Database error while getting cookies: {0}")]
+        GetLatestCookiesDatabaseError(DbErr),
+        #[error("Database error while adding cookies: {0}")]
+        AddNewCookieDatabaseError(DbErr),
     }
 }

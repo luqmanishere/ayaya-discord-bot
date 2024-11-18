@@ -10,6 +10,13 @@ async fn main() -> anyhow::Result<()> {
         net::{Ipv4Addr, SocketAddrV4},
     };
 
+    let home =
+        std::path::PathBuf::from(std::env::var("HOME").map_err(shuttle_runtime::CustomError::new)?);
+    let yt_dlp_config_dir = home.join(".config/yt-dlp");
+    if !yt_dlp_config_dir.exists() {
+        std::fs::create_dir_all(&yt_dlp_config_dir)?;
+    }
+
     // Configure the client with your Discord bot token in the environment.
     // DISCORD_TOKEN_FILE is searched first, then DISCORD_TOKEN.
     // IF DISCORD_TOKEN_FILE is found, the token is read from the file.
@@ -33,7 +40,17 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let ayayadc = ayayabot(token, db_str, None).await?;
+    let secret_key = {
+        if let Ok(token_file) = env::var("AGE_SECRET_KEY_FILE") {
+            std::fs::read_to_string(token_file)?
+        } else {
+            #[cfg(debug_assertions)]
+            dotenvy::dotenv().expect("works");
+            env::var("AGE_SECRET_KEY").context("Expected a token in the environment")?
+        }
+    };
+
+    let ayayadc = ayayabot(token, db_str, None, yt_dlp_config_dir, secret_key).await?;
     ayayadc
         .local_bind(std::net::SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(127, 0, 0, 1),
@@ -49,8 +66,15 @@ use ayaya_discord_bot::service::AyayaDiscordBot;
 async fn shuttle_main(
     #[shuttle_runtime::Secrets] secret_store: shuttle_runtime::SecretStore,
 ) -> Result<AyayaDiscordBot, shuttle_runtime::Error> {
-    use anyhow::Context as _;
+    use anyhow::Context;
     use ayaya_discord_bot::{ayayabot, LokiOpts};
+
+    let home =
+        std::path::PathBuf::from(std::env::var("HOME").map_err(shuttle_runtime::CustomError::new)?);
+    let yt_dlp_config_dir = home.join(".config/yt-dlp");
+    if !yt_dlp_config_dir.exists() {
+        std::fs::create_dir_all(&yt_dlp_config_dir)?;
+    }
 
     // Install external dependency (in the shuttle container only)
     use std::env;
@@ -88,19 +112,6 @@ async fn shuttle_main(
             panic!("failed to install dependencies")
         }
 
-        // INFO: Oauth external plugin is now in yt-dlp, to remove
-        //
-        // if !std::process::Command::new("pipx")
-        //     .arg("inject")
-        //     .arg("yt-dlp")
-        //     .arg("https://github.com/coletdjnz/yt-dlp-youtube-oauth2/archive/refs/heads/master.zip")
-        //     .status()
-        //     .expect("failed to run pipx")
-        //     .success()
-        // {
-        //     panic!("failed to install dependencies")
-        // }
-
         // prepend pipx path
         if let Some(path) = env::var_os("PATH") {
             let mut paths = env::split_paths(&path).collect::<Vec<_>>();
@@ -114,18 +125,10 @@ async fn shuttle_main(
 
         // write yt-dlp config file
         {
-            let home = std::path::PathBuf::from(
-                std::env::var("HOME").map_err(shuttle_runtime::CustomError::new)?,
-            );
-            let yt_dlp_config_dir = home.join(".config/yt-dlp");
-            if !yt_dlp_config_dir.exists() {
-                std::fs::create_dir_all(&yt_dlp_config_dir)?;
-            }
-
-            let yt_dlp_config = "--netrc";
-            let netrc_config = "machine youtube login oauth password \"\"";
+            // use cookies at the same path  as config
+            let cookies_path = yt_dlp_config_dir.join("cookies.txt");
+            let yt_dlp_config = format!("--cookies {}", cookies_path.to_str().unwrap_or(""));
             std::fs::write(yt_dlp_config_dir.join("config"), yt_dlp_config)?;
-            std::fs::write(home.join(".netrc"), netrc_config)?;
         }
     }
 
@@ -161,6 +164,10 @@ async fn shuttle_main(
         }
     };
 
-    let client = ayayabot(token, db_str, loki).await?;
+    let secret_key = secret_store
+        .get("AGE_SECRET_KEY")
+        .context("'AGE_SECRET_KEY' is not found")?;
+
+    let client = ayayabot(token, db_str, loki, yt_dlp_config_dir, secret_key).await?;
     Ok(client.into())
 }

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.7.0] - 2024-11-18
+
+### Added
+
+- Decrypt cookies from database and ytdlp use
+
 ### Changed
 
 - Moved all existing database calls to a DataManager in preperation for caching
@@ -59,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Meme command category. The only available command is `gay`.
 - New dependency: crate `rand`.
 
+[0.7.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.4.0...v0.5.0

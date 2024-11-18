@@ -1,6 +1,8 @@
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader, ErrorKind},
+    io::{BufRead, BufReader, ErrorKind, Read},
+    path::PathBuf,
+    str::FromStr,
     sync::{Arc, Mutex},
 };
 
@@ -56,12 +58,16 @@ pub struct Data {
     command_names: Vec<String>,
     command_categories: Vec<String>,
     command_categories_map: HashMap<String, Option<String>>,
+    ytdlp_config_path: PathBuf,
+    secret_key: String,
 }
 
 pub async fn ayayabot(
     token: String,
     db_str: String,
     loki: Option<LokiOpts>,
+    ytdlp_config_path: PathBuf,
+    secret_key: String,
 ) -> Result<AyayaDiscordBot> {
     // color_eyre::install()?;
 
@@ -141,6 +147,8 @@ pub async fn ayayabot(
                     command_names,
                     command_categories,
                     command_categories_map,
+                    ytdlp_config_path,
+                    secret_key,
                 })
             })
         })
@@ -279,6 +287,30 @@ async fn event_handler(
                 *user_id_lock = bot_user_id;
             }
 
+            if !std::env::var("SHUTTLE")
+                .unwrap_or_default()
+                .contains("true")
+            {
+                let data_manager = _data.data_manager.clone();
+                let path = _data.ytdlp_config_path.join("cookies.txt");
+                let key = age::x25519::Identity::from_str(&_data.secret_key).expect("key success");
+                let cookies = data_manager.get_latest_cookies().await.expect("no errors");
+                if let Some(cookies) = cookies {
+                    let file = cookies.cookies;
+                    let decryptor = age::Decryptor::new(file.as_slice()).expect("works");
+                    let mut decrypted = vec![];
+
+                    let mut reader = decryptor
+                        .decrypt(std::iter::once(&key as &dyn age::Identity))
+                        .expect("decrypt success");
+                    reader.read_to_end(&mut decrypted).expect("success");
+                    std::fs::write(path, decrypted).expect("write success");
+                    // TODO: read to file
+                } else {
+                    error!("no cookies found");
+                }
+            }
+
             // test yt-dlp
             let stderr = std::process::Command::new("yt-dlp")
                 .arg("-v")
@@ -287,7 +319,8 @@ async fn event_handler(
                 .arg("https://www.youtube.com/watch?v=1aPOj0ERTEc")
                 .stderr(std::process::Stdio::piped())
                 .spawn()
-                .expect("yt-dlp runs")
+                .expect("yt-dlp runs");
+            let stderr = stderr
                 .stderr
                 .ok_or_else(|| std::io::Error::new(ErrorKind::Other, "Could not capture stdout"))
                 .expect("cant get yt-dlp stdout");

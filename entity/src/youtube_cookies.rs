@@ -6,7 +6,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = true)]
     pub entry_id: i32,
     pub date: TimeDateTimeWithTimeZone,
-    #[sea_orm(column_type = "Binary(16)")]
+    #[sea_orm(column_type = "Blob")]
     pub cookies: Vec<u8>,
 }
 

@@ -15,7 +15,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(pk_auto(YoutubeCookies::EntryId))
                     .col(timestamp_with_time_zone(YoutubeCookies::Date))
-                    .col(binary(YoutubeCookies::Cookies))
+                    .col(blob(YoutubeCookies::Cookies))
                     .to_owned(),
             )
             .await?;
