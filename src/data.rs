@@ -341,7 +341,7 @@ impl DataManager {
 
     pub async fn add_new_cookie(&self, file: Vec<u8>) -> DataResult<()> {
         use entity::youtube_cookies;
-        let model = youtube_cookies::ActiveModel {
+        let _model = youtube_cookies::ActiveModel {
             entry_id: ActiveValue::NotSet,
             date: ActiveValue::Set(time::OffsetDateTime::now_utc()),
             cookies: ActiveValue::Set(file),
