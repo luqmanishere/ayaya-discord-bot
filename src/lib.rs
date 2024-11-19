@@ -287,10 +287,11 @@ async fn event_handler(
                 *user_id_lock = bot_user_id;
             }
 
-            if !std::env::var("SHUTTLE")
+            if std::env::var("SHUTTLE")
                 .unwrap_or_default()
                 .contains("true")
             {
+                info!("shuttle detected!");
                 let data_manager = _data.data_manager.clone();
                 let path = _data.ytdlp_config_path.join("cookies.txt");
                 let key = age::x25519::Identity::from_str(&_data.secret_key).expect("key success");
@@ -332,6 +333,7 @@ async fn event_handler(
                 .map_while(Result::ok)
                 .for_each(|line| info!("yt-dlp setup: {}", line));
             info!("yt-dlp checks done");
+            _ctx.set_activity(Some(serenity::ActivityData::watching("Hoshimachi Suichan")));
         }
         serenity::FullEvent::CacheReady { guilds } => {
             info!("Cached guild info is ready for {} guilds.", guilds.len());
