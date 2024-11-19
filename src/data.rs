@@ -6,7 +6,10 @@ use entity::prelude::*;
 use error::DataError;
 use migration::{Migrator, MigratorTrait};
 use poise::serenity_prelude as serenity;
-use sea_orm::{prelude::*, ActiveValue, EntityOrSelect, IntoActiveModel, QueryOrder, QuerySelect};
+use sea_orm::{
+    prelude::*, ActiveValue, ConnectOptions, EntityOrSelect, IntoActiveModel, QueryOrder,
+    QuerySelect,
+};
 use sea_orm::{Database, DatabaseConnection};
 use time::UtcOffset;
 
@@ -32,7 +35,9 @@ pub struct DataManager {
 impl DataManager {
     /// A new instance of the manager
     pub async fn new(url: &str) -> DataResult<Self> {
-        let db: DatabaseConnection = Database::connect(url)
+        let mut connect_options = ConnectOptions::new(url);
+        connect_options.sqlx_logging(false); // disable sqlx logging
+        let db: DatabaseConnection = Database::connect(connect_options)
             .await
             .map_err(|error| DataError::DatabaseConnectionError { error })?;
         Migrator::up(&db, None)
