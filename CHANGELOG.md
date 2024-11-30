@@ -1,80 +1,212 @@
 # Changelog
 
-All notable changes to this project starting from version 0.3 will be documented in this file.
+All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [Unreleased]
+
+### Added
+
+- Add shuffle command
+
+### Fixed
+
+- Stop sqlx logging from pollutitng the logs
 
 ## [0.7.1] - 2024-11-19
 
 ### Added
 
-- Activity status
-
-## [0.7.0] - 2024-11-18
-
-### Added
-
-- Decrypt cookies from database and ytdlp use
+- Add activity
 
 ### Changed
 
-- Moved all existing database calls to a DataManager in preperation for caching
+- Wtf
+- V0.7.1
+
+### Fixed
+
+- Fix clippy and fmt
+
+## [0.7.0] - 2024-11-18
+
+### Changed
+
+- Try to fix ytdlp cookies
+- Update changelog
+- Move database calls into data manager
 
 ## [0.6.0] - 2024-11-16
 
 ### Added
 
-- Restricting command usage, command based or category based
-- Allow users to explicitly use commands regardless of restrictions
-
-## [0.5.1] - 2024-11-15
+- Add command restriction features
 
 ### Changed
 
-- Fixed oauth cookie prompt
+- V0.6.0
 
-## [0.5.0] - 2024-11-15
+### Fixed
+
+- Fix lint
+
+## [0.5.1] - 2024-11-14
+
+### Fixed
+
+- Fix oauth
+
+## [0.5.0] - 2024-11-14
 
 ### Added
 
-- Introduction of database to track persistent data.
-- Keep track of command call count per user per server.
-- Log command calls to database.
-- Add commands to show stored stats.
-- Preliminary work to serve a dashboard alongside the bot
+- Add command_user_allow_table
 
 ### Changed
 
-- Changed help generation to a prettier one
-- Changed weightage for the meme gay command
+- V0.5.0
+- Update
+- Alot of things
+- Serve webpage alongside bot
 
-### Removed
+### Fixed
 
-- Removed external youtube oauth plugin
+- Weightage on memes
+- Fix wrong version
+
+## [0.4.1] - 2024-10-22
+
+### Added
+
+- Add missing help texts
 
 ## [0.4.0] - 2024-10-22
 
 ### Changed
 
-- Make the commands under `music` available without the music namespace. These are commonly used.
-- Updated `anyhow` and `thiserror` to their latest version
-- Changed `dotenv` to `dotenvy` due to unmaintained
+- Update changelog and formatting
+- Copy commands out of subcommands
+- Update dependencies
+- Update badges
+- Update badge
+- Ci name
+- Deploy only on version tags
+
+### Fixed
+
+- Run rust checks only if rust is changed
+- Fix diff link
+
+### Removed
+
+- Remove unused comment
 
 ## [0.3.0] - 2024-10-20
 
 ### Added
 
-- Add new `CHANGELOG` file
-- Meme command category. The only available command is `gay`.
-- New dependency: crate `rand`.
+- Add gay command
 
-[0.7.1]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.7.0...v0.7.1
-[0.7.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.5.1...v0.6.0
-[0.5.1]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.2.0...v0.3.0
+### Changed
+
+- Bump to 0.3.0
+
+## [0.2.0] - 2024-10-19
+
+### Added
+
+- Add loop command
+- Add 45s timeout
+- Add pagination to queue
+- Add youtube-dl deps
+- Add new skip command
+- Add docker build to gha
+- Add missing pub
+- Added the delete command
+- Added nowplaying command
+- Added inactivity auto kick
+- Add README and fix formatting
+- Add Github CI
+- Added join guard
+
+### Changed
+
+- Todos
+- Improve playlist handling so youtube likes us
+- Ordering is now correct with playlists
+- Move to our own implementation that uses youtube-dl-rs
+- Update Cargo.lock
+- Modularize audio commands
+- Allow running in nix env
+- Pretty embeds in discord
+- Deploy to shuttle
+- Filter out unnecessary
+- Push to loki
+- Starting diagnostics and error messages
+- Use sane errors in code
+- Leave when alone in channel
+- Shuttle.rs integration
+- Implement playlist support
+- Restructuring
+- Swap some plain messages for embeds
+- Normalize files
+- Implement notifications when a track starts playing
+- Implement search command
+- Cargo update
+- Temp fix clippy
+- Attempting to fix
+- Updated bot to latest serenity and songbird versions
+- Small improvements to the code
+- Fix clippy warnings
+- Implement search in play option
+- Initiial code for feature `search`
+- Fix the inactive counter behaviour
+- Updated README
+- Minor quality of life changes
+- Publish to github
+- Fixed project name
+- Initial Commit
+
+### Fixed
+
+- Clippy
+- Fix clippy
+- Reply when the queue is empty instead of erroring on emptyness
+- Cleanup some code that should be unused
+- Make crate only internal stuff
+- Have shuttle apt update first before installing packages
+- Clippy
+- Fix queue
+- Deploy should only run on code changes
+- Clippy errors
+- Youtube playback now uses oauth
+- Show help when music is called without subcommands
+- Fix error handling in play command
+- Use futures crate stream instead
+- Limit spawned tasks
+- Update to latest version
+- Flesh out more errors
+- Flesh out more errors
+- Move deps install to main for visibility
+- Log in localtime or +8 or UTC
+- Fix attempt 2
+- Fixed prefix
+
+### Removed
+
+- Delete from queue
+- Remove unused workflow
+
+[unreleased]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.7.1..HEAD
+[0.7.1]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.7.0..v0.7.1
+[0.7.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.6.0..v0.7.0
+[0.6.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.5.1..v0.6.0
+[0.5.1]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.5.0..v0.5.1
+[0.5.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.4.1..v0.5.0
+[0.4.1]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.4.0..v0.4.1
+[0.4.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.3.0..v0.4.0
+[0.3.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.2.0..v0.3.0
+
+<!-- generated by git-cliff -->
