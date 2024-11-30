@@ -1,6 +1,6 @@
 [package]
 name = "ayaya-discord-bot"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -55,10 +55,10 @@ version = "0.4.3"
 features = ["builtin-queue", "driver", "serenity"]
 
 [dependencies.serenity]
-# version = "0.12"
-git = "https://github.com/serenity-rs/serenity.git"
-# branch = "next"
-rev = "c3d4a3386ea0710a81618f07771c83912c5f6196"
+version = "0.12"
+# git = "https://github.com/serenity-rs/serenity.git"
+# # branch = "next"
+# rev = "c3d4a3386ea0710a81618f07771c83912c5f6196"
 features = [
   "cache",
   "framework",
