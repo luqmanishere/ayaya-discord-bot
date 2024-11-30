@@ -1,6 +1,7 @@
 //! This module contains commands for queue manipulation (excluding addition)
 
 use poise::serenity_prelude as serenity;
+use rand::seq::SliceRandom;
 use tracing::{error, warn};
 
 use crate::{
@@ -10,7 +11,7 @@ use crate::{
         error::MusicCommandError,
         utils::{self, metadata_to_embed},
     },
-    Context,
+    CommandResult, Context,
 };
 
 /// Shows the queue. The only kind of acceptable spoilers.
@@ -213,6 +214,31 @@ pub async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }
 
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
+pub async fn shuffle(ctx: Context<'_>) -> CommandResult {
+    ctx.defer().await?;
+
+    let manager = &ctx.data().songbird;
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    if let Some(handler_lock) = manager.get(guild_info.guild_id) {
+        {
+            let handler = handler_lock.lock().await;
+            let queue = { handler.queue() };
+            queue.modify_queue(|queued| {
+                let mut rng = rand::thread_rng();
+                // it is required to preserve the first element
+                queued.make_contiguous()[1..].shuffle(&mut rng);
+            });
+            // TODO: pretty embeds
+            ctx.say("Ayaya shuffled the queue!").await?;
+        }
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
     Ok(())
 }
 

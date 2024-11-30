@@ -27,6 +27,7 @@ pub fn voice_commands() -> Commands {
         loop_track(),
         stop_loop(),
         ting(),
+        shuffle(),
     ]
 }
 
