@@ -313,7 +313,8 @@ async fn event_handler(
             }
 
             // test yt-dlp
-            let stderr = std::process::Command::new("yt-dlp")
+            #[expect(clippy::zombie_processes)]
+            let child = std::process::Command::new("yt-dlp")
                 .arg("-v")
                 .arg("-O")
                 .arg("title,channel")
@@ -321,7 +322,7 @@ async fn event_handler(
                 .stderr(std::process::Stdio::piped())
                 .spawn()
                 .expect("yt-dlp runs");
-            let stderr = stderr
+            let stderr = child
                 .stderr
                 .ok_or_else(|| std::io::Error::new(ErrorKind::Other, "Could not capture stdout"))
                 .expect("cant get yt-dlp stdout");
