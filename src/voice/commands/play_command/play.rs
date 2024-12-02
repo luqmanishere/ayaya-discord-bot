@@ -3,6 +3,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use poise::serenity_prelude as serenity;
+use rand::seq::SliceRandom;
 use songbird::{input::Compose, Event};
 use tokio::sync::Mutex;
 use tracing::{error, info};
@@ -42,7 +43,7 @@ impl PlayParse {
     }
 
     /// Handle the parsed input for play. Takes the poise context to facilitate communication
-    pub async fn run(self, ctx: Context<'_>) -> Result<(), BotError> {
+    pub async fn run(self, ctx: Context<'_>, shuffle: bool) -> Result<(), BotError> {
         let manager = ctx.data().songbird.clone();
         let guild_id = get_guild_id(ctx)?;
         let calling_channel_id = ctx.channel_id();
@@ -63,7 +64,15 @@ impl PlayParse {
                 info!("using provided playlist link: {playlist_url}");
                 ctx.reply("Handling playlist....").await?;
 
-                youtube::YoutubeDl::new_playlist(ctx.data().http.clone(), playlist_url).await?
+                let mut playlist =
+                    youtube::YoutubeDl::new_playlist(ctx.data().http.clone(), playlist_url).await?;
+                if shuffle {
+                    let mut rng = rand::thread_rng();
+                    playlist.shuffle(&mut rng);
+                    playlist
+                } else {
+                    playlist
+                }
             }
         };
         handle_sources(call, calling_channel_id, sources, ctx).await?;
@@ -72,13 +81,13 @@ impl PlayParse {
 }
 
 /// Parses the input string and adds the result to the trackqueue
-pub async fn play_inner(ctx: Context<'_>, input: String) -> Result<(), BotError> {
+pub async fn play_inner(ctx: Context<'_>, input: String, shuffle: bool) -> Result<(), BotError> {
     let input_type = PlayParse::parse(&input);
 
     // join a channel first
     join_inner(ctx, false).await?;
 
-    input_type.run(ctx).await
+    input_type.run(ctx, shuffle).await
 }
 
 /// Inserts a youtube source, sets events and notifies the calling channel

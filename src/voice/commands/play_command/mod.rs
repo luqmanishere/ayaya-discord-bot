@@ -51,7 +51,33 @@ pub async fn play(
 
     ctx.defer().await?;
 
-    play_inner(ctx, url).await?;
+    play_inner(ctx, url, false).await?;
+    Ok(())
+}
+
+/// Plays music from YT url or search term. Randomly shuffles the order if a playlist is given.
+///
+/// We are getting help from a higher being...
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    aliases("sp"),
+    guild_only,
+    category = "Music"
+)]
+pub async fn shuffle_play(
+    ctx: Context<'_>,
+    #[description = "A url or a search term for youtube"]
+    #[min_length = 1]
+    url: Vec<String>,
+) -> Result<(), BotError> {
+    // convert vec to a string
+    let url = url.join(" ").trim().to_string();
+
+    ctx.defer().await?;
+
+    play_inner(ctx, url, true).await?;
     Ok(())
 }
 
@@ -81,7 +107,7 @@ pub async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<(), Bo
 
     match create_search_interaction(ctx, search).await {
         Ok(youtube_id) => {
-            play_inner(ctx, youtube_id).await?;
+            play_inner(ctx, youtube_id, false).await?;
         }
         Err(e) => {
             if let BotError::MusicCommandError(MusicCommandError::SearchTimeout) = e {

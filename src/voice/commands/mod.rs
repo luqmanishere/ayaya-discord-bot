@@ -28,6 +28,7 @@ pub fn voice_commands() -> Commands {
         stop_loop(),
         ting(),
         shuffle(),
+        shuffle_play(),
     ]
 }
 
