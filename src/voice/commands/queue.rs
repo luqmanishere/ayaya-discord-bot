@@ -31,9 +31,12 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
 
     // Check if in channel
     if let Some(handler_lock) = manager.get(guild_id) {
-        let handler = handler_lock.lock().await;
-        let queue = handler.queue();
-        let tracks = queue.current_queue();
+        // dont hold the lock, we only need the track metadatas
+        let tracks = {
+            let handler = handler_lock.lock().await;
+            let queue = handler.queue();
+            queue.current_queue()
+        };
         let queue_vec = if !tracks.is_empty() {
             let data = ctx.data();
             let metadata_lock = data.track_metadata.lock().unwrap();
