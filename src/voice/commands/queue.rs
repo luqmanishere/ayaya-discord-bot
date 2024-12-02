@@ -57,13 +57,10 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
             }
             queue_vec
         } else {
-            vec![]
-        };
-        if queue_vec.is_empty() {
             ctx.reply("Queue is empty, add some music to see something")
                 .await?;
             return Ok(());
-        }
+        };
 
         if let Err(BotError::MusicCommandError(MusicCommandError::SearchTimeout)) =
             queue_pagination_interaction(ctx, queue_vec).await
