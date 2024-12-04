@@ -183,25 +183,25 @@ async fn pre_command(ctx: poise::Context<'_, Data, BotError>) {
     let _guard = span.enter();
 
     let command_name = ctx.command().name.clone();
-    let author = ctx.author();
+    let author = ctx.author().clone();
     let channel_id = ctx.channel_id();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
     info!("Command \"{command_name}\" called from channel {channel_id} in guild {guild_id:?} by {} ({})", author.name, author);
 
-    // log to database
-    match ctx
-        .data()
-        .data_manager
-        .clone()
-        .log_command_call(guild_id, author, command_name)
-        .await
-    {
-        Ok(_) => {}
-        Err(error) => {
-            // log the error
-            error!("{error}");
-        }
-    };
+    // log to database asynchronously, we don't need to wait for this to finish at all.
+    let mut data_manager = ctx.data().data_manager.clone();
+    tokio::spawn(async move {
+        match data_manager
+            .log_command_call(guild_id, &author, command_name)
+            .await
+        {
+            Ok(_) => {}
+            Err(error) => {
+                // log the error
+                error!("error logging command call to database: {error}");
+            }
+        };
+    });
 }
 
 async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
