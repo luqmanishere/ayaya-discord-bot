@@ -16,6 +16,7 @@ sea-orm = { version = "1", features = [
   "with-json",
   "with-uuid",
 ] }
+bincode = { version = "2.0.0-rc.3", features = ["serde"] }
 
 [dependencies]
 shuttle-serenity = { version = "0.47" }
@@ -49,6 +50,9 @@ strum = { version = "0.26", features = ["derive"] }
 entity = { path = "entity" }
 migration = { path = "migration" }
 age = { version = "0.11" }
+lru-mem = { version = "0.3" }
+bincode = { workspace = true }
+
 
 [dependencies.songbird]
 version = "0.4.3"

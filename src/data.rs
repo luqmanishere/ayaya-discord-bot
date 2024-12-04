@@ -1,9 +1,11 @@
 //! Manage database connection and caching
 //!
+use std::sync::Arc;
 
 use ::serenity::futures::TryFutureExt;
 use entity::prelude::*;
 use error::DataError;
+use lru_mem::{HeapSize, LruCache};
 use migration::{Migrator, MigratorTrait};
 use poise::serenity_prelude as serenity;
 use sea_orm::{
@@ -12,24 +14,22 @@ use sea_orm::{
 };
 use sea_orm::{Database, DatabaseConnection};
 use time::UtcOffset;
+use tokio::sync::Mutex;
 
 pub type DataResult<T> = Result<T, DataError>;
 
-/// Manage data connection and caching. The principle of operation is simple.
-/// When data is pulled for the first time, it gets cached. Any addition later on is also added to
-/// the cache after being pushed to the database. This saves some network access.
+/// Manage data connection and caching. Cache access, insert and invalidation are implemented as
+/// methods in this struct.
 ///
-/// ## Why is this fine, what about concurrent access?
+/// ## Cache details
 ///
-/// This bot is not designed to be a distributed software running on HA or anything like that. It's
-/// a single program, if it dies it dies there is no external concurrent access. Hence, a simple
-/// model that does not query the database for any changes while it is running (or only
-/// periodically) is suitable for this use case.
-///
-/// I don't even know how to make a distributed kind of discord bot (if that is even possible).
+/// Cache is split into relevant parts of the data (eg: permissions). To access the cache, the key
+/// consists of parts tha encode the details of the access (see [`PermissionCacheKey`]). This makes
+/// it easy to remove via the `.retain` method by simply comparing fields.
 #[derive(Clone, Debug)]
 pub struct DataManager {
     db: DatabaseConnection, // this is already clone
+    permission_cache: Arc<Mutex<LruCache<PermissionCacheKey, Vec<u8>>>>,
 }
 
 impl DataManager {
@@ -43,7 +43,40 @@ impl DataManager {
         Migrator::up(&db, None)
             .await
             .map_err(|error| DataError::MigrationError { error })?; // always upgrade db to the latest version
-        Ok(Self { db })
+        Ok(Self {
+            db,
+            permission_cache: Arc::new(Mutex::new(LruCache::new(1024 * 1024))),
+        })
+    }
+
+    /// Find a value in the permission cache. Returns a [`None`] if there is no value for the provided key
+    pub async fn permission_cache_access(&mut self, key: &PermissionCacheKey) -> Option<Vec<u8>> {
+        let mut cache = self.permission_cache.lock().await;
+        let value = cache.get(key).cloned();
+        if value.is_some() {
+            tracing::debug!("found in cache");
+        } else {
+            tracing::debug!("cache miss");
+        }
+        value
+    }
+
+    /// Inserts a new entry into the permission cache. The cache stores [`Vec<u8>`], which may be used directly
+    /// or by encoding items to bincode. Bincode encoding is fast, and does not take up much time.
+    pub async fn permission_cache_insert(&mut self, key: PermissionCacheKey, value: Vec<u8>) {
+        let mut cache = self.permission_cache.lock().await;
+        if let Err(error) = cache.insert(key, value) {
+            tracing::error!("error inserting into permission cache: {error}");
+        };
+    }
+
+    /// Invalidates the cache based on the key given. The key is broken into each part and any containing part is invalidated(removed).
+    pub async fn permission_cache_invalidate(&mut self, key: PermissionCacheKey) {
+        let mut cache = self.permission_cache.lock().await;
+        cache.retain(|cached_key, _| {
+            // remove the cache of the command for the server
+            !(cached_key.comorcat == key.comorcat && cached_key.guild_id == key.guild_id)
+        });
     }
 
     /// Log command calls to the database. Will also increment the command counter.
@@ -130,15 +163,34 @@ impl DataManager {
         user_id: u64,
         command: &str,
     ) -> DataResult<Option<entity::command_allow_user::Model>> {
-        // TODO: caching
         use entity::command_allow_user;
-        CommandAllowUser::find()
-            .filter(command_allow_user::Column::ServerId.eq(guild_id))
-            .filter(command_allow_user::Column::UserId.eq(user_id))
-            .filter(command_allow_user::Column::Command.eq(command))
-            .one(&self.db)
-            .map_err(|error| DataError::FindAllowedUserError { error })
-            .await
+        const OP: &str = "find_user_allowed";
+        let cache_key = PermissionCacheKey {
+            user_id: Some(user_id),
+            guild_id,
+            operation: OP,
+            comorcat: command.to_string(),
+        };
+
+        let entry = {
+            if let Some(entry) = self.permission_cache_access(&cache_key).await {
+                let (decoded, _): (Option<command_allow_user::Model>, _) =
+                    bincode::decode_from_slice(&entry, bincode::config::standard()).unwrap();
+                decoded
+            } else {
+                let model = CommandAllowUser::find()
+                    .filter(command_allow_user::Column::ServerId.eq(guild_id))
+                    .filter(command_allow_user::Column::UserId.eq(user_id))
+                    .filter(command_allow_user::Column::Command.eq(command))
+                    .one(&self.db)
+                    .map_err(|error| DataError::FindAllowedUserError { error })
+                    .await?;
+                let encode = bincode::encode_to_vec(&model, bincode::config::standard()).unwrap();
+                self.permission_cache_insert(cache_key, encode).await;
+                model
+            }
+        };
+        Ok(entry)
     }
 
     /// Finds the allowed roles for the command, if any. Returns an empty [`Vec`] if no allowed
@@ -152,14 +204,34 @@ impl DataManager {
         guild_id: u64,
         command: &str,
     ) -> DataResult<Vec<entity::require_command_role::Model>> {
-        // TODO: caching
         use entity::require_command_role;
-        RequireCommandRole::find()
-            .filter(require_command_role::Column::ServerId.eq(guild_id))
-            .filter(require_command_role::Column::Command.eq(command))
-            .all(&self.db)
-            .map_err(|error| DataError::FindCommandRolesAllowedError { error })
-            .await
+        const OP: &str = "find_command_roles_allowed";
+        let cache_key = PermissionCacheKey {
+            user_id: None,
+            guild_id,
+            operation: OP,
+            comorcat: command.to_string(),
+        };
+
+        let entry = {
+            if let Some(entry) = self.permission_cache_access(&cache_key).await {
+                let (decoded, _): (Vec<require_command_role::Model>, _) =
+                    bincode::decode_from_slice(&entry, bincode::config::standard()).unwrap();
+                decoded
+            } else {
+                let model = RequireCommandRole::find()
+                    .filter(require_command_role::Column::ServerId.eq(guild_id))
+                    .filter(require_command_role::Column::Command.eq(command))
+                    .all(&self.db)
+                    .map_err(|error| DataError::FindCommandRolesAllowedError { error })
+                    .await?;
+                if let Ok(encoded) = bincode::encode_to_vec(&model, bincode::config::standard()) {
+                    self.permission_cache_insert(cache_key, encoded).await;
+                };
+                model
+            }
+        };
+        Ok(entry)
     }
 
     /// Finds the allowed roles for the category, if any. Return an empty [`Vec`] if no allowed
@@ -174,12 +246,33 @@ impl DataManager {
         command_category: &str,
     ) -> DataResult<Vec<entity::require_category_role::Model>> {
         use entity::require_category_role;
-        RequireCategoryRole::find()
-            .filter(require_category_role::Column::ServerId.eq(guild_id))
-            .filter(require_category_role::Column::Category.eq(command_category))
-            .all(&self.db)
-            .map_err(DataError::FindCategoryRolesAllowedDatabaseError)
-            .await
+        const OP: &str = "find_category_roles_allowed";
+        let cache_key = PermissionCacheKey {
+            user_id: None,
+            guild_id,
+            operation: OP,
+            comorcat: command_category.to_string(),
+        };
+
+        let entry = {
+            if let Some(entry) = self.permission_cache_access(&cache_key).await {
+                let (decoded, _): (Vec<require_category_role::Model>, _) =
+                    bincode::decode_from_slice(&entry, bincode::config::standard()).unwrap();
+                decoded
+            } else {
+                let model = RequireCategoryRole::find()
+                    .filter(require_category_role::Column::ServerId.eq(guild_id))
+                    .filter(require_category_role::Column::Category.eq(command_category))
+                    .all(&self.db)
+                    .map_err(DataError::FindCategoryRolesAllowedDatabaseError)
+                    .await?;
+                if let Ok(encoded) = bincode::encode_to_vec(&model, bincode::config::standard()) {
+                    self.permission_cache_insert(cache_key, encoded).await;
+                };
+                model
+            }
+        };
+        Ok(entry)
     }
 
     /// Inserts a new command role restriction into the database. A check is done before insertion
@@ -214,6 +307,14 @@ impl DataManager {
             .insert(&self.db)
             .await
             .map_err(DataError::NewCommandRoleRestrictionDatabaseError)?;
+            // invalidate the cache
+            self.permission_cache_invalidate(PermissionCacheKey {
+                user_id: None,
+                guild_id,
+                operation: "",
+                comorcat: command.to_string(),
+            })
+            .await;
             Ok(model)
         }
     }
@@ -250,6 +351,14 @@ impl DataManager {
             .insert(&self.db)
             .await
             .map_err(DataError::NewCategoryRoleRestrictionDatabaseError)?;
+            // cache invalidation
+            self.permission_cache_invalidate(PermissionCacheKey {
+                user_id: None,
+                guild_id,
+                operation: "",
+                comorcat: command_category.to_string(),
+            })
+            .await;
             Ok(model)
         }
     }
@@ -274,6 +383,14 @@ impl DataManager {
             .insert(&self.db)
             .await
             .map_err(DataError::NewCommandAllowedUserDatabaseError)?;
+            // cache invalidation
+            self.permission_cache_invalidate(PermissionCacheKey {
+                user_id: Some(user_id),
+                guild_id,
+                operation: "",
+                comorcat: command.to_string(),
+            })
+            .await;
             Ok(model)
         }
     }
@@ -358,6 +475,24 @@ impl DataManager {
     }
 }
 
+/// The cache key for the permission cache. Each detail is split into a field for easy comparison
+#[derive(Debug, Eq, Hash, PartialEq, Clone)]
+pub struct PermissionCacheKey {
+    /// The user id in u64, if any
+    pub user_id: Option<u64>,
+    /// The guild id in u64
+    pub guild_id: u64,
+    /// The name of the function calling
+    pub operation: &'static str,
+    /// The name of the bot command or command category
+    pub comorcat: String,
+}
+
+impl HeapSize for PermissionCacheKey {
+    fn heap_size(&self) -> usize {
+        self.comorcat.heap_size() + self.operation.heap_size()
+    }
+}
 pub mod error {
     use sea_orm::DbErr;
 
