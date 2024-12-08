@@ -434,9 +434,9 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.7.7"
+version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "504e3947307ac8326a5437504c517c4b56716c9d98fac0028c2acc7ca47d70ae"
+checksum = "edca88bc138befd0323b20752846e6587272d3b03b0343c8ea28a6f819e6e71f"
 dependencies = [
  "async-trait",
  "axum-core 0.4.5",
@@ -464,6 +464,18 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "axum-auth"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8169113a185f54f68614fcfc3581df585d30bf8542bcb99496990e1025e4120a"
+dependencies = [
+ "async-trait",
+ "axum-core 0.4.5",
+ "base64 0.21.7",
+ "http 1.1.0",
 ]
 
 [[package]]
@@ -510,7 +522,8 @@ version = "0.9.0"
 dependencies = [
  "age",
  "anyhow",
- "axum 0.7.7",
+ "axum 0.7.9",
+ "axum-auth",
  "base64 0.22.1",
  "bincode",
  "dotenvy",

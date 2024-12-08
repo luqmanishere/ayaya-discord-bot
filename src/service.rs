@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+use axum::{async_trait, http::StatusCode};
+use axum::{extract::FromRequestParts, http::request::Parts};
+use axum_auth::{AuthBasicCustom, Rejection};
 use poise::serenity_prelude as serenity;
 
 use crate::{error::BotError, Data};
@@ -68,5 +71,31 @@ impl shuttle_runtime::Service for AyayaDiscordBot {
         };
 
         Ok(())
+    }
+}
+
+/// Your custom basic auth returning a 401 Unauthorized for compliance with Grafana Cloud expectations
+pub struct MetricsBasicAuth(pub (String, Option<String>));
+
+// this is where you define your custom options
+impl AuthBasicCustom for MetricsBasicAuth {
+    const ERROR_CODE: StatusCode = StatusCode::UNAUTHORIZED; // <-- define custom status code here
+    const ERROR_OVERWRITE: Option<&'static str> = None; // <-- define overwriting message here
+
+    fn from_header(contents: (String, Option<String>)) -> Self {
+        Self(contents)
+    }
+}
+
+// this is just boilerplate, copy-paste this
+#[async_trait]
+impl<B> FromRequestParts<B> for MetricsBasicAuth
+where
+    B: Send + Sync,
+{
+    type Rejection = Rejection;
+
+    async fn from_request_parts(parts: &mut Parts, _: &B) -> Result<Self, Self::Rejection> {
+        Self::decode_request_parts(parts)
     }
 }

@@ -45,6 +45,7 @@ base64 = "0.22.1"
 url = "2.5.2"
 rand = "0.8"
 axum = { version = "0.7" }
+axum-auth = { version = "0.7" }
 sea-orm = { workspace = true }
 strum = { version = "0.26", features = ["derive"] }
 entity = { path = "entity" }

@@ -26,7 +26,7 @@ use poise::{
 };
 use prometheus_client::{encoding::text::encode, registry::Registry};
 use reqwest::Client as HttpClient;
-use service::{AyayaDiscordBot, Discord};
+use service::{AyayaDiscordBot, Discord, MetricsBasicAuth};
 use songbird::input::AuxMetadata;
 use stats::stats_commands;
 use time::UtcOffset;
@@ -437,7 +437,17 @@ async fn hello_world() -> &'static str {
     "Hello, world!"
 }
 
-async fn metrics_handler(State(state): State<Arc<TokioMutex<AxumState>>>) -> impl IntoResponse {
+async fn metrics_handler(
+    MetricsBasicAuth((id, password)): MetricsBasicAuth,
+    State(state): State<Arc<TokioMutex<AxumState>>>,
+) -> impl IntoResponse {
+    if id != "admin" || password != Some("password".to_string()) {
+        return Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .body(Body::from("Unauthorized".to_string()))
+            .unwrap();
+    };
+
     let state = state.lock().await;
     let mut buffer = String::new();
     {
