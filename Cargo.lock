@@ -506,7 +506,7 @@ dependencies = [
 
 [[package]]
 name = "ayaya-discord-bot"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "age",
  "anyhow",
