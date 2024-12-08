@@ -2,7 +2,10 @@ use miette::Diagnostic;
 use poise::serenity_prelude::{self as serenity};
 use thiserror::Error;
 
-use crate::utils::{ChannelInfo, GuildInfo};
+use crate::{
+    error::ErrorName,
+    utils::{ChannelInfo, GuildInfo},
+};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum MusicCommandError {
@@ -231,4 +234,35 @@ pub enum MusicCommandError {
         voice_channel_info: ChannelInfo,
         count: Option<usize>,
     },
+}
+
+impl ErrorName for MusicCommandError {
+    fn name(&self) -> String {
+        let name = match self {
+            MusicCommandError::BotVoiceNotJoined { .. } => "bot_voice_not_joined",
+            MusicCommandError::UserVoiceNotJoined { .. } => "user_voice_not_joined",
+            MusicCommandError::FailedJoinCall { .. } => "failed_join_call",
+            MusicCommandError::FailedLeaveCall { .. } => "failed_leave_call",
+            MusicCommandError::FailedUnmuteCall { .. } => "failed_unmute_call",
+            MusicCommandError::FailedDeafenCall { .. } => "failed_deafen_call",
+            MusicCommandError::FailedUndeafenCall { .. } => "failed_undeafen_call",
+            MusicCommandError::CallDoesNotExist => "call_does_not_exist",
+            MusicCommandError::YoutubeDlError { .. } => "youtube_dl_error",
+            MusicCommandError::YoutubeDlEmptyPlaylist { .. } => "youtube_dl_empty_playlist",
+            MusicCommandError::TrackMetadataNotFound { .. } => "track_metadata_not_found",
+            MusicCommandError::TrackMetadataRetrieveFailed(_) => "track_metadata_retrieve_failed",
+            MusicCommandError::TrackStateNotFound { .. } => "track_state_not_found",
+            MusicCommandError::FailedTrackSkip { .. } => "failed_track_skip",
+            MusicCommandError::FailedTrackPause { .. } => "failed_track_pause",
+            MusicCommandError::FailedTrackResume { .. } => "failed_track_resume",
+            MusicCommandError::FailedTrackSeek { .. } => "failed_track_seek",
+            MusicCommandError::QueueOutOfBounds { .. } => "queue_out_of_bounds",
+            MusicCommandError::QueueDeleteNowPlaying { .. } => "queue_delete_now_playing",
+            MusicCommandError::NoTrackToSeek { .. } => "no_track_to_seek",
+            MusicCommandError::SearchTimeout => "search_timeout",
+            MusicCommandError::EmptySource => "empty_source",
+            MusicCommandError::FailedTrackLoop { .. } => "failed_track_loop",
+        };
+        format!("music::{name}")
+    }
 }

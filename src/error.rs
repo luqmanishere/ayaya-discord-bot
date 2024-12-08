@@ -3,7 +3,7 @@ use poise::serenity_prelude as serenity;
 use thiserror::Error;
 use tracing::error;
 
-use crate::{voice::error::MusicCommandError, Data};
+use crate::{metrics::ErrorType, voice::error::MusicCommandError, Data};
 
 pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
     error!("error error error {}", error);
@@ -27,6 +27,10 @@ pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
                 .expect("no errors");
         }
         poise::FrameworkError::Command { error, ctx, .. } => {
+            ctx.data()
+                .metrics
+                .error(error.name(), ErrorType::Command)
+                .await;
             let cmd = ctx.command().name.clone();
             error!("Error executing command ({}): {}", cmd, error);
 
@@ -43,6 +47,10 @@ pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
             }
         }
     }
+}
+
+pub trait ErrorName {
+    fn name(&self) -> String;
 }
 
 #[derive(Error, Diagnostic, Debug)]
@@ -67,6 +75,24 @@ pub enum BotError {
     DataManagerError(#[from] crate::data::error::DataError),
     #[error("Error downloading attachment: {0}")]
     DownloadAttachmentError(serenity::Error),
+}
+
+impl ErrorName for BotError {
+    fn name(&self) -> String {
+        let name = match self {
+            BotError::MusicCommandError(music_command_error) => &music_command_error.name(),
+            BotError::NoGuildId => "no_guild_id",
+            BotError::NoGuild => "no_guild",
+            BotError::GuildCacheStale => "guild_cache_stale",
+            BotError::GuildMismatch => "guild_mismatch",
+            // TODO: error name
+            BotError::GeneralSerenityError(..) => "serenity_error",
+            BotError::DatabaseOperationError(..) => "database_error",
+            BotError::DataManagerError(data_error) => &data_error.name(),
+            BotError::DownloadAttachmentError(..) => "download_attachment_error",
+        };
+        format!("main::{name}")
+    }
 }
 
 pub fn command_error_embed(command: String, error: BotError) -> serenity::CreateEmbed {

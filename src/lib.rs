@@ -8,21 +8,29 @@ use std::{
 
 use admin::admin_commands;
 use anyhow::Result;
+use axum::{
+    body::Body,
+    extract::State,
+    http::{header::CONTENT_TYPE, StatusCode},
+    response::{IntoResponse, Response},
+};
 use base64::Engine as _;
 use data::DataManager;
 use error::{error_handler, BotError};
 use memes::gay;
+use metrics::Metrics;
 use owner::owner_commands;
 use poise::{
     serenity_prelude::{self as serenity},
     FrameworkError,
 };
+use prometheus_client::{encoding::text::encode, registry::Registry};
 use reqwest::Client as HttpClient;
 use service::{AyayaDiscordBot, Discord};
 use songbird::input::AuxMetadata;
 use stats::stats_commands;
 use time::UtcOffset;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex as TokioMutex, RwLock};
 use tracing::{debug, error, info, level_filters::LevelFilter, subscriber::set_global_default};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{fmt::time::OffsetTime, layer::SubscriberExt, EnvFilter};
@@ -36,6 +44,7 @@ pub(crate) mod admin;
 pub(crate) mod data;
 pub(crate) mod error;
 pub(crate) mod memes;
+pub(crate) mod metrics;
 pub(crate) mod owner;
 pub(crate) mod stats;
 pub(crate) mod utils;
@@ -60,6 +69,9 @@ pub struct Data {
     command_categories_map: HashMap<String, Option<String>>,
     ytdlp_config_path: PathBuf,
     secret_key: String,
+    #[expect(dead_code)]
+    metrics_registry: Arc<TokioMutex<Registry>>,
+    metrics: Metrics,
 }
 
 pub async fn ayayabot(
@@ -73,7 +85,10 @@ pub async fn ayayabot(
 
     setup_logging(loki).await?;
 
-    let data_manager = DataManager::new(&db_str)
+    let metrics_registry = Arc::new(TokioMutex::new(Registry::default()));
+    let metrics = Metrics::new();
+    metrics.register_metrics(metrics_registry.clone()).await;
+    let data_manager = DataManager::new(&db_str, metrics.clone())
         .await
         .map_err(|e| anyhow::anyhow!("database error: {}", e))?;
 
@@ -93,6 +108,7 @@ pub async fn ayayabot(
     commands.append(&mut admin_commands());
 
     let manager_clone = manager.clone();
+    let metrics_registry_poise = metrics_registry.clone();
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands,
@@ -138,6 +154,7 @@ pub async fn ayayabot(
                     .iter()
                     .map(|e| (e.name.clone(), e.category.clone()))
                     .collect::<HashMap<_, _>>();
+
                 Ok(Data {
                     http: HttpClient::new(),
                     songbird: manager_clone,
@@ -149,6 +166,8 @@ pub async fn ayayabot(
                     command_categories_map,
                     ytdlp_config_path,
                     secret_key,
+                    metrics_registry: metrics_registry_poise,
+                    metrics,
                 })
             })
         })
@@ -167,7 +186,12 @@ pub async fn ayayabot(
         voice_manager_arc: manager,
     };
 
-    let router = axum::Router::new().route("/", axum::routing::get(hello_world));
+    let axum_state = Arc::new(TokioMutex::new(AxumState { metrics_registry }));
+    let router = axum::Router::new()
+        .route("/", axum::routing::get(hello_world))
+        .route("/metrics", axum::routing::get(metrics_handler))
+        .with_state(axum_state);
+
     Ok(AyayaDiscordBot { discord, router })
 }
 
@@ -178,6 +202,12 @@ async fn global_checks(ctx: poise::Context<'_, Data, BotError>) -> Result<bool, 
 }
 
 async fn pre_command(ctx: poise::Context<'_, Data, BotError>) {
+    // metric increase
+    ctx.data()
+        .metrics
+        .increase_command_call_counter(ctx.command().name.clone())
+        .await;
+
     // logging span
     let span = tracing::span!(tracing::Level::TRACE, "pre_command");
     let _guard = span.enter();
@@ -399,6 +429,28 @@ impl LokiOpts {
     }
 }
 
+pub struct AxumState {
+    metrics_registry: Arc<TokioMutex<Registry>>,
+}
+
 async fn hello_world() -> &'static str {
     "Hello, world!"
+}
+
+async fn metrics_handler(State(state): State<Arc<TokioMutex<AxumState>>>) -> impl IntoResponse {
+    let state = state.lock().await;
+    let mut buffer = String::new();
+    {
+        let metrics_registry = state.metrics_registry.lock().await;
+        encode(&mut buffer, &metrics_registry).unwrap();
+    }
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(
+            CONTENT_TYPE,
+            "application/openmetrics-text; version=1.0.0; charset=utf-8",
+        )
+        .body(Body::from(buffer))
+        .unwrap()
 }

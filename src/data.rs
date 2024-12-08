@@ -16,7 +16,10 @@ use sea_orm::{Database, DatabaseConnection};
 use time::UtcOffset;
 use tokio::sync::Mutex;
 
+use crate::metrics::{DataOperationType, Metrics};
+
 pub type DataResult<T> = Result<T, DataError>;
+pub type PermissionCache = Arc<Mutex<LruCache<PermissionCacheKey, Vec<u8>>>>;
 
 /// Manage data connection and caching. Cache access, insert and invalidation are implemented as
 /// methods in this struct.
@@ -29,12 +32,13 @@ pub type DataResult<T> = Result<T, DataError>;
 #[derive(Clone, Debug)]
 pub struct DataManager {
     db: DatabaseConnection, // this is already clone
-    permission_cache: Arc<Mutex<LruCache<PermissionCacheKey, Vec<u8>>>>,
+    metrics_handler: Metrics,
+    permission_cache: PermissionCache,
 }
 
 impl DataManager {
     /// A new instance of the manager
-    pub async fn new(url: &str) -> DataResult<Self> {
+    pub async fn new(url: &str, metrics_handler: Metrics) -> DataResult<Self> {
         let mut connect_options = ConnectOptions::new(url);
         connect_options.sqlx_logging(false); // disable sqlx logging
         let db: DatabaseConnection = Database::connect(connect_options)
@@ -43,10 +47,24 @@ impl DataManager {
         Migrator::up(&db, None)
             .await
             .map_err(|error| DataError::MigrationError { error })?; // always upgrade db to the latest version
+        let permission_cache = Arc::new(Mutex::new(LruCache::new(1024 * 1024)));
+        Self::setup_cache_metrics(metrics_handler.clone(), permission_cache.clone()).await;
         Ok(Self {
             db,
-            permission_cache: Arc::new(Mutex::new(LruCache::new(1024 * 1024))),
+            metrics_handler,
+            permission_cache,
         })
+    }
+
+    pub async fn setup_cache_metrics(metrics_handler: Metrics, permission_cache: PermissionCache) {
+        tokio::spawn(async move {
+            loop {
+                metrics_handler
+                    .cache_len("permission_cache", permission_cache.lock().await.len())
+                    .await;
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            }
+        });
     }
 
     /// Find a value in the permission cache. Returns a [`None`] if there is no value for the provided key
@@ -72,6 +90,11 @@ impl DataManager {
 
     /// Invalidates the cache based on the key given. The key is broken into each part and any containing part is invalidated(removed).
     pub async fn permission_cache_invalidate(&mut self, key: PermissionCacheKey) {
+        let _timing = DataTiming::new(
+            "permission_cache_invalidate".to_string(),
+            DataOperationType::Write,
+            Some(self.metrics_handler.clone()),
+        );
         let mut cache = self.permission_cache.lock().await;
         cache.retain(|cached_key, _| {
             // remove the cache of the command for the server
@@ -86,6 +109,16 @@ impl DataManager {
         author: &serenity::User,
         command_name: String,
     ) -> DataResult<()> {
+        const OP: &str = "log_command_call";
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Write)
+            .await;
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Write,
+            Some(self.metrics_handler.clone()),
+        );
+
         let db = &self.db;
         let now_odt = time::OffsetDateTime::now_utc()
             .to_offset(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
@@ -117,6 +150,9 @@ impl DataManager {
         author: &serenity::User,
         command_name: String,
     ) -> DataResult<()> {
+        self.metrics_handler
+            .data_access("increment_command_counter", DataOperationType::Write)
+            .await;
         let db = &self.db;
         use entity::user_command_all_time_statistics;
         let user: Option<user_command_all_time_statistics::Model> =
@@ -163,8 +199,18 @@ impl DataManager {
         user_id: u64,
         command: &str,
     ) -> DataResult<Option<entity::command_allow_user::Model>> {
-        use entity::command_allow_user;
         const OP: &str = "find_user_allowed";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+
+        use entity::command_allow_user;
+        self.metrics_handler
+            .data_access(OP.to_string(), DataOperationType::Read)
+            .await;
+
         let cache_key = PermissionCacheKey {
             user_id: Some(user_id),
             guild_id,
@@ -204,8 +250,18 @@ impl DataManager {
         guild_id: u64,
         command: &str,
     ) -> DataResult<Vec<entity::require_command_role::Model>> {
-        use entity::require_command_role;
         const OP: &str = "find_command_roles_allowed";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+
+        use entity::require_command_role;
+        self.metrics_handler
+            .data_access(OP.to_string(), DataOperationType::Read)
+            .await;
+
         let cache_key = PermissionCacheKey {
             user_id: None,
             guild_id,
@@ -245,8 +301,18 @@ impl DataManager {
         guild_id: u64,
         command_category: &str,
     ) -> DataResult<Vec<entity::require_category_role::Model>> {
-        use entity::require_category_role;
         const OP: &str = "find_category_roles_allowed";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+
+        use entity::require_category_role;
+        self.metrics_handler
+            .data_access(OP.to_string(), DataOperationType::Read)
+            .await;
+
         let cache_key = PermissionCacheKey {
             user_id: None,
             guild_id,
@@ -289,6 +355,16 @@ impl DataManager {
         role: &serenity::Role,
         command: &str,
     ) -> DataResult<entity::require_command_role::Model> {
+        const OP: &str = "new_command_role_restriction";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Write,
+            Some(self.metrics_handler.clone()),
+        );
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Write)
+            .await;
+
         use entity::require_command_role;
         let existing = self
             .find_command_roles_allowed(guild_id, command)
@@ -333,6 +409,16 @@ impl DataManager {
         role: &serenity::Role,
         command_category: &str,
     ) -> DataResult<entity::require_category_role::Model> {
+        const OP: &str = "new_category_role_restriction";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Write,
+            Some(self.metrics_handler.clone()),
+        );
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Write)
+            .await;
+
         use entity::require_category_role;
         let existing = self
             .find_category_roles_allowed(guild_id, command_category)
@@ -369,6 +455,16 @@ impl DataManager {
         user_id: u64,
         command: &str,
     ) -> DataResult<entity::command_allow_user::Model> {
+        const OP: &str = "new_command_user_allowed";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Write,
+            Some(self.metrics_handler.clone()),
+        );
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Write)
+            .await;
+
         use entity::command_allow_user;
         let existing = self.find_user_allowed(guild_id, user_id, command).await?;
         if existing.is_some() {
@@ -406,6 +502,16 @@ impl DataManager {
         guild_id: u64,
         command: &str,
     ) -> DataResult<Vec<entity::command_allow_user::Model>> {
+        const OP: &str = "findall_user_allowed";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Read)
+            .await;
+
         use entity::command_allow_user;
         CommandAllowUser::find()
             .filter(command_allow_user::Column::ServerId.eq(guild_id))
@@ -421,6 +527,16 @@ impl DataManager {
     ///
     /// This function will return an error if there is an error with the database.
     pub async fn find5_command_log(&self) -> DataResult<Vec<entity::command_call_log::Model>> {
+        const OP: &str = "find5_command_log";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Read)
+            .await;
+
         CommandCallLog::find()
             .limit(5)
             .all(&self.db)
@@ -440,6 +556,16 @@ impl DataManager {
         user_id: u64,
         command: &str,
     ) -> DataResult<Option<entity::user_command_all_time_statistics::Model>> {
+        const OP: &str = "find_user_all_time_command_stats";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+        self.metrics_handler
+            .data_access("find_user_all_time_command_stats", DataOperationType::Read)
+            .await;
+
         use entity::user_command_all_time_statistics;
         UserCommandAllTimeStatistics::find()
             .filter(user_command_all_time_statistics::Column::ServerId.eq(guild_id))
@@ -451,6 +577,16 @@ impl DataManager {
     }
 
     pub async fn get_latest_cookies(&self) -> DataResult<Option<entity::youtube_cookies::Model>> {
+        const OP: &str = "get_latest_cookies";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+        self.metrics_handler
+            .data_access("get_latest_cookies", DataOperationType::Read)
+            .await;
+
         use entity::youtube_cookies;
         YoutubeCookies::find()
             .select()
@@ -462,6 +598,16 @@ impl DataManager {
     }
 
     pub async fn add_new_cookie(&self, file: Vec<u8>) -> DataResult<()> {
+        const OP: &str = "add_new_cookie";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Write,
+            Some(self.metrics_handler.clone()),
+        );
+        self.metrics_handler
+            .data_access("add_new_cookie", DataOperationType::Write)
+            .await;
+
         use entity::youtube_cookies;
         let _model = youtube_cookies::ActiveModel {
             entry_id: ActiveValue::NotSet,
@@ -493,8 +639,56 @@ impl HeapSize for PermissionCacheKey {
         self.comorcat.heap_size() + self.operation.heap_size()
     }
 }
+
+pub struct DataTiming {
+    start: std::time::Instant,
+    name: String,
+    operation_type: DataOperationType,
+    metric_handler: Option<Metrics>,
+}
+
+impl DataTiming {
+    pub fn new(
+        name: String,
+        operation_type: DataOperationType,
+        metric_handler: Option<Metrics>,
+    ) -> Self {
+        let start = std::time::Instant::now();
+        Self {
+            start,
+            name,
+            operation_type,
+            metric_handler,
+        }
+    }
+}
+
+impl Drop for DataTiming {
+    fn drop(&mut self) {
+        let elapsed = std::time::Instant::now() - self.start;
+        let elapsed = elapsed.as_secs_f64();
+        let name = self.name.clone();
+        let operation_type = self.operation_type.clone();
+        tracing::debug!(
+            "timed {} operation type: {} for: {} seconds",
+            name,
+            operation_type,
+            elapsed
+        );
+        if let Some(metric_handler) = self.metric_handler.take() {
+            tokio::spawn(async move {
+                metric_handler
+                    .data_time(name, operation_type, elapsed)
+                    .await;
+            });
+        }
+    }
+}
+
 pub mod error {
     use sea_orm::DbErr;
+
+    use crate::error::ErrorName;
 
     #[derive(thiserror::Error, miette::Diagnostic, Debug)]
     pub enum DataError {
@@ -534,5 +728,51 @@ pub mod error {
         GetLatestCookiesDatabaseError(DbErr),
         #[error("Database error while adding cookies: {0}")]
         AddNewCookieDatabaseError(DbErr),
+    }
+
+    impl ErrorName for DataError {
+        fn name(&self) -> String {
+            let name = match self {
+                DataError::DatabaseConnectionError { .. } => "database_connection_error",
+                DataError::MigrationError { .. } => "migration_error",
+                DataError::IncrementCommandCounterError { .. } => "increment_command_counter_error",
+                DataError::LogCommandCallError { .. } => "log_command_call_error",
+                DataError::FindAllowedUserError { .. } => "find_user_allowed_error",
+                DataError::FindCommandRolesAllowedError { .. } => {
+                    "find_command_roles_allowed_error"
+                }
+                DataError::FindCategoryRolesAllowedDatabaseError(..) => {
+                    "find_category_roles_allowed_database_error"
+                }
+                DataError::NewCommandRoleRestrictionDatabaseError(..) => {
+                    "new_command_role_restriction_database_error"
+                }
+                DataError::NewCommandRoleRestrictionDuplicate => {
+                    "new_command_role_restriction_duplicate"
+                }
+                DataError::NewCategoryRoleRestrictionDatabaseError(..) => {
+                    "new_category_role_restriction_database_error"
+                }
+                DataError::NewCategoryRoleRestrictionDuplicate => {
+                    "new_category_role_restriction_duplicate"
+                }
+                DataError::NewCommandAllowedUserDuplicate => "new_command_allowed_user_duplicate",
+                DataError::NewCommandAllowedUserDatabaseError(..) => {
+                    "new_command_allowed_user_database_error"
+                }
+                DataError::FindAllAllowedUserDatabaseError(..) => {
+                    "find_all_allowed_user_database_error"
+                }
+                DataError::Find5CommandCallLogDatabaseError(..) => {
+                    "find_5_command_call_log_database_error"
+                }
+                DataError::FindUserAllTimeCommandStatsDatabaseError(..) => {
+                    "find_user_all_time_command_stats_database_error"
+                }
+                DataError::GetLatestCookiesDatabaseError(..) => "get_latest_cookies_database_error",
+                DataError::AddNewCookieDatabaseError(..) => "add_new_cookie_database_error",
+            };
+            format!("data::{name}")
+        }
     }
 }
