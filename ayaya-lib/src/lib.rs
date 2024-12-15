@@ -30,7 +30,7 @@ use reqwest::Client as HttpClient;
 use service::{AyayaDiscordBot, Discord, MetricsBasicAuth};
 use songbird::input::AuxMetadata;
 use stats::stats_commands;
-use time::UtcOffset;
+use time::{format_description, UtcOffset};
 use tokio::sync::{Mutex as TokioMutex, RwLock};
 use tracing::{debug, error, info, level_filters::LevelFilter, subscriber::set_global_default};
 use tracing_error::ErrorLayer;
@@ -391,17 +391,49 @@ async fn ping(ctx: Context<'_>) -> Result<(), BotError> {
 /// Ayaya likes to talk about herself...
 #[poise::command(slash_command, prefix_command)]
 async fn about(ctx: Context<'_>) -> Result<(), BotError> {
-    let about = poise::CreateReply::default()
-        .content(
+    let mut infos = vec![];
+
+    if let Some(git_describe) = option_env!("VERGEN_GIT_DESCRIBE") {
+        infos.push(("Bot Version", git_describe.to_string(), true));
+    }
+
+    if let Some(git_commit_timestamp) = option_env!("VERGEN_BUILD_TIMESTAMP") {
+        let datetime = time::OffsetDateTime::parse(
+            &git_commit_timestamp,
+            &time::format_description::well_known::Rfc3339,
+        );
+        match datetime {
+            Ok(datetime) => {
+                let format = format_description::parse(
+                    "[year]-[month]-[day] [hour repr:24 padding:zero]:[minute padding:zero]:[second padding:zero]",
+                )
+                .unwrap();
+                let formatted = datetime.format(&format).unwrap_or("Unknown".to_string());
+                infos.push(("Build Time", formatted.to_string(), true));
+            }
+            Err(_) => {}
+        }
+    }
+
+    if let Some(git_sha) = option_env!("VERGEN_GIT_SHA") {
+        infos.push(("Commit Hash", git_sha.to_string(), false));
+    }
+
+    let embed = serenity::CreateEmbed::new()
+        .title("About Ayaya")
+        .description(
             r"
-_*Ayaya*_, a random bot
-Author: SolemnAttic#9269
+_*Ayaya*_, a random bot with many features
+Author: solemnattic (SolemnAttic#9269)
 Github: https://github.com/luqmanishere/ayaya-discord-bot
 
 Consider leaving a star on the Github page!
     ",
         )
-        .reply(true);
+        .fields(infos)
+        .color(serenity::Color::FABLED_PINK);
+
+    let about = poise::CreateReply::default().embed(embed).reply(true);
 
     ctx.send(about).await?;
     Ok(())
