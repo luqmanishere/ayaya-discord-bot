@@ -336,7 +336,7 @@ async fn event_handler(
                         .expect("decrypt success");
                     reader.read_to_end(&mut decrypted).expect("success");
                     std::fs::write(path, decrypted).expect("write success");
-                    // TODO: read to file
+                    info!("wrote cookies to path");
                 } else {
                     error!("no cookies found");
                 }
@@ -346,6 +346,8 @@ async fn event_handler(
             #[expect(clippy::zombie_processes)]
             let child = std::process::Command::new("yt-dlp")
                 .arg("-v")
+                .arg("--extractor-args")
+                .arg("youtube:player_client=web_creator,mweb")
                 .arg("-O")
                 .arg("title,channel")
                 .arg("https://www.youtube.com/watch?v=1aPOj0ERTEc")

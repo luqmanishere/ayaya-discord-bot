@@ -167,6 +167,8 @@ impl YoutubeDl {
             .extra_arg("--no-playlist")
             .extra_arg("-f")
             .extra_arg("ba[abr>0][vcodec=none]/best")
+            .extra_arg("--extractor-args")
+            .extra_arg("youtube:player_client=web_creator,mweb")
             .process_timeout(std::time::Duration::from_secs(45)) // the length of a youtube ad
             .run_async()
             .await
