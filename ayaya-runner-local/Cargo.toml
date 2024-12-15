@@ -1,0 +1,10 @@
+[package]
+name = "ayaya-runner-local"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+miette = { workspace = true }
+tokio = { workspace = true }
+dotenvy = { version = "0.15" }
+ayaya-lib = { path = "../ayaya-lib" }

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use axum::{async_trait, http::StatusCode};
 use axum::{extract::FromRequestParts, http::request::Parts};
 use axum_auth::{AuthBasicCustom, Rejection};
+use miette::IntoDiagnostic;
 use poise::serenity_prelude as serenity;
 
 use crate::{error::BotError, Data};
@@ -21,13 +22,13 @@ pub struct Discord {
 
 use anyhow::Result;
 impl AyayaDiscordBot {
-    pub async fn local_bind(self, addr: std::net::SocketAddr) -> Result<()> {
+    pub async fn local_bind(self, addr: std::net::SocketAddr) -> miette::Result<()> {
         use std::future::IntoFuture;
 
         let serve = axum::serve(
-            shuttle_runtime::tokio::net::TcpListener::bind(addr)
+            tokio::net::TcpListener::bind(addr)
                 .await
-                .map_err(shuttle_runtime::CustomError::new)?,
+                .into_diagnostic()?,
             self.router,
         )
         .into_future();
@@ -35,7 +36,8 @@ impl AyayaDiscordBot {
         let mut client = serenity::ClientBuilder::new(self.discord.token, self.discord.intents)
             .voice_manager_arc(self.discord.voice_manager_arc)
             .framework(self.discord.framework)
-            .await?;
+            .await
+            .into_diagnostic()?;
 
         tokio::select! {
             _ = client.start_autosharded() => {},

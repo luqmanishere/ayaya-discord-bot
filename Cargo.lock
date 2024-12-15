@@ -34,6 +34,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "aes"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
+dependencies = [
+ "cfg-if",
+ "cipher",
+ "cpufeatures",
+]
+
+[[package]]
+name = "aes-gcm"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "831010a0f742e1209b3bcea8fab6a8e149051ba6099432c8cb2cc117dec3ead1"
+dependencies = [
+ "aead",
+ "aes",
+ "cipher",
+ "ctr",
+ "ghash",
+ "subtle",
+]
+
+[[package]]
 name = "age"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -517,7 +542,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ayaya-discord-bot"
+name = "ayaya-lib"
 version = "0.9.1"
 dependencies = [
  "age",
@@ -539,7 +564,6 @@ dependencies = [
  "sea-orm",
  "serenity",
  "shuttle-runtime",
- "shuttle-serenity",
  "songbird",
  "strum 0.26.3",
  "symphonia",
@@ -554,6 +578,26 @@ dependencies = [
  "uuid",
  "vergen-gix",
  "youtube_dl",
+]
+
+[[package]]
+name = "ayaya-runner-local"
+version = "0.1.0"
+dependencies = [
+ "ayaya-lib",
+ "dotenvy",
+ "miette",
+ "tokio",
+]
+
+[[package]]
+name = "ayaya-runner-shuttle"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ayaya-lib",
+ "miette",
+ "shuttle-runtime",
 ]
 
 [[package]]
@@ -763,9 +807,9 @@ checksum = "5ce89b21cab1437276d2650d57e971f9d548a2d9037cc231abdc0562b97498ce"
 
 [[package]]
 name = "bytemuck"
-version = "1.17.1"
+version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "773d90827bc3feecfb67fab12e24de0749aad83c74b9504ecde46237b5cd24e2"
+checksum = "8b37c88a63ffd85d15b406896cc343916d7cf57838a847b3a6f2ca5d39a5695a"
 
 [[package]]
 name = "byteorder"
@@ -941,9 +985,9 @@ checksum = "cbd0f76e066e64fdc5631e3bb46381254deab9ef1158292f27c8c57e3bf3fe59"
 
 [[package]]
 name = "cmake"
-version = "0.1.51"
+version = "0.1.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb1e43aa7fd152b1f968787f7dbcdeb306d1867ff373c69955211876c053f91a"
+checksum = "c682c223677e0e5b6b7f63a64b9351844c3f1b1678a68b7ee617e30fb082620e"
 dependencies = [
  "cc",
 ]
@@ -1145,6 +1189,15 @@ dependencies = [
  "salsa20",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "ctr"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0369ee1ad671834580515889b80f2ea915f23b8be8d0daa4bbaf2ac5c7590835"
+dependencies = [
+ "cipher",
 ]
 
 [[package]]
@@ -1837,6 +1890,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ghash"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0d8a4362ccb29cb0b265253fb0a2728f592895ee6854fd9bc13f2ffda266ff1"
+dependencies = [
+ "opaque-debug",
+ "polyval",
+]
+
+[[package]]
 name = "gimli"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2465,9 +2528,9 @@ dependencies = [
 
 [[package]]
 name = "hls_m3u8"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e2bd2de7f92b5301546ce1ac53a4ae5cf2f6b10751b100ab1efb73c19788fba"
+checksum = "b906521a5b0e6d2ec07ea0bb855d92a1db30b48812744a645a3b2a1405cb8159"
 dependencies = [
  "derive_builder 0.9.0",
  "derive_more",
@@ -3741,6 +3804,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "polyval"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d1fe60d06143b2430aa532c94cfe9e29783047f06c0d7fd359a9a51b729fa25"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "opaque-debug",
+ "universal-hash",
+]
+
+[[package]]
+name = "portable-atomic"
+version = "1.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "280dc24453071f1b63954171985a0b0d30058d287960968b9b2aca264c8d4ee6"
+
+[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3984,9 +4065,9 @@ dependencies = [
 
 [[package]]
 name = "realfft"
-version = "3.3.0"
+version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "953d9f7e5cdd80963547b456251296efc2626ed4e3cbf36c869d9564e0220571"
+checksum = "390252372b7f2aac8360fc5e72eba10136b166d6faeed97e6d0c8324eb99b2b1"
 dependencies = [
  "rustfft",
 ]
@@ -4171,11 +4252,12 @@ dependencies = [
 
 [[package]]
 name = "ringbuf"
-version = "0.4.4"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46f7f1b88601a8ee13cabf203611ccdf64345dc1c5d24de8b11e1a678ee619b6"
+checksum = "726bb493fe9cac765e8f96a144c3a8396bdf766dedad22e504b70b908dcbceb4"
 dependencies = [
  "crossbeam-utils",
+ "portable-atomic",
 ]
 
 [[package]]
@@ -5039,16 +5121,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shuttle-serenity"
-version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5fd46b851d55746e3c994800fca48782ab4aa5cd0d8c16ae1d2934a96debfe9"
-dependencies = [
- "serenity",
- "shuttle-runtime",
-]
-
-[[package]]
 name = "shuttle-service"
 version = "0.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5159,14 +5231,17 @@ dependencies = [
 
 [[package]]
 name = "songbird"
-version = "0.4.3"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "338dd182f9f084f583c4c0db38588e28a34778ecec288208cf0b61c378ac90d1"
+checksum = "30c6bde67a7ba20c8d9abefa35dfbb4f7abb570b344af73c201626033fb64703"
 dependencies = [
+ "aead",
+ "aes-gcm",
  "async-trait",
  "audiopus",
  "byteorder",
  "bytes",
+ "chacha20poly1305",
  "crypto_secretbox",
  "dashmap 5.5.3",
  "derivative",
@@ -5199,6 +5274,7 @@ dependencies = [
  "tracing-futures",
  "twilight-gateway",
  "typemap_rev",
+ "typenum",
  "url",
  "uuid",
 ]
@@ -6506,9 +6582,9 @@ checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 
 [[package]]
 name = "typesize"
-version = "0.1.8"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "666137410f50df35fabf3c8ac6380d47281e9523799c74df192abba1b508b4bf"
+checksum = "549e54551d85ba6718a95333d9bc4367f69793d7aba638de30f8d25a1f554a1d"
 dependencies = [
  "chrono",
  "dashmap 5.5.3",
@@ -6524,9 +6600,9 @@ dependencies = [
 
 [[package]]
 name = "typesize-derive"
-version = "0.1.7"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "905e88c2a4cc27686bd57e495121d451f027e441388a67f773be729ad4be1ea8"
+checksum = "fd9fc0ad9e03a2b0c2e2a0eafaecccef2121829e1ab6ce9c9d790e6c6766bd1c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6596,9 +6672,9 @@ checksum = "e70f2a8b45122e719eb623c01822704c4e0907e7e426a05927e1a1cfff5b75d0"
 
 [[package]]
 name = "unicode-segmentation"
-version = "1.11.0"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4c87d22b6e3f4a18d4d40ef354e97c90fcb14dd91d7dc0aa9d8a1172ebf7202"
+checksum = "f6ccf251212114b54433ec949fd6a7841275f9ada20dddd2f29e9ceea4501493"
 
 [[package]]
 name = "unicode-width"

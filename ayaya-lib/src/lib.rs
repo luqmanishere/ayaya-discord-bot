@@ -19,6 +19,7 @@ use data::DataManager;
 use error::{error_handler, BotError};
 use memes::gay;
 use metrics::Metrics;
+use miette::IntoDiagnostic;
 use owner::owner_commands;
 use poise::{
     serenity_prelude::{self as serenity},
@@ -80,7 +81,7 @@ pub async fn ayayabot(
     loki: Option<LokiOpts>,
     ytdlp_config_path: PathBuf,
     secret_key: String,
-) -> Result<AyayaDiscordBot> {
+) -> miette::Result<AyayaDiscordBot> {
     // color_eyre::install()?;
 
     setup_logging(loki).await?;
@@ -90,7 +91,7 @@ pub async fn ayayabot(
     metrics.register_metrics(metrics_registry.clone()).await;
     let data_manager = DataManager::new(&db_str, metrics.clone())
         .await
-        .map_err(|e| anyhow::anyhow!("database error: {}", e))?;
+        .map_err(|e| miette::miette!("database error: {}", e))?;
 
     #[cfg(debug_assertions)]
     let prefix = "~";
@@ -234,7 +235,7 @@ async fn pre_command(ctx: poise::Context<'_, Data, BotError>) {
     });
 }
 
-async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
+async fn setup_logging(loki: Option<LokiOpts>) -> miette::Result<()> {
     // Init tracing with malaysian offset cause thats where i live and read timestamps
     let offset = UtcOffset::current_local_offset()
         .unwrap_or(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
@@ -242,20 +243,23 @@ async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
     // TODO: revamp. this is way too confusing
     match loki {
         Some(loki) => {
-            let url = url::Url::parse("https://logs-prod-020.grafana.net")?;
+            let url = url::Url::parse("https://logs-prod-020.grafana.net").into_diagnostic()?;
 
             let builder = tracing_loki::builder()
-                .label("application", loki.application_log_label.clone())?
-                .extra_field("pid", format!("{}", std::process::id()))?
-                .http_header("Authorization", format!("Basic {}", loki.get_basic_auth()))?;
+                .label("application", loki.application_log_label.clone())
+                .into_diagnostic()?
+                .extra_field("pid", format!("{}", std::process::id()))
+                .into_diagnostic()?
+                .http_header("Authorization", format!("Basic {}", loki.get_basic_auth()))
+                .into_diagnostic()?;
 
-            let (layer, task) = builder.build_url(url)?;
+            let (layer, task) = builder.build_url(url).into_diagnostic()?;
             let registry = tracing_subscriber::registry()
                 .with(
                     EnvFilter::builder()
                         .with_default_directive(LevelFilter::INFO.into())
                         .from_env_lossy()
-                        .add_directive("ayaya_discord_bot=debug".parse()?),
+                        .add_directive("ayaya_discord_bot=debug".parse().into_diagnostic()?),
                 )
                 .with(
                     tracing_subscriber::fmt::layer()
@@ -267,7 +271,7 @@ async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
                 )
                 .with(ErrorLayer::default())
                 .with(layer);
-            set_global_default(registry)?;
+            set_global_default(registry).into_diagnostic()?;
             tokio::spawn(task);
         }
         None => {
@@ -277,7 +281,7 @@ async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
                     EnvFilter::builder()
                         .with_default_directive(LevelFilter::INFO.into())
                         .from_env_lossy()
-                        .add_directive("ayaya_discord_bot=debug".parse()?),
+                        .add_directive("ayaya_discord_bot=debug".parse().into_diagnostic()?),
                 )
                 .with(
                     tracing_subscriber::fmt::layer()
@@ -288,7 +292,7 @@ async fn setup_logging(loki: Option<LokiOpts>) -> Result<()> {
                         .with_thread_ids(true),
                 )
                 .with(ErrorLayer::default());
-            set_global_default(registry)?;
+            set_global_default(registry).into_diagnostic()?;
         }
     };
 

@@ -1,0 +1,72 @@
+[package]
+name = "ayaya-lib"
+version = { workspace = true }
+edition = "2021"
+
+[dependencies]
+tracing-subscriber = { version = "0.3", features = [
+  "env-filter",
+  "fmt",
+  "std",
+  "time",
+] }
+tracing = "0.1"
+tracing-error = { version = "0.2", features = ["traced-error"] }
+# color-eyre = "0.6"
+shuttle-runtime = { workspace = true }
+tokio = { workspace = true }
+dotenvy = { version = "0.15" }
+reqwest = { version = "0.11" }
+uuid = { version = "*", features = ["v7"] }
+humantime = { version = "2" }
+youtube_dl = { version = "0.10", features = ["tokio"] }
+thiserror = { workspace = true }
+time = { version = "0.3", features = ["local-offset"] }
+anyhow = "1"
+miette = { workspace = true }
+tracing-loki = "0.2.5"
+base64 = "0.22.1"
+url = "2.5.2"
+rand = "0.8"
+axum = { version = "0.7" }
+axum-auth = { version = "0.7" }
+sea-orm = { workspace = true }
+strum = { version = "0.26", features = ["derive"] }
+entity = { path = "../entity" }
+migration = { path = "../migration" }
+age = { version = "0.11" }
+lru-mem = { version = "0.3" }
+bincode = { workspace = true }
+prometheus-client = { version = "0.22" }
+
+[dependencies.songbird]
+version = "0.4.3"
+features = ["builtin-queue", "driver", "serenity"]
+
+[dependencies.serenity]
+version = "0.12"
+# git = "https://github.com/serenity-rs/serenity.git"
+# # branch = "next"
+# rev = "c3d4a3386ea0710a81618f07771c83912c5f6196"
+features = [
+  "cache",
+  "framework",
+  "voice",
+  "http",
+  "rustls_backend",
+  "gateway",
+  "collector",
+]
+
+[dependencies.poise]
+git = "https://github.com/serenity-rs/poise.git"
+rev = "bbc837a1dd170d6ebb5c9208d7a9fd8b3dc27a27"
+
+[dependencies.symphonia]
+version = "0.5"
+features = ["aac", "mp3", "isomp4", "alac"]
+
+[build-dependencies]
+# All features enabled
+vergen-gix = { version = "1.0.0", features = ["build", "cargo", "rustc"] }
+anyhow = { version = "1" }
