@@ -1,3 +1,7 @@
+[workspace.package]
+version = "0.9.1"
+edition = "2018"
+
 [workspace]
 resolver = "2"
 members = [
@@ -8,10 +12,6 @@ members = [
   "ayaya-runner-shuttle",
 ]
 default-members = ["ayaya-lib", "ayaya-runner-local"]
-
-[workspace.package]
-version = "0.9.1"
-edition = "2018"
 
 [workspace.dependencies]
 sea-orm = { version = "1", features = [
