@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2024-12-15
+
+### Changed
+
+- Move workspace dependencies to the top
+- Reorganize code into workspaces
+
+### Fixed
+
+- Change the player name
+
 ## [0.9.1] - 2024-12-08
 
 ### Fixed
@@ -238,6 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Delete from queue
 - Remove unused workflow
 
+[0.9.2]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.9.1..v0.9.2
 [0.9.1]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.9.0..v0.9.1
 [0.9.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.8.0..v0.9.0
 [0.8.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.7.4..v0.8.0
