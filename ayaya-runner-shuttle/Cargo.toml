@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# workspace deps
 shuttle-runtime = { workspace = true }
-anyhow = { version = "1" }
 miette = { workspace = true }
+
+anyhow = { version = "1" }
 ayaya-lib = { path = "../ayaya-lib" }
