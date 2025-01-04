@@ -48,6 +48,17 @@ async fn main(
             panic!("failed to install dependencies")
         }
 
+        // upgrade all pipx packages
+        if !std::process::Command::new("pipx")
+            .arg("upgrade-all")
+            // can add more here
+            .status()
+            .expect("failed to run pipx")
+            .success()
+        {
+            panic!("failed to install dependencies")
+        }
+
         // prepend pipx path
         if let Some(path) = env::var_os("PATH") {
             let mut paths = env::split_paths(&path).collect::<Vec<_>>();
