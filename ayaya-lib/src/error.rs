@@ -75,6 +75,8 @@ pub enum BotError {
     DataManagerError(#[from] crate::data::error::DataError),
     #[error("Error downloading attachment: {0}")]
     DownloadAttachmentError(serenity::Error),
+    #[error("Error executing external command: {0}")]
+    ExternalAsyncCommandError(tokio::io::Error),
 }
 
 impl ErrorName for BotError {
@@ -90,6 +92,7 @@ impl ErrorName for BotError {
             BotError::DatabaseOperationError(..) => "database_error",
             BotError::DataManagerError(data_error) => &data_error.name(),
             BotError::DownloadAttachmentError(..) => "download_attachment_error",
+            BotError::ExternalAsyncCommandError(..) => "external_async_commaand_error",
         };
         format!("main::{name}")
     }
