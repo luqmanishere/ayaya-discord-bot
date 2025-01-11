@@ -10,14 +10,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: shuttle-hq/deploy-action@main
+      - uses: shuttle-hq/deploy-action@v2
         with:
-          deploy-key: ${{ secrets.SHUTTLE_API_KEY }}
-          name: "ayaya-discord-bot"
-          allow-dirty: "false"
-          no-test: "true"
+          shuttle-api-key: ${{ secrets.SHUTTLE_API_KEY }}
+          project-id: proj_01JH9HEHTQH58S84KDQXRW6RGB
           secrets: |
             DISCORD_TOKEN = '${{ secrets.DISCORD_TOKEN }}'
             GRAFANA_USER = '${{ secrets.GRAFANA_USER }}'
             GRAFANA_API_KEY =  '${{ secrets.GRAFANA_API_KEY }}'
             APPLICATION_LOG_LABEL = 'ayaya-discord-bot'
+            DATABASE_URL = '${{ secrets.DATABASE_URL }}'
+            AGE_SECRET_KEY = '${{ secrets.AGE_SECRET_KEY }}'

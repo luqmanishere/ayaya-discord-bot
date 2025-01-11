@@ -9,3 +9,5 @@
 /rust-analyzer.json
 /.DS_Store
 /secrets
+.shuttle*
+Secrets*.toml
