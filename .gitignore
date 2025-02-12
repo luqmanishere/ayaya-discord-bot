@@ -11,3 +11,4 @@
 /secrets
 .shuttle*
 Secrets*.toml
+/.cargo

@@ -2,7 +2,7 @@ FROM rust:1.84 AS chef
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
 # install build dependencies
-RUN apt update && apt install -y cmake 
+RUN apt update && apt install -y cmake
 RUN cargo install cargo-chef 
 WORKDIR /usr/src/ayayadc
 
