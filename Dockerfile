@@ -1,4 +1,4 @@
-FROM rust:1.79 AS chef 
+FROM rust:1.84 AS chef 
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
 # install build dependencies

@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-with-docker-x86:
-    name: Build multi-platform Docker image
+    name: Build x86 Docker image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -27,7 +27,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
   build-with-docker-aarch64:
-    name: Build multi-platform Docker image
+    name: Build aarch64 Docker image
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v3
