@@ -400,19 +400,17 @@ async fn about(ctx: Context<'_>) -> Result<(), BotError> {
 
     if let Some(git_commit_timestamp) = option_env!("VERGEN_BUILD_TIMESTAMP") {
         let datetime = time::OffsetDateTime::parse(
-            &git_commit_timestamp,
+            git_commit_timestamp,
             &time::format_description::well_known::Rfc3339,
         );
-        match datetime {
-            Ok(datetime) => {
-                let format = format_description::parse(
-                    "[year]-[month]-[day] [hour repr:24 padding:zero]:[minute padding:zero]:[second padding:zero]",
-                )
-                .unwrap();
-                let formatted = datetime.format(&format).unwrap_or("Unknown".to_string());
-                infos.push(("Build Time", formatted.to_string(), true));
-            }
-            Err(_) => {}
+        // TODO: decide if errors will be handled here
+        if let Ok(datetime) = datetime {
+            let format = format_description::parse(
+                "[year]-[month]-[day] [hour repr:24 padding:zero]:[minute padding:zero]:[second padding:zero]",
+            )
+            .unwrap();
+            let formatted = datetime.format(&format).unwrap_or("Unknown".to_string());
+            infos.push(("Build Time", formatted.to_string(), true));
         }
     }
 

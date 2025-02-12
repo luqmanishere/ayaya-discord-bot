@@ -118,7 +118,7 @@ impl ChannelInfo {
 }
 
 /// Autocomplete function for command names
-pub async fn autocomplete_command_names<'a>(ctx: Context<'_>, partial: &'a str) -> Vec<String> {
+pub async fn autocomplete_command_names(ctx: Context<'_>, partial: &str) -> Vec<String> {
     let partial = partial.to_lowercase();
     let command_names = &ctx.data().command_names;
     command_names
