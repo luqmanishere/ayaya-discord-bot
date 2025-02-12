@@ -12,6 +12,13 @@ async fn main() -> miette::Result<()> {
     let yt_dlp_config_dir = home.join(".config/yt-dlp");
     if !yt_dlp_config_dir.exists() {
         std::fs::create_dir_all(&yt_dlp_config_dir).into_diagnostic()?;
+
+        // use cookies at the same path  as config if in a container
+        if !std::env::var("container").unwrap_or_default().is_empty() {
+            let cookies_path = yt_dlp_config_dir.join("cookies.txt");
+            let yt_dlp_config = format!("--cookies {}", cookies_path.to_str().unwrap_or(""));
+            std::fs::write(yt_dlp_config_dir.join("config"), yt_dlp_config).into_diagnostic()?;
+        }
     }
 
     // Configure the client with your Discord bot token in the environment.

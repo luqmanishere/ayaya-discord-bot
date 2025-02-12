@@ -324,6 +324,7 @@ async fn event_handler(
             if std::env::var("SHUTTLE")
                 .unwrap_or_default()
                 .contains("true")
+                || !std::env::var("container").unwrap_or_default().is_empty()
             {
                 info!("shuttle detected!");
                 let data_manager = _data.data_manager.clone();
