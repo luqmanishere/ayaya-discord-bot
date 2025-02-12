@@ -5,19 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.10.0] - 2025-01-11
+## [0.10.0] - 2025-02-12
 
 ### Added
 
+- Add our cookies to containers in general
 - Add `dep_version` command
 
 ### Changed
 
+- Use github new arm builder
 - Update shuttle & use the new platform
 - Update the about command with build details
 
 ### Fixed
 
+- Abstract some code into functions
 - Make sure pip always upgrades its dependencies
 
 ## [0.9.2] - 2024-12-15
