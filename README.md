@@ -12,3 +12,27 @@ Built upon [serenity-rs/serenity](https://github.com/serenity-rs/serenity) and [
 - [x] Queue management
 - [x] Youtube playlists
 - [ ] Minigames
+
+## Docker usage
+
+Example docker command with the required env vars:
+
+```sh
+docker run -e DISCORD_TOKEN="Discord bot token" \
+    -e DATABASE_URL="mysql database url" \
+    -e AGE_SECRET_KEY="age secret key" \
+    luqmanishere/ayayadc
+```
+
+We also support reading from files:
+
+```sh
+# TODO
+docker run -e DISCORD_TOKEN="Discord bot token" \
+    -e DATABASE_URL="mysql database url" \
+    -e AGE_SECRET_KEY="age secret key" \
+    luqmanishere/ayayadc
+
+```
+
+Excuse the bad design while we migrate from shuttle.

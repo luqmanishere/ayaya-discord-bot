@@ -17,41 +17,11 @@ async fn main() -> miette::Result<()> {
     // Configure the client with your Discord bot token in the environment.
     // DISCORD_TOKEN_FILE is searched first, then DISCORD_TOKEN.
     // IF DISCORD_TOKEN_FILE is found, the token is read from the file.
-    let token = {
-        if let Ok(token_file) = env::var("DISCORD_TOKEN_FILE") {
-            std::fs::read_to_string(token_file).into_diagnostic()?
-        } else {
-            #[cfg(debug_assertions)]
-            dotenvy::dotenv().expect("works");
-            env::var("DISCORD_TOKEN")
-                .into_diagnostic()
-                .wrap_err("Expected a token in the environment")?
-        }
-    };
+    let token = file_or_env_var("DISCORD_TOKEN")?;
 
-    let db_str = {
-        if let Ok(token_file) = env::var("DATABASE_URL_FILE") {
-            std::fs::read_to_string(token_file).into_diagnostic()?
-        } else {
-            #[cfg(debug_assertions)]
-            dotenvy::dotenv().expect("finding .env file");
-            env::var("DATABASE_URL")
-                .into_diagnostic()
-                .wrap_err("Expected a token in the environment")?
-        }
-    };
+    let db_str = file_or_env_var("DATABASE_URL")?;
 
-    let secret_key = {
-        if let Ok(token_file) = env::var("AGE_SECRET_KEY_FILE") {
-            std::fs::read_to_string(token_file).into_diagnostic()?
-        } else {
-            #[cfg(debug_assertions)]
-            dotenvy::dotenv().expect("works");
-            env::var("AGE_SECRET_KEY")
-                .into_diagnostic()
-                .context("Expected a token in the environment")?
-        }
-    };
+    let secret_key = file_or_env_var("AGE_SECRET_KEY")?;
 
     let ayayadc = ayayabot(token, db_str, None, yt_dlp_config_dir, secret_key).await?;
     ayayadc
@@ -60,4 +30,23 @@ async fn main() -> miette::Result<()> {
             8000,
         )))
         .await
+}
+
+fn file_or_env_var(env_name: &str) -> miette::Result<String> {
+    let filename_var = format!("{env_name}_FILE");
+    if let Ok(token_file) = env::var(&filename_var) {
+        std::fs::read_to_string(&token_file)
+            .into_diagnostic()
+            .context(miette::miette!(
+            "File ENV var for {env_name} is set to {token_file} but the contents cannot be read."
+        ))
+    } else {
+        #[cfg(debug_assertions)]
+        dotenvy::dotenv().expect("works");
+        env::var(env_name)
+            .into_diagnostic()
+            .context(miette::miette!(
+                "Expected a token for {env_name} or a file from {filename_var} in the environment. Please refer to the README.",
+            ))
+    }
 }

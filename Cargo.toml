@@ -24,6 +24,6 @@ sea-orm = { version = "1", features = [
 ] }
 bincode = { version = "2.0.0-rc.3", features = ["serde"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "tracing"] }
-miette = { version = "7" }
+miette = { version = "7", features = ["fancy"] }
 thiserror = { version = "1" }
 shuttle-runtime = { version = "0.51", default-features = false }
