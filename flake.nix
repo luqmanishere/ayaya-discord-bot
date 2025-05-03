@@ -5,7 +5,6 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     fenix.url = "github:nix-community/fenix";
   };
-
   outputs = {
     self,
     flake-utils,
@@ -21,8 +20,7 @@
 
         toolchain = with fenix.packages.${system};
           combine [
-            stable.rustc
-            stable.cargo
+            stable.toolchain
             targets.aarch64-apple-darwin.stable.rust-std
           ];
 
@@ -47,12 +45,13 @@
         # };
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
+            toolchain
             yt-dlp
             ffmpeg
             cmake
             mold
           ];
-          buildInputs = with pkgs; [iconv.dev libopus.dev pkg-config];
+          buildInputs = with pkgs; [iconv.dev libopus.dev pkg-config cargo-shuttle];
         };
       }
     );
