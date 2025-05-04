@@ -34,7 +34,9 @@ pub async fn restrict_command_role(
     let mut data_manager = ctx.data().data_manager.clone();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
 
-    let model = data_manager.new_command_role_restriction(guild_id, &role, &command);
+    let model = data_manager
+        .permissions_mut()
+        .new_command_role_restriction(guild_id, &role, &command);
 
     match model.await {
         Ok(res) => {
@@ -74,7 +76,9 @@ pub async fn restrict_category_role(
     let mut data_manager = ctx.data().data_manager.clone();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
 
-    let model = data_manager.new_category_role_restriction(guild_id, &role, &category);
+    let model = data_manager
+        .permissions_mut()
+        .new_category_role_restriction(guild_id, &role, &category);
 
     match model.await {
         Ok(res) => {
@@ -115,7 +119,10 @@ pub async fn allow_user_command(
     let mut data_manager = ctx.data().data_manager.clone();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
 
-    let model = data_manager.new_command_user_allowed(guild_id, user.id.get(), &command);
+    let model =
+        data_manager
+            .permissions_mut()
+            .new_command_user_allowed(guild_id, user.id.get(), &command);
 
     match model.await {
         Ok(res) => {
@@ -162,14 +169,17 @@ pub async fn list_command_restrictions(
         };
 
     let allowed_users = data_manager
+        .permissions_mut()
         .findall_user_allowed(guild_id, &command)
         .await?;
 
     let required_roles_command = data_manager
+        .permissions_mut()
         .find_command_roles_allowed(guild_id, &command)
         .await?;
 
     let required_roles_category = data_manager
+        .permissions_mut()
         .find_category_roles_allowed(guild_id, &command_category)
         .await?;
 

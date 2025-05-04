@@ -152,6 +152,7 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
 
     // check first if user is allowed to use the command
     let user_allowed = data_manager
+        .permissions_mut()
         .find_user_allowed(guild_id, user_id, &command)
         .await?;
     if let Some(_model) = user_allowed {
@@ -160,6 +161,7 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
 
     // check for roles. if present, then iter, else check for catgory role
     let command_roles_allowed = data_manager
+        .permissions_mut()
         .find_command_roles_allowed(guild_id, &command)
         .await?;
     if !command_roles_allowed.is_empty() {
@@ -180,6 +182,7 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
     } else {
         // check for category roles. if present, iter, else allow
         let category_roles_allowed = data_manager
+            .permissions_mut()
             .find_category_roles_allowed(guild_id, &command_category)
             .await?;
         if !category_roles_allowed.is_empty() {

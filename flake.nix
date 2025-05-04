@@ -50,8 +50,9 @@
             ffmpeg
             cmake
             mold
+            pkg-config
           ];
-          buildInputs = with pkgs; [iconv.dev libopus.dev pkg-config cargo-shuttle];
+          buildInputs = with pkgs; [iconv.dev libopus.dev cargo-shuttle openssl];
         };
       }
     );
