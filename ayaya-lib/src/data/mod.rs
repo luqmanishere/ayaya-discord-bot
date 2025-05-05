@@ -172,7 +172,7 @@ impl DataManager {
     /// # Errors
     ///
     /// This function will return an error if .
-    pub async fn find_user_all_time_command_stats(
+    pub async fn find_single_user_single_all_time_command_stats(
         &self,
         guild_id: u64,
         user_id: u64,
@@ -196,6 +196,35 @@ impl DataManager {
             .one(&self.db)
             .await
             .map_err(DataError::FindUserAllTimeCommandStatsDatabaseError)
+    }
+
+    /// Finds all the users data for a single command call
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the database errors.
+    pub async fn find_all_users_single_command_call(
+        &self,
+        guild_id: u64,
+        command_name: String,
+    ) -> DataResult<Vec<entity::user_command_all_time_statistics::Model>> {
+        const OP: &str = "rank_users_command_call";
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Read)
+            .await;
+
+        use entity::user_command_all_time_statistics;
+        UserCommandAllTimeStatistics::find()
+            .filter(user_command_all_time_statistics::Column::ServerId.eq(guild_id))
+            .filter(user_command_all_time_statistics::Column::Command.eq(command_name))
+            .all(&self.db)
+            .await
+            .map_err(DataError::FindSingleUsersSingleCommandCallError)
     }
 
     pub async fn get_latest_cookies(&self) -> DataResult<Option<entity::youtube_cookies::Model>> {
@@ -286,6 +315,8 @@ pub mod error {
         GetLatestCookiesDatabaseError(DbErr),
         #[error("Database error while adding cookies: {0}")]
         AddNewCookieDatabaseError(DbErr),
+        #[error("Database error while getting user command stats: {0}")]
+        FindSingleUsersSingleCommandCallError(DbErr),
     }
 
     impl ErrorName for DataError {
@@ -329,6 +360,9 @@ pub mod error {
                 }
                 DataError::GetLatestCookiesDatabaseError(..) => "get_latest_cookies_database_error",
                 DataError::AddNewCookieDatabaseError(..) => "add_new_cookie_database_error",
+                DataError::FindSingleUsersSingleCommandCallError(..) => {
+                    "find_single_user_single_all_time_command_stats"
+                }
             };
             format!("data::{name}")
         }
