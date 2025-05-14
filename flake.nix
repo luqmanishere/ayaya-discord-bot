@@ -51,6 +51,8 @@
             cmake
             mold
             pkg-config
+            sea-orm-cli
+            just
           ];
           buildInputs = with pkgs; [iconv.dev libopus.dev cargo-shuttle openssl];
         };

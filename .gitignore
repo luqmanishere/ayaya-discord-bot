@@ -12,3 +12,4 @@
 .shuttle*
 Secrets*.toml
 /.cargo
+/dev/stats.sqlite
