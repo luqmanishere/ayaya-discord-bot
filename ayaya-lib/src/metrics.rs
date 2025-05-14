@@ -143,6 +143,12 @@ impl Metrics {
     }
 }
 
+impl Default for Metrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct CommandLabel {
     command_name: String,
