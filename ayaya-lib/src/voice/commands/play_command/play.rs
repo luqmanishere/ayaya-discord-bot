@@ -1,10 +1,10 @@
 //! This module contains functions supporting the play command
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use poise::serenity_prelude as serenity;
 use rand::seq::SliceRandom;
-use songbird::{input::Compose, Event};
+use songbird::{input::Compose, tracks::Track, Event};
 use tokio::sync::Mutex;
 use tracing::{error, info};
 
@@ -16,7 +16,7 @@ use crate::{
         commands::play_command::youtube,
         error::MusicCommandError,
         events::TrackPlayNotifier,
-        utils::{self, metadata_to_embed},
+        utils::{self, metadata_to_embed, YoutubeMetadata},
     },
     Context,
 };
@@ -178,7 +178,6 @@ async fn handle_sources(
         1 => {
             let metadata = insert_source(
                 sources.first().expect("length should be 1").clone(),
-                ctx.data().track_metadata.clone(),
                 call,
                 ctx.serenity_context().http.clone(),
                 calling_channel_id,
@@ -195,7 +194,6 @@ async fn handle_sources(
             for source in sources {
                 insert_source(
                     source,
-                    ctx.data().track_metadata.clone(),
                     call.clone(),
                     ctx.serenity_context().http.clone(),
                     calling_channel_id,
@@ -214,11 +212,9 @@ async fn handle_sources(
     Ok(())
 }
 
-#[expect(clippy::too_many_arguments)]
 /// Process the given source, obtain its metadata and handle track insertion with events. This
 /// function is made to be used with tokio::spawn
 #[tracing::instrument(skip(
-    track_metadata,
     call,
     serenity_http,
     calling_channel_id,
@@ -229,39 +225,39 @@ async fn handle_sources(
 ))]
 async fn insert_source(
     mut source: youtube::YoutubeDl,
-    track_metadata: Arc<std::sync::Mutex<HashMap<uuid::Uuid, songbird::input::AuxMetadata>>>,
     call: Option<Arc<Mutex<songbird::Call>>>,
     serenity_http: Arc<serenity::Http>,
     calling_channel_id: serenity::ChannelId,
     stats: StatsManager,
     user: serenity::User,
     guild_id: serenity::GuildId,
-) -> Result<songbird::input::AuxMetadata, BotError> {
+) -> Result<YoutubeMetadata, BotError> {
     // TODO: rework this entire thing
     info!("Gathering metadata for source");
     match source.aux_metadata().await {
         Ok(metadata) => {
             // TODO: store this in the hashmap
-            let youtube = source
+            let mut youtube = source
                 .youtube_metadata()
                 .expect("youtube metadata initialized");
+            // the user context is still the same, so we can directly add it here
+            youtube.requester = Some(user.clone());
 
             let desc = format!(
                 "{} Ch: {}",
-                youtube.title.unwrap_or_unknown(),
-                youtube.channel.unwrap_or_unknown()
+                youtube.title.clone().unwrap_or_unknown(),
+                youtube.channel.clone().unwrap_or_unknown()
             );
             stats
-                .add_song_queue_count(guild_id.get(), &user, youtube.id, Some(desc))
+                .add_song_queue_count(
+                    guild_id.get(),
+                    &user,
+                    youtube.youtube_id.clone(),
+                    Some(desc),
+                )
                 .await?;
 
-            let track: songbird::tracks::Track = source.into();
-            let track_uuid = track.uuid;
-
-            {
-                let mut metadata_lock = track_metadata.lock().unwrap();
-                metadata_lock.insert(track_uuid, metadata.clone());
-            }
+            let track = Track::new_with_data(source.into(), std::sync::Arc::new(youtube.clone()));
 
             // queue the next song few seconds before current song ends
             let preload_time = if let Some(duration) = metadata.duration {
@@ -280,7 +276,7 @@ async fn insert_source(
                         Event::Track(songbird::TrackEvent::Play),
                         TrackPlayNotifier {
                             channel_id: calling_channel_id,
-                            metadata: metadata.clone(),
+                            metadata: youtube.clone(),
                             http: serenity_http_clone,
                         },
                     )
@@ -291,7 +287,7 @@ async fn insert_source(
                     metadata.channel.clone().unwrap_or_unknown()
                 );
                 // Logging added playlist in discord will be annoyying af
-                Ok(metadata)
+                Ok(youtube)
             } else {
                 error!("Call does not exist...");
                 return Err(MusicCommandError::CallDoesNotExist.into());

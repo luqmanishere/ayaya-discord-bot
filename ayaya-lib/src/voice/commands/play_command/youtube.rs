@@ -54,7 +54,7 @@ pub struct YoutubeDl {
     program: &'static str,
     client: Client,
     aux_metadata: Option<AuxMetadata>,
-    youtube_metadata: Option<youtube_dl::SingleVideo>,
+    youtube_metadata: Option<YoutubeMetadata>,
     query: QueryType,
     update_query_db: Option<StatsManager>,
 }
@@ -123,7 +123,7 @@ impl YoutubeDl {
     pub fn new_url_with_metadata(
         client: Client,
         url: String,
-        youtube_metadata: youtube_dl::SingleVideo,
+        youtube_metadata: YoutubeMetadata,
         aux_metadata: AuxMetadata,
     ) -> Self {
         Self {
@@ -163,11 +163,13 @@ impl YoutubeDl {
         let metadata = videos
             .iter()
             .map(|e| {
+                let youtube_metadata = e.as_youtube_metadata();
+                let aux = youtube_metadata.as_aux_metadata();
                 Self::new_url_with_metadata(
                     client.clone(),
                     format!("https://www.youtube.com/watch?v={}", e.id),
-                    e.clone(),
-                    e.as_youtube_metadata().as_aux_metadata(),
+                    youtube_metadata,
+                    aux,
                 )
             })
             .collect::<Vec<_>>();
@@ -175,7 +177,7 @@ impl YoutubeDl {
         Ok((metadata, youtube_playlist.into_playlist()))
     }
 
-    pub fn youtube_metadata(&self) -> Option<youtube_dl::SingleVideo> {
+    pub fn youtube_metadata(&self) -> Option<YoutubeMetadata> {
         self.youtube_metadata.clone()
     }
 
@@ -234,7 +236,7 @@ impl YoutubeDl {
         };
 
         // set the query results
-        self.youtube_metadata = Some(video);
+        self.youtube_metadata = Some(youtube_metadata.clone());
         self.aux_metadata = Some(meta);
 
         Ok(youtube_metadata)

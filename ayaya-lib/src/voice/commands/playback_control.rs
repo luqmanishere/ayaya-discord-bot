@@ -2,10 +2,10 @@
 
 use crate::{
     error::BotError,
-    utils::{check_msg, get_guild_id, ChannelInfo, GuildInfo, OptionExt as _},
+    utils::{check_msg, get_guild_id, ChannelInfo, GuildInfo, OptionExt},
     voice::{
         error::MusicCommandError,
-        utils::{self, metadata_to_embed},
+        utils::{self, metadata_to_embed, YoutubeMetadata},
     },
     Context,
 };
@@ -25,15 +25,13 @@ pub async fn pause(ctx: Context<'_>, _args: String) -> Result<(), BotError> {
                 .await?;
         let queue = handler.queue();
         let track_uuid = queue.current().unwrap().uuid();
-        let song_name = {
-            let metadata_lock = ctx.data().track_metadata.lock().unwrap();
-            metadata_lock
-                .get(&track_uuid)
-                .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                .title
-                .clone()
-                .unwrap_or_unknown()
-        };
+        let song_name = queue
+            .current()
+            .unwrap()
+            .data::<YoutubeMetadata>()
+            .title
+            .clone()
+            .unwrap_or_unknown();
         queue
             .pause()
             .map_err(|e| MusicCommandError::FailedTrackPause {
@@ -76,15 +74,14 @@ pub async fn resume(ctx: Context<'_>) -> Result<(), BotError> {
                 .await?;
         let queue = handler.queue();
         let track_uuid = queue.current().unwrap().uuid();
-        let song_name = {
-            let metadata_lock = ctx.data().track_metadata.lock().unwrap();
-            metadata_lock
-                .get(&track_uuid)
-                .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                .title
-                .clone()
-                .unwrap_or_unknown()
-        };
+        let song_name = queue
+            .current()
+            .unwrap()
+            .data::<YoutubeMetadata>()
+            .title
+            .clone()
+            .unwrap_or_unknown();
+
         queue
             .resume()
             .map_err(|e| MusicCommandError::FailedTrackResume {
@@ -94,6 +91,7 @@ pub async fn resume(ctx: Context<'_>) -> Result<(), BotError> {
                 voice_channel_info,
             })?;
 
+        // TODO: embed
         check_msg(
             ctx.channel_id()
                 .say(ctx, format!("{} - resumed", song_name))
@@ -142,13 +140,8 @@ pub async fn skip(ctx: Context<'_>) -> Result<(), BotError> {
                 .await?;
         let queue = handler.queue();
         let track_uuid = queue.current().unwrap().uuid();
-        let song_metadata = {
-            let metadata_lock = ctx.data().track_metadata.lock().unwrap();
-            metadata_lock
-                .get(&track_uuid)
-                .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                .clone()
-        };
+        let song_metadata = queue.current().unwrap().data::<YoutubeMetadata>();
+
         queue
             .skip()
             .map_err(|e| MusicCommandError::FailedTrackSkip {
@@ -184,14 +177,8 @@ pub async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
                 .await?;
         match handler.queue().current() {
             Some(track) => {
-                let data = ctx.data();
                 let track_uuid = track.uuid();
-                let metadata = {
-                    let lock = data.track_metadata.lock().unwrap();
-                    lock.get(&track_uuid)
-                        .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                        .clone()
-                };
+                let metadata = track.data::<YoutubeMetadata>().as_aux_metadata();
                 track
                     .seek(std::time::Duration::from_secs(secs))
                     .result()
@@ -262,14 +249,7 @@ pub async fn loop_track(ctx: Context<'_>, count: Option<usize>) -> Result<(), Bo
                 .await?;
         match handler.queue().current() {
             Some(track) => {
-                let data = ctx.data();
-                let track_uuid = track.uuid();
-                let metadata = {
-                    let lock = data.track_metadata.lock().unwrap();
-                    lock.get(&track_uuid)
-                        .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                        .clone()
-                };
+                let metadata = track.data::<YoutubeMetadata>();
 
                 match count {
                     Some(count) => {
@@ -351,14 +331,7 @@ pub async fn stop_loop(ctx: Context<'_>) -> Result<(), BotError> {
                 .await?;
         match handler.queue().current() {
             Some(track) => {
-                let data = ctx.data();
-                let track_uuid = track.uuid();
-                let metadata = {
-                    let lock = data.track_metadata.lock().unwrap();
-                    lock.get(&track_uuid)
-                        .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                        .clone()
-                };
+                let metadata = track.data::<YoutubeMetadata>();
 
                 track
                     .disable_loop()

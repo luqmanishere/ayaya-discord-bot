@@ -9,7 +9,7 @@ use crate::{
     utils::{get_guild_id, ChannelInfo, GuildInfo, OptionExt},
     voice::{
         error::MusicCommandError,
-        utils::{self, metadata_to_embed},
+        utils::{self, metadata_to_embed, YoutubeMetadata},
     },
     CommandResult, Context,
 };
@@ -38,15 +38,10 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
             queue.current_queue()
         };
         let queue_vec = if !tracks.is_empty() {
-            let data = ctx.data();
-            let metadata_lock = data.track_metadata.lock().unwrap();
             let mut queue_vec = vec![];
 
             for (index, track) in tracks.iter().enumerate() {
-                let track_uuid = track.uuid();
-                let metadata = metadata_lock
-                    .get(&track_uuid)
-                    .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?;
+                let metadata = track.data::<YoutubeMetadata>().as_aux_metadata();
                 let rendered = format!(
                     "{}. {} | Channel: {}",
                     index + 1,
@@ -106,14 +101,7 @@ pub async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<(), BotEr
             if queue_position != 1 {
                 let index = queue_position - 1;
                 if let Some(track) = queue.current_queue().get(index) {
-                    let track_uuid = track.uuid();
-                    let track_metadata = ctx.data().track_metadata.clone();
-                    let metadata = {
-                        let lock = track_metadata.lock().unwrap();
-                        lock.get(&track_uuid)
-                            .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                            .clone()
-                    };
+                    let metadata = track.data::<YoutubeMetadata>();
                     if queue.dequeue(index).is_some() {
                         ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
                             utils::EmbedOperation::DeleteFromQueue,
@@ -177,7 +165,6 @@ pub async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
         let handler = handler.lock().await;
         match handler.queue().current() {
             Some(track) => {
-                let data = ctx.data();
                 let track_uuid = track.uuid();
                 let track_state =
                     track
@@ -187,12 +174,8 @@ pub async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
                             source: e,
                             track_uuid,
                         })?;
-                let metadata = {
-                    let lock = data.track_metadata.lock().unwrap();
-                    lock.get(&track_uuid)
-                        .ok_or(MusicCommandError::TrackMetadataNotFound { track_uuid })?
-                        .clone()
-                };
+
+                let metadata = track.data::<YoutubeMetadata>();
 
                 ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
                     utils::EmbedOperation::NowPlaying,
@@ -204,7 +187,7 @@ pub async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
             None => {
                 ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
                     utils::EmbedOperation::NowPlaying,
-                    &songbird::input::AuxMetadata::default(),
+                    &YoutubeMetadata::default(),
                     None,
                 )))
                 .await?;

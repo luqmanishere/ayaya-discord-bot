@@ -4,7 +4,7 @@ use std::{
     io::{BufRead, BufReader, ErrorKind, Read},
     path::PathBuf,
     str::FromStr,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use admin::admin_commands;
@@ -29,7 +29,6 @@ use poise::{
 use prometheus_client::{encoding::text::encode, registry::Registry};
 use reqwest::Client as HttpClient;
 use service::{AyayaDiscordBot, Discord, MetricsBasicAuth};
-use songbird::input::AuxMetadata;
 use stats::stats_commands;
 use time::{format_description, UtcOffset};
 use tokio::sync::{Mutex as TokioMutex, RwLock};
@@ -37,7 +36,6 @@ use tracing::{debug, error, info, level_filters::LevelFilter, subscriber::set_gl
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{fmt::time::OffsetTime, layer::SubscriberExt, EnvFilter};
 use utils::GuildInfo;
-use uuid::Uuid;
 use voice::voice_commands;
 
 use crate::voice::commands::music;
@@ -63,7 +61,6 @@ pub type CommandResult = Result<(), BotError>;
 pub struct Data {
     http: HttpClient,
     songbird: Arc<songbird::Songbird>,
-    track_metadata: Arc<Mutex<HashMap<Uuid, AuxMetadata>>>,
     user_id: RwLock<serenity::UserId>,
     data_manager: DataManager,
     command_names: Vec<String>,
@@ -166,7 +163,6 @@ pub async fn ayayabot(
                 Ok(Data {
                     http: HttpClient::new(),
                     songbird: manager_clone,
-                    track_metadata: Default::default(),
                     user_id: Default::default(),
                     data_manager,
                     command_names,

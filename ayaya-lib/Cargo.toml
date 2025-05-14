@@ -22,7 +22,7 @@ tracing = "0.1"
 tracing-error = { version = "0.2", features = ["traced-error"] }
 # color-eyre = "0.6"
 dotenvy = { version = "0.15" }
-reqwest = { version = "0.11" }
+reqwest = { version = "0.12" }
 uuid = { version = "*", features = ["v7"] }
 humantime = { version = "2" }
 youtube_dl = { version = "0.10", features = ["tokio"] }
@@ -44,7 +44,7 @@ lru-mem = { version = "0.3" }
 prometheus-client = { version = "0.22" }
 
 [dependencies.songbird]
-version = "0.4.3"
+version = "0.5.0"
 features = ["builtin-queue", "driver", "serenity"]
 
 [dependencies.serenity]

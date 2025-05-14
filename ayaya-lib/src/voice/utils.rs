@@ -3,6 +3,7 @@ use std::fmt;
 use std::ops::Sub;
 use std::time::Duration;
 
+use ::serenity::all::Mentionable;
 use poise::serenity_prelude as serenity;
 use songbird::constants::SAMPLE_RATE_RAW;
 use youtube_dl::{SearchOptions, SingleVideo, YoutubeDlOutput};
@@ -11,8 +12,7 @@ use crate::{utils::OptionExt, BotError, Context};
 
 use super::error::MusicCommandError;
 
-#[derive(Clone, Debug)]
-#[expect(dead_code)]
+#[derive(Clone, Debug, Default)]
 pub struct YoutubeMetadata {
     pub track: Option<String>,
     pub artist: Option<String>,
@@ -35,6 +35,7 @@ pub struct YoutubeMetadata {
     pub url: String,
     pub webpage_url: Option<String>,
     pub protocol: Option<youtube_dl::Protocol>,
+    pub requester: Option<serenity::User>,
 }
 
 impl YoutubeMetadata {
@@ -46,7 +47,7 @@ impl YoutubeMetadata {
         let r_date = self.release_date.as_ref();
         let date = r_date.or(self.upload_date.as_ref()).cloned();
         let channel = self.channel.clone();
-        let duration = self.duration.map(std::time::Duration::from_secs_f64);
+        let duration = self.duration();
         let source_url = self.webpage_url.clone();
         let title = self.title.clone();
         let thumbnail = self.thumbnail.clone();
@@ -67,6 +68,10 @@ impl YoutubeMetadata {
 
             ..songbird::input::AuxMetadata::default()
         }
+    }
+
+    pub fn duration(&self) -> Option<std::time::Duration> {
+        self.duration.map(std::time::Duration::from_secs_f64)
     }
 }
 
@@ -115,6 +120,7 @@ impl AsYoutubeMetadata for SingleVideo {
             url: value.url.expect("url has to exist"),
             webpage_url: value.webpage_url,
             protocol: value.protocol,
+            requester: None,
         }
     }
 }
@@ -188,7 +194,7 @@ impl std::fmt::Display for EmbedOperation {
 /// Converts AuxMetadata to a pretty embed
 pub fn metadata_to_embed(
     operation: EmbedOperation,
-    metadata: &songbird::input::AuxMetadata,
+    metadata: &YoutubeMetadata,
     track_state: Option<&songbird::tracks::TrackState>,
 ) -> serenity::CreateEmbed {
     let mut embed = serenity::CreateEmbed::default()
@@ -215,17 +221,21 @@ pub fn metadata_to_embed(
         (
             "Duration",
             // TODO: decide what to do with this unwrap
-            humantime::format_duration(metadata.duration.unwrap_or_default()).to_string(),
+            humantime::format_duration(metadata.duration().unwrap_or_default()).to_string(),
             true,
         ),
     ]);
+
+    if let Some(requester) = &metadata.requester {
+        embed = embed.fields([("Requester", requester.mention().to_string(), true)])
+    }
 
     // extra conditional fields
     if let Some(track_state) = track_state {
         match operation {
             EmbedOperation::SkipSong => {
                 let current_pos = track_state.position;
-                let duration = metadata.duration.unwrap_or_default();
+                let duration = metadata.duration().unwrap_or_default();
                 let time_remaining = duration.sub(current_pos);
 
                 embed = embed.field(
@@ -236,7 +246,7 @@ pub fn metadata_to_embed(
             }
             EmbedOperation::NowPlaying => {
                 let current_pos = track_state.position;
-                let duration = metadata.duration.unwrap_or_default();
+                let duration = metadata.duration().unwrap_or_default();
                 let time_remaining = duration.sub(current_pos);
 
                 embed = embed.fields([
@@ -294,7 +304,7 @@ pub async fn create_search_interaction(
     // TODO: optimize?
     let metadata_embeds = metadata_vec
         .iter()
-        .map(|e| metadata_to_embed(EmbedOperation::YoutubeSearch, &e.as_aux_metadata(), None))
+        .map(|e| metadata_to_embed(EmbedOperation::YoutubeSearch, e, None))
         .collect::<Vec<_>>();
     let metadata_embed_chunks = metadata_embeds.chunks(3).collect::<Vec<_>>();
 

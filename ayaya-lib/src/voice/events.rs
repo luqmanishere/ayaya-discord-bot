@@ -11,12 +11,11 @@ use serenity::{
     Context as SerenityContext,
 };
 use songbird::{
-    input::AuxMetadata, tracks::PlayMode, Event, EventContext, EventHandler as VoiceEventHandler,
-    Songbird,
+    tracks::PlayMode, Event, EventContext, EventHandler as VoiceEventHandler, Songbird,
 };
 use tracing::{error, info};
 
-use super::utils::{metadata_to_embed, EmbedOperation};
+use super::utils::{metadata_to_embed, EmbedOperation, YoutubeMetadata};
 use crate::utils::check_msg;
 
 pub struct SongFader {
@@ -152,7 +151,7 @@ impl VoiceEventHandler for BotInactiveCounter {
 /// Notify the calling channel when a track starts to play
 pub struct TrackPlayNotifier {
     pub channel_id: ChannelId,
-    pub metadata: AuxMetadata,
+    pub metadata: YoutubeMetadata,
     pub http: Arc<Http>,
 }
 
