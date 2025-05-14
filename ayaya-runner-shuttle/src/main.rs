@@ -115,7 +115,9 @@ async fn main(
         .get("AGE_SECRET_KEY")
         .context("'AGE_SECRET_KEY' is not found")?;
 
-    let client = ayayabot(token, db_str, loki, yt_dlp_config_dir, secret_key)
+    let data_dir = home.join(".local/share/ayayadc");
+
+    let client = ayayabot(token, db_str, loki, yt_dlp_config_dir, secret_key, data_dir)
         .await
         .map_err(|e| shuttle_runtime::Error::Custom(anyhow::anyhow!(e.to_string())))?;
     Ok(client)

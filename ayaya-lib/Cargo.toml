@@ -36,7 +36,9 @@ axum = { version = "0.7" }
 axum-auth = { version = "0.7" }
 strum = { version = "0.26", features = ["derive"] }
 entity = { path = "../entity" }
+entity-sqlite = { path = "../entity-sqlite" }
 migration = { path = "../migration" }
+migration-sqlite = { path = "../migration-sqlite" }
 age = { version = "0.11" }
 lru-mem = { version = "0.3" }
 prometheus-client = { version = "0.22" }

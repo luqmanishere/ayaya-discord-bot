@@ -1,11 +1,16 @@
 //! Manage database connection and caching
 //!
 pub mod permissions;
+pub mod stats;
 mod utils;
+
+use std::sync::{Arc, Mutex};
 
 use entity::prelude::*;
 use error::DataError;
-use migration::{Migrator, MigratorTrait};
+use lru_mem::LruCache;
+use migration::{Migrator as MysqlMigrator, MigratorTrait};
+use migration_sqlite::Migrator as SqliteMigrator;
 use permissions::Permissions;
 use poise::serenity_prelude as serenity;
 use sea_orm::{
@@ -13,12 +18,14 @@ use sea_orm::{
     QuerySelect,
 };
 use sea_orm::{Database, DatabaseConnection};
+use stats::StatsManager;
 use time::UtcOffset;
 use utils::DataTiming;
 
 use crate::metrics::{DataOperationType, Metrics};
 
 pub type DataResult<T> = Result<T, DataError>;
+pub type Autocomplete = Arc<Mutex<LruCache<String, String>>>;
 
 /// Manage data connection and caching. Cache access, insert and invalidation are implemented as
 /// methods in this struct.
@@ -31,32 +38,66 @@ pub type DataResult<T> = Result<T, DataError>;
 #[derive(Clone, Debug)]
 pub struct DataManager {
     db: DatabaseConnection, // this is already clone
+    #[expect(dead_code)]
+    stats_db: DatabaseConnection,
     metrics_handler: Metrics,
     permissions: Permissions,
+    stats: StatsManager,
+    autocomplete_cache: Autocomplete,
 }
 
 impl DataManager {
     /// A new instance of the manager
-    pub async fn new(url: &str, metrics_handler: Metrics) -> DataResult<Self> {
-        let mut connect_options = ConnectOptions::new(url);
+    pub async fn new(
+        main_url: &str,
+        _stats_url: &str,
+        metrics_handler: Metrics,
+    ) -> DataResult<Self> {
+        let mut connect_options = ConnectOptions::new(main_url);
         connect_options.sqlx_logging(false); // disable sqlx logging
         let db: DatabaseConnection = Database::connect(connect_options)
             .await
             .map_err(|error| DataError::DatabaseConnectionError { error })?;
-        Migrator::up(&db, None)
+        MysqlMigrator::up(&db, None)
             .await
             .map_err(|error| DataError::MigrationError { error })?; // always upgrade db to the latest version
 
+        #[cfg(debug_assertions)]
+        let mut connect_options_stats = ConnectOptions::new("sqlite://dev/stats.sqlite?mode=rwc");
+        #[cfg(not(debug_assertions))]
+        let mut connect_options_stats = ConnectOptions::new(_stats_url);
+
+        connect_options_stats.sqlx_logging(false);
+        let stats_db: DatabaseConnection = Database::connect(connect_options_stats)
+            .await
+            .map_err(|error| DataError::DatabaseConnectionError { error })?;
+        SqliteMigrator::up(&stats_db, None)
+            .await
+            .map_err(|error| DataError::MigrationError { error })?;
+
         let permissions = Permissions::new(db.clone(), metrics_handler.clone()).await?;
+        let stats = StatsManager::new(stats_db.clone(), metrics_handler.clone());
         Ok(Self {
             db,
+            stats_db,
             metrics_handler,
             permissions,
+            stats,
+            autocomplete_cache: Arc::new(Mutex::new(LruCache::new(1000 * 1024))),
         })
     }
 
     pub fn permissions_mut(&mut self) -> &mut Permissions {
         &mut self.permissions
+    }
+
+    #[expect(dead_code)]
+    pub fn stats_mut(&mut self) -> &mut StatsManager {
+        &mut self.stats
+    }
+
+    pub fn stats(&self) -> StatsManager {
+        self.stats.clone()
     }
 
     /// Log command calls to the database. Will also increment the command counter.
@@ -272,6 +313,22 @@ impl DataManager {
     }
 }
 
+impl DataManager {
+    /// Add autocomplete entry
+    pub fn add_autocomplete(&mut self, key: String, value: String) {
+        self.autocomplete_cache
+            .lock()
+            .unwrap()
+            .insert(key, value)
+            .expect("entries should not be too large");
+    }
+
+    /// Get the autocomplete entry
+    pub fn get_autocomplete(&mut self, key: String) -> Option<String> {
+        self.autocomplete_cache.lock().unwrap().get(&key).cloned()
+    }
+}
+
 pub mod error {
     use sea_orm::DbErr;
 
@@ -317,6 +374,8 @@ pub mod error {
         AddNewCookieDatabaseError(DbErr),
         #[error("Database error while getting user command stats: {0}")]
         FindSingleUsersSingleCommandCallError(DbErr),
+        #[error("Database error in operation {operation}: {error}")]
+        DatabaseError { operation: String, error: DbErr },
     }
 
     impl ErrorName for DataError {
@@ -363,6 +422,7 @@ pub mod error {
                 DataError::FindSingleUsersSingleCommandCallError(..) => {
                     "find_single_user_single_all_time_command_stats"
                 }
+                DataError::DatabaseError { operation, .. } => operation,
             };
             format!("data::{name}")
         }

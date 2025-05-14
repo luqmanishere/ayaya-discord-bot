@@ -30,7 +30,16 @@ async fn main() -> miette::Result<()> {
 
     let secret_key = file_or_env_var("AGE_SECRET_KEY")?;
 
-    let ayayadc = ayayabot(token, db_str, None, yt_dlp_config_dir, secret_key).await?;
+    // data store dir
+    // TODO: allow configuration
+    let data_dir = home.join(".local/share/ayayadc");
+    if !data_dir.exists() {
+        std::fs::create_dir_all(&data_dir)
+            .into_diagnostic()
+            .wrap_err("Unable to create data dir")?;
+    }
+
+    let ayayadc = ayayabot(token, db_str, None, yt_dlp_config_dir, secret_key, data_dir).await?;
     ayayadc
         .local_bind(net::SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(127, 0, 0, 1),

@@ -44,10 +44,11 @@ pub async fn play(
     ctx: Context<'_>,
     #[description = "A url or a search term for youtube"]
     #[min_length = 1]
-    url: Vec<String>,
+    #[autocomplete = "autocomplete_play"]
+    query: Vec<String>,
 ) -> Result<(), BotError> {
     // convert vec to a string
-    let url = url.join(" ").trim().to_string();
+    let url = query.join(" ").trim().to_string();
 
     ctx.defer().await?;
 
@@ -70,10 +71,11 @@ pub async fn shuffle_play(
     ctx: Context<'_>,
     #[description = "A url or a search term for youtube"]
     #[min_length = 1]
-    url: Vec<String>,
+    #[autocomplete = "autocomplete_play"]
+    query: Vec<String>,
 ) -> Result<(), BotError> {
     // convert vec to a string
-    let url = url.join(" ").trim().to_string();
+    let url = query.join(" ").trim().to_string();
 
     ctx.defer().await?;
 

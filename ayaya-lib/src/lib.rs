@@ -1,3 +1,4 @@
+#![deny(clippy::allow_attributes)]
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, ErrorKind, Read},
@@ -69,6 +70,8 @@ pub struct Data {
     command_categories: Vec<String>,
     command_categories_map: HashMap<String, Option<String>>,
     ytdlp_config_path: PathBuf,
+    #[expect(dead_code)]
+    data_dir: PathBuf,
     secret_key: String,
     #[expect(dead_code)]
     metrics_registry: Arc<TokioMutex<Registry>>,
@@ -81,6 +84,7 @@ pub async fn ayayabot(
     loki: Option<LokiOpts>,
     ytdlp_config_path: PathBuf,
     secret_key: String,
+    data_dir: PathBuf,
 ) -> miette::Result<AyayaDiscordBot> {
     // color_eyre::install()?;
 
@@ -89,7 +93,10 @@ pub async fn ayayabot(
     let metrics_registry = Arc::new(TokioMutex::new(Registry::default()));
     let metrics = Metrics::new();
     metrics.register_metrics(metrics_registry.clone()).await;
-    let data_manager = DataManager::new(&db_str, metrics.clone())
+
+    let stats_db = data_dir.join("stats.sqlite");
+    let stats_url = format!("sqlite://{}?mode=rwc", stats_db.display());
+    let data_manager = DataManager::new(&db_str, &stats_url, metrics.clone())
         .await
         .map_err(|e| miette::miette!("database error: {}", e))?;
 
@@ -166,6 +173,7 @@ pub async fn ayayabot(
                     command_categories,
                     command_categories_map,
                     ytdlp_config_path,
+                    data_dir,
                     secret_key,
                     metrics_registry: metrics_registry_poise,
                     metrics,

@@ -7,7 +7,9 @@ resolver = "2"
 members = [
   "ayaya-lib",
   "entity",
+  "entity-sqlite",
   "migration",
+  "migration-sqlite",
   "ayaya-runner-local",
   "ayaya-runner-shuttle",
 ]
@@ -16,6 +18,7 @@ default-members = ["ayaya-lib", "ayaya-runner-local"]
 [workspace.dependencies]
 sea-orm = { version = "1", features = [
   "sqlx-mysql",
+  "sqlx-sqlite",
   "runtime-tokio-rustls",
   "macros",
   "with-time",

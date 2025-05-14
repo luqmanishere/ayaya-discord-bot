@@ -12,7 +12,7 @@ use crate::{utils::OptionExt, BotError, Context};
 use super::error::MusicCommandError;
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub struct YoutubeMetadata {
     pub track: Option<String>,
     pub artist: Option<String>,

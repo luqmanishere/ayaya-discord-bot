@@ -14,7 +14,9 @@ use tracing::{info, warn};
 use youtube_dl::{Protocol, YoutubeDlOutput};
 
 use crate::{
+    data::stats::StatsManager,
     error::BotError,
+    utils::OptionExt,
     voice::{
         error::MusicCommandError,
         utils::{AsYoutubeMetadata, YoutubeMetadata},
@@ -29,6 +31,17 @@ enum QueryType {
     Search(String),
 }
 
+impl std::fmt::Display for QueryType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let desc = match self {
+            QueryType::Url(url) => url,
+            QueryType::Search(search) => search,
+        };
+
+        f.write_str(desc)
+    }
+}
+
 /// A lazily instantiated call to download a file, finding its URL via youtube-dl.
 ///
 /// By default, this uses yt-dlp and is backed by an [`HttpRequest`]. This handler
@@ -40,8 +53,10 @@ enum QueryType {
 pub struct YoutubeDl {
     program: &'static str,
     client: Client,
-    metadata: Option<AuxMetadata>,
+    aux_metadata: Option<AuxMetadata>,
+    youtube_metadata: Option<youtube_dl::SingleVideo>,
     query: QueryType,
+    update_query_db: Option<StatsManager>,
 }
 
 impl YoutubeDl {
@@ -50,52 +65,81 @@ impl YoutubeDl {
     /// This requires a reqwest client: ideally, one should be created and shared between
     /// all requests.
     #[must_use]
-    pub fn new(client: Client, url: String) -> Self {
-        Self::new_ytdl_like(YOUTUBE_DL_COMMAND, client, url)
+    pub fn new(client: Client, url: String, update_query_db: Option<StatsManager>) -> Self {
+        Self::new_ytdl_like(YOUTUBE_DL_COMMAND, client, url, update_query_db)
     }
 
     /// Creates a lazy request to select an audio stream from `url` as in [`new`], using `program`.
     ///
     /// [`new`]: Self::new
     #[must_use]
-    pub fn new_ytdl_like(program: &'static str, client: Client, url: String) -> Self {
+    pub fn new_ytdl_like(
+        program: &'static str,
+        client: Client,
+        url: String,
+        update_query_db: Option<StatsManager>,
+    ) -> Self {
         Self {
             program,
             client,
-            metadata: None,
+            aux_metadata: None,
+            youtube_metadata: None,
             query: QueryType::Url(url),
+            update_query_db,
         }
     }
 
     /// Creates a request to search youtube for an optionally specified number of videos matching `query`,
     /// using "yt-dlp".
     #[must_use]
-    pub fn new_search(client: Client, query: String) -> Self {
-        Self::new_search_ytdl_like(YOUTUBE_DL_COMMAND, client, query)
+    pub fn new_search(
+        client: Client,
+        query: String,
+        update_query_db: Option<StatsManager>,
+    ) -> Self {
+        Self::new_search_ytdl_like(YOUTUBE_DL_COMMAND, client, query, update_query_db)
     }
 
     /// Creates a request to search youtube for an optionally specified number of videos matching `query`,
     /// using `program`.
     #[must_use]
-    pub fn new_search_ytdl_like(program: &'static str, client: Client, query: String) -> Self {
+    pub fn new_search_ytdl_like(
+        program: &'static str,
+        client: Client,
+        query: String,
+        update_query_db: Option<StatsManager>,
+    ) -> Self {
         Self {
             program,
             client,
-            metadata: None,
+            aux_metadata: None,
+            youtube_metadata: None,
             query: QueryType::Search(query),
+            update_query_db,
         }
     }
 
-    pub fn new_url_with_metadata(client: Client, url: String, metadata: AuxMetadata) -> Self {
+    /// Creates a request to select an audio stream from `url` with a set metadata
+    pub fn new_url_with_metadata(
+        client: Client,
+        url: String,
+        youtube_metadata: youtube_dl::SingleVideo,
+        aux_metadata: AuxMetadata,
+    ) -> Self {
         Self {
             program: YOUTUBE_DL_COMMAND,
             client,
-            metadata: Some(metadata),
+            aux_metadata: Some(aux_metadata),
+            youtube_metadata: Some(youtube_metadata),
             query: QueryType::Url(url),
+            update_query_db: None,
         }
     }
 
-    pub async fn new_playlist(client: Client, url: String) -> Result<Vec<Self>, BotError> {
+    pub async fn new_playlist(
+        client: Client,
+        url: String,
+    ) -> Result<(Vec<Self>, Option<youtube_dl::Playlist>), BotError> {
         let youtube_playlist = youtube_dl::YoutubeDl::new(url.clone())
             .flat_playlist(true)
             .extra_arg("-f")
@@ -107,11 +151,13 @@ impl YoutubeDl {
                 args: url.clone(),
             })?;
 
+        // TODO: cleanup
         let videos = match youtube_playlist {
-            YoutubeDlOutput::Playlist(playlist) => playlist
+            YoutubeDlOutput::Playlist(ref playlist) => playlist
                 .entries
+                .clone()
                 .ok_or(MusicCommandError::YoutubeDlEmptyPlaylist { args: url })?,
-            YoutubeDlOutput::SingleVideo(video) => vec![*video],
+            YoutubeDlOutput::SingleVideo(ref video) => vec![*video.clone()],
         };
 
         let metadata = videos
@@ -120,43 +166,27 @@ impl YoutubeDl {
                 Self::new_url_with_metadata(
                     client.clone(),
                     format!("https://www.youtube.com/watch?v={}", e.id),
+                    e.clone(),
                     e.as_youtube_metadata().as_aux_metadata(),
                 )
             })
             .collect::<Vec<_>>();
 
-        Ok(metadata)
+        Ok((metadata, youtube_playlist.into_playlist()))
     }
 
-    /// Runs a search for the given query, returning a list of up to `n_results`
-    /// possible matches which are `AuxMetadata` objects containing a valid URL.
-    ///
-    /// Returns up to 5 matches by default.
-    pub async fn search(
-        &mut self,
-        n_results: Option<usize>,
-    ) -> Result<Vec<AuxMetadata>, AudioStreamError> {
-        let n_results = n_results.unwrap_or(5);
-
-        Ok(match &self.query {
-            // Safer to just return the metadata for the pointee if possible
-            QueryType::Url(_) => vec![self.aux_metadata().await?],
-            QueryType::Search(_) => self
-                .query(n_results)
-                .await?
-                .into_iter()
-                .map(|v| v.as_aux_metadata())
-                .collect(),
-        })
+    pub fn youtube_metadata(&self) -> Option<youtube_dl::SingleVideo> {
+        self.youtube_metadata.clone()
     }
 
+    /// Query for single metadata
     #[tracing::instrument(skip_all, fields(self.query))]
-    async fn query(&mut self, n_results: usize) -> Result<Vec<YoutubeMetadata>, AudioStreamError> {
+    async fn query(&mut self) -> Result<YoutubeMetadata, AudioStreamError> {
         let new_query;
         let query_str = match &self.query {
             QueryType::Url(url) => url,
             QueryType::Search(query) => {
-                new_query = format!("ytsearch{n_results}:{query}");
+                new_query = format!("ytsearch1:{query}");
                 &new_query
             }
         };
@@ -181,21 +211,33 @@ impl YoutubeDl {
             YoutubeDlOutput::SingleVideo(video) => vec![*video],
         };
 
-        let out = videos
-            .into_iter()
-            .map(|e| e.as_youtube_metadata())
-            .collect::<Vec<_>>();
+        let video = videos.into_iter().next().ok_or_else(|| {
+            AudioStreamError::Fail(format!("no results found for '{query_str}'").into())
+        })?;
 
-        let meta = out
-            .first()
-            .ok_or_else(|| {
-                AudioStreamError::Fail(format!("no results found for '{query_str}'").into())
-            })?
-            .as_aux_metadata();
+        let youtube_metadata = video.as_youtube_metadata();
 
-        self.metadata = Some(meta);
+        let meta = youtube_metadata.as_aux_metadata();
 
-        Ok(out)
+        if let Some(stats) = &mut self.update_query_db {
+            let text = format!(
+                "{} ({})",
+                video.title.clone().unwrap_or_unknown(),
+                video.channel.clone().unwrap_or_unknown()
+            );
+            if let Err(e) = stats
+                .update_user_play_queries_description(self.query.to_string(), text)
+                .await
+            {
+                tracing::error!("Unable to update query descriptions from source: {e}");
+            };
+        };
+
+        // set the query results
+        self.youtube_metadata = Some(video);
+        self.aux_metadata = Some(meta);
+
+        Ok(youtube_metadata)
     }
 }
 
@@ -215,8 +257,7 @@ impl Compose for YoutubeDl {
         &mut self,
     ) -> Result<AudioStream<Box<dyn MediaSource>>, AudioStreamError> {
         // panic safety: `query` should have ensured > 0 results if `Ok`
-        let mut results = self.query(1).await?;
-        let result = results.swap_remove(0);
+        let result = self.query().await?;
 
         let mut headers = HeaderMap::default();
 
@@ -230,7 +271,7 @@ impl Compose for YoutubeDl {
             }));
         }
 
-        #[allow(clippy::single_match_else)]
+        #[expect(clippy::single_match_else)]
         match result.protocol {
             Some(Protocol::M3U8Native) => {
                 let mut req =
@@ -255,14 +296,14 @@ impl Compose for YoutubeDl {
     }
 
     async fn aux_metadata(&mut self) -> Result<AuxMetadata, AudioStreamError> {
-        if let Some(meta) = self.metadata.as_ref() {
+        if let Some(meta) = self.aux_metadata.as_ref() {
             return Ok(meta.clone());
         }
 
         warn!("no metadata found");
-        self.query(1).await?;
+        self.query().await?;
 
-        self.metadata.clone().ok_or_else(|| {
+        self.aux_metadata.clone().ok_or_else(|| {
             let msg: Box<dyn Error + Send + Sync + 'static> =
                 "Failed to instantiate any metadata... Should be unreachable.".into();
             AudioStreamError::Fail(msg)

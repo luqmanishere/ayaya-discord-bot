@@ -1,0 +1,8 @@
+[package]
+name = "entity-sqlite"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sea-orm = { workspace = true }
+bincode = { workspace = true }
