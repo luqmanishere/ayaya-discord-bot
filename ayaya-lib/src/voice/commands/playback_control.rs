@@ -178,7 +178,6 @@ pub async fn seek(
 
     let manager = &ctx.data().songbird;
 
-    // TODO: polish and user error handling
     if let Some(handler) = manager.get(guild_info.guild_id) {
         let handler = handler.lock().await;
         let voice_channel_info =
@@ -228,8 +227,6 @@ pub async fn seek(
                             voice_channel_info,
                             position: secs,
                         })?;
-                    let song_name = metadata.title.clone().unwrap();
-                    let channel_name = metadata.channel.clone().unwrap();
 
                     let new_track_info = if let Ok(track_info) = track.get_info().await {
                         Some(track_info)

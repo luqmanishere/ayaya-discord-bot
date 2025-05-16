@@ -87,7 +87,6 @@ impl ErrorName for BotError {
             BotError::NoGuild => "no_guild",
             BotError::GuildCacheStale => "guild_cache_stale",
             BotError::GuildMismatch => "guild_mismatch",
-            // TODO: error name
             BotError::GeneralSerenityError(..) => "serenity_error",
             BotError::DatabaseOperationError(..) => "database_error",
             BotError::DataManagerError(data_error) => &data_error.name(),
