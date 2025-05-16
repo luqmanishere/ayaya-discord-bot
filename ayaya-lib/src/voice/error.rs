@@ -184,6 +184,34 @@ pub enum MusicCommandError {
         position: u64,
     },
 
+    #[error("Backwards seeking is not supported, requested position {requested_position}, current position {current_position}")]
+    #[diagnostic(help("Just don't seek backwards? Look at the autocomplete lol."))]
+    NoSeekBackwards {
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
+        requested_position: u64,
+        current_position: u64,
+    },
+
+    #[error("Out of bounds, requested position {requested_position}, max_position {max_position}")]
+    #[diagnostic(help(
+        "You can seek up to -5 seconds before end. Refer to the autocomplete for max."
+    ))]
+    SeekOutOfBounds {
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
+        requested_position: u64,
+        max_position: u64,
+    },
+
+    #[error("This track has no reported duration, hence seeking is unsafe.")]
+    #[diagnostic(help("Go complain to @solemnattic"))]
+    NoDurationNoSeek {
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
+        track_uuid: uuid::Uuid,
+    },
+
     #[error(
         "Error accessing the index {index} in the queue for voice channel {} ({}) in guild {} ({})",
         voice_channel_info.channel_name,
@@ -256,6 +284,9 @@ impl ErrorName for MusicCommandError {
             MusicCommandError::FailedTrackPause { .. } => "failed_track_pause",
             MusicCommandError::FailedTrackResume { .. } => "failed_track_resume",
             MusicCommandError::FailedTrackSeek { .. } => "failed_track_seek",
+            MusicCommandError::NoSeekBackwards { .. } => "no_backwards_seek",
+            MusicCommandError::SeekOutOfBounds { .. } => "seek_out_of_bounds",
+            MusicCommandError::NoDurationNoSeek { .. } => "no_duration_no_seek",
             MusicCommandError::QueueOutOfBounds { .. } => "queue_out_of_bounds",
             MusicCommandError::QueueDeleteNowPlaying { .. } => "queue_delete_now_playing",
             MusicCommandError::NoTrackToSeek { .. } => "no_track_to_seek",

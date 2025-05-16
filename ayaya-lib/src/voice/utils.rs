@@ -171,6 +171,7 @@ pub enum EmbedOperation {
     LoopCount(usize),
     LoopIndefinite,
     StopLoop,
+    Seek(u64),
 }
 
 impl std::fmt::Display for EmbedOperation {
@@ -184,6 +185,7 @@ impl std::fmt::Display for EmbedOperation {
             EmbedOperation::LoopCount(count) => &format!("Looping {count} times"),
             EmbedOperation::LoopIndefinite => "Indefinite Track Loop",
             EmbedOperation::StopLoop => "Stop Track Loop",
+            EmbedOperation::Seek(_) => "Seek",
         };
         write!(f, "{out}")
     }
@@ -197,20 +199,23 @@ pub fn metadata_to_embed(
     metadata: &YoutubeMetadata,
     track_state: Option<&songbird::tracks::TrackState>,
 ) -> serenity::CreateEmbed {
+    let mut description = serenity::MessageBuilder::default();
+    description.push_line(format!(
+        "### {}",
+        metadata.title.clone().unwrap_or_unknown()
+    ));
+
+    if let EmbedOperation::Seek(secs) = operation {
+        description.push_line(format!("Track seeked to {secs} seconds"));
+    };
+
     let mut embed = serenity::CreateEmbed::default()
         .author(
             serenity::CreateEmbedAuthor::new(format!("{} | Youtube Video", operation)).icon_url(
                 "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
             ),
         )
-        .description(
-            serenity::MessageBuilder::default()
-                .push_line(format!(
-                    "### {}",
-                    metadata.title.clone().unwrap_or_unknown()
-                ))
-                .to_string(),
-        );
+        .description(description.to_string());
 
     embed = embed.fields([
         (
@@ -244,7 +249,7 @@ pub fn metadata_to_embed(
                     true,
                 );
             }
-            EmbedOperation::NowPlaying => {
+            EmbedOperation::NowPlaying | EmbedOperation::Seek(_) => {
                 let current_pos = track_state.position;
                 let duration = metadata.duration().unwrap_or_default();
                 let time_remaining = duration.sub(current_pos);

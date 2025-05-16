@@ -1,4 +1,8 @@
 //! This module contains commands used to manipulate playback
+use std::cmp::Ordering;
+
+use ::serenity::{futures::TryFutureExt, FutureExt};
+use poise::serenity_prelude as serenity;
 
 use crate::{
     error::BotError,
@@ -164,7 +168,12 @@ pub async fn skip(ctx: Context<'_>) -> Result<(), BotError> {
 /// Seeks the track to a position given in seconds
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
 #[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
-pub async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
+pub async fn seek(
+    ctx: Context<'_>,
+    #[description = "Time in seconds to seek to. Can only seek forwards! Max is -5s from end."]
+    #[autocomplete = "autocomplete_seek"]
+    secs: u64,
+) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
     let manager = &ctx.data().songbird;
@@ -178,32 +187,70 @@ pub async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
         match handler.queue().current() {
             Some(track) => {
                 let track_uuid = track.uuid();
-                let metadata = track.data::<YoutubeMetadata>().as_aux_metadata();
-                track
-                    .seek(std::time::Duration::from_secs(secs))
-                    .result()
-                    .map_err(|e| MusicCommandError::FailedTrackSeek {
-                        source: e,
-                        track_uuid,
+                let metadata = track.data::<YoutubeMetadata>();
+
+                if let Some(max_track_duration) = metadata.duration() {
+                    let max_track_position = max_track_duration.as_secs() - 5;
+                    let track_state = track.get_info().await.map_err(|e| {
+                        MusicCommandError::TrackStateNotFound {
+                            source: e,
+                            track_uuid,
+                        }
+                    })?;
+                    let current_position = track_state.position.as_secs();
+
+                    // check if less than current pos, or more than max
+                    if secs < current_position {
+                        return Err(MusicCommandError::NoSeekBackwards {
+                            guild_info,
+                            voice_channel_info,
+                            requested_position: secs,
+                            current_position,
+                        }
+                        .into());
+                    } else if secs > max_track_position {
+                        return Err(MusicCommandError::SeekOutOfBounds {
+                            guild_info,
+                            voice_channel_info,
+                            requested_position: secs,
+                            max_position: max_track_position,
+                        }
+                        .into());
+                    }
+
+                    track
+                        .seek(std::time::Duration::from_secs(secs))
+                        .result()
+                        .map_err(|e| MusicCommandError::FailedTrackSeek {
+                            source: e,
+                            track_uuid,
+                            guild_info,
+                            voice_channel_info,
+                            position: secs,
+                        })?;
+                    let song_name = metadata.title.clone().unwrap();
+                    let channel_name = metadata.channel.clone().unwrap();
+
+                    let new_track_info = if let Ok(track_info) = track.get_info().await {
+                        Some(track_info)
+                    } else {
+                        None
+                    };
+
+                    let embed = metadata_to_embed(
+                        utils::EmbedOperation::Seek(secs),
+                        &metadata,
+                        new_track_info.as_ref(),
+                    );
+                    ctx.send(poise::CreateReply::default().embed(embed)).await?;
+                } else {
+                    return Err(MusicCommandError::NoDurationNoSeek {
                         guild_info,
                         voice_channel_info,
-                        position: secs,
-                    })?;
-                let song_name = metadata.title.clone().unwrap();
-                let channel_name = metadata.channel.clone().unwrap();
-
-                // TODO: express in embed
-                check_msg(
-                    ctx.channel_id()
-                        .say(
-                            ctx,
-                            format!(
-                                "Seek track: `{} ({})` to {} seconds",
-                                song_name, channel_name, secs
-                            ),
-                        )
-                        .await,
-                );
+                        track_uuid,
+                    }
+                    .into());
+                }
             }
             None => {
                 let voice_channel_info = ChannelInfo::from_songbird_current_channel(
@@ -224,6 +271,71 @@ pub async fn seek(ctx: Context<'_>, secs: u64) -> Result<(), BotError> {
     }
 
     Ok(())
+}
+
+async fn autocomplete_seek(
+    ctx: Context<'_>,
+    partial: &str,
+) -> impl Iterator<Item = serenity::AutocompleteChoice> {
+    fn template(partial: u64) -> Vec<serenity::AutocompleteChoice> {
+        vec![serenity::AutocompleteChoice::new(
+            format!("Selection: {partial}s"),
+            partial,
+        )]
+    }
+
+    let partial = partial.parse::<u64>().unwrap_or_default();
+
+    let manager = ctx.data().songbird.clone();
+    let Ok(guild_info) = GuildInfo::from_ctx(ctx) else {
+        return template(partial).into_iter();
+    };
+    let current = manager.get(guild_info.guild_id);
+    if let Some(handler) = current {
+        let queue = handler.lock().await.queue().clone();
+        drop(handler);
+        let Some(current) = queue.current() else {
+            return template(partial).into_iter();
+        };
+
+        let Some(duration) = current.data::<YoutubeMetadata>().duration() else {
+            return vec![].into_iter();
+        };
+        let current_duration = {
+            let Ok(track_state) = current.get_info().await else {
+                return template(partial).into_iter();
+            };
+
+            track_state.position.as_secs()
+        };
+        let max_duration = duration.as_secs() - 5;
+
+        let mut complete = template(partial);
+        complete.push(serenity::AutocompleteChoice::new(
+            format!("Max: {max_duration}s | Current: {current_duration}s"),
+            max_duration,
+        ));
+
+        // indicate if less
+        if partial <= current_duration {
+            complete.push(serenity::AutocompleteChoice::new(
+                format!("ERROR: {partial}s is <= current position"),
+                partial,
+            ));
+        }
+
+        // indicate if more
+        if partial > max_duration {
+            complete.push(serenity::AutocompleteChoice::new(
+                format!("ERROR: {partial}s is > max position"),
+                partial,
+            ));
+        }
+
+        complete.into_iter()
+    } else {
+        template(partial).into_iter()
+    }
 }
 
 /// Loops the current track. Leave empty for an indefinite loop.
