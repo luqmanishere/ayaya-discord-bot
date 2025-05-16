@@ -53,6 +53,7 @@
             pkg-config
             sea-orm-cli
             just
+            git-cliff
           ];
           buildInputs = with pkgs; [iconv.dev libopus.dev cargo-shuttle openssl];
         };
