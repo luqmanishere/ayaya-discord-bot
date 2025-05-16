@@ -1,7 +1,5 @@
 //! This module contains commands used to manipulate playback
-use std::cmp::Ordering;
 
-use ::serenity::{futures::TryFutureExt, FutureExt};
 use poise::serenity_prelude as serenity;
 
 use crate::{
@@ -228,11 +226,7 @@ pub async fn seek(
                             position: secs,
                         })?;
 
-                    let new_track_info = if let Ok(track_info) = track.get_info().await {
-                        Some(track_info)
-                    } else {
-                        None
-                    };
+                    let new_track_info = track.get_info().await.ok();
 
                     let embed = metadata_to_embed(
                         utils::EmbedOperation::Seek(secs),
