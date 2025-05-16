@@ -547,7 +547,6 @@ dependencies = [
  "axum-auth",
  "base64 0.22.1",
  "bincode",
- "dotenvy",
  "entity",
  "entity-sqlite",
  "humantime",
@@ -594,7 +593,6 @@ version = "0.11.0"
 dependencies = [
  "anyhow",
  "ayaya-lib",
- "miette",
  "shuttle-runtime",
 ]
 
@@ -1510,7 +1508,6 @@ dependencies = [
 name = "entity-sqlite"
 version = "0.1.0"
 dependencies = [
- "bincode",
  "sea-orm",
 ]
 
