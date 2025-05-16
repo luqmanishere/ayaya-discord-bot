@@ -40,11 +40,16 @@ impl PlayParse {
         };
 
         if new_input.starts_with("http") {
+            let url = url::Url::parse(&new_input).unwrap();
+            let pairs = url.query_pairs().filter(|(name, _)| !name.eq("si"));
+            let mut url = url.clone();
+            url.query_pairs_mut().clear().extend_pairs(pairs);
+
             if new_input.contains("playlist") {
-                return Self::PlaylistUrl(new_input.to_string());
+                return Self::PlaylistUrl(url.to_string());
             }
 
-            Self::Url(new_input.to_string())
+            Self::Url(url.to_string())
         } else {
             Self::Search(new_input.to_string())
         }
