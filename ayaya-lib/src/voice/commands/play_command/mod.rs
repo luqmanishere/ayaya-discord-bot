@@ -50,7 +50,7 @@ pub async fn play(
     // convert vec to a string
     let url = query.join(" ").trim().to_string();
 
-    ctx.defer().await?;
+    ctx.defer_or_broadcast().await?;
 
     play_inner(ctx, url, false).await?;
     Ok(())

@@ -16,7 +16,7 @@ use crate::{
         commands::play_command::youtube,
         error::MusicCommandError,
         events::TrackPlayNotifier,
-        utils::{self, metadata_to_embed, YoutubeMetadata},
+        utils::{self, metadata_to_embed, playlist_to_embed, YoutubeMetadata},
     },
     Context,
 };
@@ -108,13 +108,11 @@ impl PlayParse {
             }
             PlayParse::PlaylistUrl(ref playlist_url) => {
                 info!("using provided playlist link: {playlist_url}");
-                ctx.reply("Handling playlist....").await?;
 
                 let (mut playlist, playlist_info) =
                     youtube::YoutubeDl::new_playlist(ctx.data().http.clone(), playlist_url.clone())
                         .await?;
 
-                // TODO: broadcast playlist info
                 if let Some(playlist_info) = playlist_info {
                     tracing::warn!("adding playlist info");
                     ctx.data()
@@ -125,9 +123,18 @@ impl PlayParse {
                             ctx.author(),
                             playlist_url.to_string(),
                             self.to_string(),
-                            playlist_info.title.unwrap_or_default(),
+                            playlist_info.title.clone().unwrap_or_default(),
                         )
                         .await?;
+
+                    // broadcast playlist info
+                    let embed = playlist_to_embed(
+                        &utils::EmbedOperation::NewPlaylist,
+                        &playlist_info,
+                        Some(ctx.author()),
+                    );
+
+                    ctx.send(poise::CreateReply::default().embed(embed)).await?;
                 } else {
                     tracing::error!("no playlist info");
                 }

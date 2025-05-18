@@ -6,7 +6,7 @@ use std::time::Duration;
 use ::serenity::all::Mentionable;
 use poise::serenity_prelude as serenity;
 use songbird::constants::SAMPLE_RATE_RAW;
-use youtube_dl::{SearchOptions, SingleVideo, YoutubeDlOutput};
+use youtube_dl::{Playlist, SearchOptions, SingleVideo, YoutubeDlOutput};
 
 use crate::{utils::OptionExt, BotError, Context};
 
@@ -173,6 +173,7 @@ pub enum EmbedOperation {
     StopLoop,
     Seek(u64),
     MoveInQueue { source: usize, target: usize },
+    NewPlaylist,
 }
 
 impl std::fmt::Display for EmbedOperation {
@@ -188,6 +189,7 @@ impl std::fmt::Display for EmbedOperation {
             EmbedOperation::StopLoop => "Stop Track Loop",
             EmbedOperation::Seek(_) => "Seek",
             EmbedOperation::MoveInQueue { .. } => "Queue Item Moved",
+            EmbedOperation::NewPlaylist => "New Playlist",
         };
         write!(f, "{out}")
     }
@@ -405,4 +407,40 @@ pub async fn create_search_interaction(
             .await?;
     }
     Err(MusicCommandError::SearchTimeout.into())
+}
+
+pub fn playlist_to_embed(
+    operation: &EmbedOperation,
+    playlist: &Playlist,
+    requester: Option<&serenity::User>,
+) -> serenity::CreateEmbed {
+    let mut description = serenity::MessageBuilder::default();
+    description.push_line(format!(
+        "### {}",
+        playlist.title.clone().unwrap_or_unknown()
+    ));
+
+    let mut embed = embed_template(operation).description(description.to_string());
+
+    embed = embed.fields([(
+        "Uploader",
+        playlist.uploader.clone().unwrap_or_unknown(),
+        true,
+    )]);
+
+    if let Some(requester) = requester {
+        embed = embed.fields([("Requester", requester.mention().to_string(), true)])
+    }
+
+    let thumbnail = match playlist.thumbnails.clone().unwrap_or_default().first() {
+        Some(thumbnail) => thumbnail
+            .url
+            .clone()
+            .unwrap_or("https://cdn-icons-png.freepik.com/512/107/107817.png".to_string()),
+        None => "https://cdn-icons-png.freepik.com/512/107/107817.png".to_string(),
+    };
+
+    embed = embed.thumbnail(thumbnail);
+
+    embed
 }
