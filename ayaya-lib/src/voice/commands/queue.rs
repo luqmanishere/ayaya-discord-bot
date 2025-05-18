@@ -9,7 +9,7 @@ use crate::{
     utils::{get_guild_id, ChannelInfo, GuildInfo, OptionExt},
     voice::{
         error::MusicCommandError,
-        utils::{self, embed_template, metadata_to_embed, YoutubeMetadata},
+        utils::{self, metadata_to_embed, YoutubeMetadata},
     },
     CommandResult, Context,
 };
@@ -385,7 +385,7 @@ pub async fn queue_move(
                     queue_mut.insert(target_index, item);
                     tracing::info!("moved index {index} to {target_index}");
 
-                    return Some(data);
+                    Some(data)
                 } else {
                     None
                 }
