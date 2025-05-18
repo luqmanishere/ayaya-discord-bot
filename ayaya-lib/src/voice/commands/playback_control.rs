@@ -8,7 +8,8 @@ use crate::{
     voice::{
         error::MusicCommandError,
         utils::{self, metadata_to_embed, YoutubeMetadata},
-    }, Context,
+    },
+    Context,
 };
 
 /// Pause the party. Time is frozen in this bubble universe."
