@@ -172,6 +172,7 @@ pub enum EmbedOperation {
     LoopIndefinite,
     StopLoop,
     Seek(u64),
+    MoveInQueue { source: usize, target: usize },
 }
 
 impl std::fmt::Display for EmbedOperation {
@@ -186,9 +187,31 @@ impl std::fmt::Display for EmbedOperation {
             EmbedOperation::LoopIndefinite => "Indefinite Track Loop",
             EmbedOperation::StopLoop => "Stop Track Loop",
             EmbedOperation::Seek(_) => "Seek",
+            EmbedOperation::MoveInQueue { .. } => "Queue Item Moved",
         };
         write!(f, "{out}")
     }
+}
+
+/// Template for all embeds
+pub fn embed_template(operation: &EmbedOperation) -> serenity::CreateEmbed {
+    serenity::CreateEmbed::default()
+        .author(
+            serenity::CreateEmbedAuthor::new(format!("{}", operation)).icon_url(
+                "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
+            ),
+        )
+        .timestamp(serenity::Timestamp::now())
+        .footer(serenity::CreateEmbedFooter::new("Ayaya Discord Bot"))
+        .color(match operation {
+            EmbedOperation::YoutubeSearch | EmbedOperation::DeleteFromQueue => serenity::Color::RED,
+            EmbedOperation::AddToQueue => serenity::Color::MEIBE_PINK,
+            EmbedOperation::NowPlayingNotification | EmbedOperation::NowPlaying => {
+                serenity::Color::DARK_GREEN
+            }
+            EmbedOperation::SkipSong => serenity::Color::ORANGE,
+            _ => serenity::Color::MEIBE_PINK,
+        })
 }
 
 // TODO: extract static pictures out to somewhere
@@ -205,17 +228,17 @@ pub fn metadata_to_embed(
         metadata.title.clone().unwrap_or_unknown()
     ));
 
-    if let EmbedOperation::Seek(secs) = operation {
-        description.push_line(format!("Track seeked to {secs} seconds"));
+    match operation {
+        EmbedOperation::Seek(secs) => {
+            description.push_line(format!("Track seeked to {secs} seconds"));
+        }
+        EmbedOperation::MoveInQueue { source, target } => {
+            description.push_line(format!("Queue item {source} is moved to {target}"));
+        }
+        _ => (),
     };
 
-    let mut embed = serenity::CreateEmbed::default()
-        .author(
-            serenity::CreateEmbedAuthor::new(format!("{} | Youtube Video", operation)).icon_url(
-                "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
-            ),
-        )
-        .description(description.to_string());
+    let mut embed = embed_template(&operation).description(description.to_string());
 
     embed = embed.fields([
         (
@@ -271,25 +294,13 @@ pub fn metadata_to_embed(
         }
     }
 
-    embed = embed
-        .thumbnail(
-            metadata
-                .thumbnail
-                .clone()
-                // thumbnail or broken
-                .unwrap_or("https://cdn-icons-png.freepik.com/512/107/107817.png".to_string()),
-        )
-        .timestamp(serenity::Timestamp::now())
-        .footer(serenity::CreateEmbedFooter::new("Ayaya Discord Bot"))
-        .color(match operation {
-            EmbedOperation::YoutubeSearch | EmbedOperation::DeleteFromQueue => serenity::Color::RED,
-            EmbedOperation::AddToQueue => serenity::Color::MEIBE_PINK,
-            EmbedOperation::NowPlayingNotification | EmbedOperation::NowPlaying => {
-                serenity::Color::DARK_GREEN
-            }
-            EmbedOperation::SkipSong => serenity::Color::ORANGE,
-            _ => serenity::Color::MEIBE_PINK,
-        });
+    embed = embed.thumbnail(
+        metadata
+            .thumbnail
+            .clone()
+            // thumbnail or broken
+            .unwrap_or("https://cdn-icons-png.freepik.com/512/107/107817.png".to_string()),
+    );
 
     embed
 }

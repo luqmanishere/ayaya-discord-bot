@@ -29,6 +29,7 @@ pub fn voice_commands() -> Commands {
         ting(),
         shuffle(),
         shuffle_play(),
+        queue_move(),
     ]
 }
 

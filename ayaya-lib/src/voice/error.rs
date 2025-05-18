@@ -262,6 +262,14 @@ pub enum MusicCommandError {
         voice_channel_info: ChannelInfo,
         count: Option<usize>,
     },
+    #[error("Cannot mutate position 1 in the queue.")]
+    #[diagnostic(help(
+        "To move to the next song position, use position 2. Or leave the target empty."
+    ))]
+    QueueMoveNoPos1 {
+        guild_info: GuildInfo,
+        voice_channel_info: ChannelInfo,
+    },
 }
 
 impl ErrorName for MusicCommandError {
@@ -293,6 +301,7 @@ impl ErrorName for MusicCommandError {
             MusicCommandError::SearchTimeout => "search_timeout",
             MusicCommandError::EmptySource => "empty_source",
             MusicCommandError::FailedTrackLoop { .. } => "failed_track_loop",
+            MusicCommandError::QueueMoveNoPos1 { .. } => "queue_move_no_pos1",
         };
         format!("music::{name}")
     }

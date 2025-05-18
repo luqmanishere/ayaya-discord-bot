@@ -9,7 +9,7 @@ use crate::{
     utils::{get_guild_id, ChannelInfo, GuildInfo, OptionExt},
     voice::{
         error::MusicCommandError,
-        utils::{self, metadata_to_embed, YoutubeMetadata},
+        utils::{self, embed_template, metadata_to_embed, YoutubeMetadata},
     },
     CommandResult, Context,
 };
@@ -325,4 +325,86 @@ async fn queue_pagination_interaction(
     }
     // TODO: its own error
     Err(MusicCommandError::SearchTimeout.into())
+}
+
+/// Swap item positions in queue. Use the queue command to view the queue
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
+pub async fn queue_move(
+    ctx: Context<'_>,
+    #[description = "The item that is going to be moved. Position 1 is unchangable."]
+    original_position: u64,
+    #[description = "The target position. Leave to move to next position. Position 1 is unchangeable."]
+    target_position: Option<u64>,
+) -> CommandResult {
+    ctx.defer_or_broadcast().await?;
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = &ctx.data().songbird;
+
+    if let Some(handler) = manager.get(guild_info.guild_id) {
+        let handler = handler.lock().await;
+        let voice_channel_info =
+            ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
+                .await?;
+
+        let queue = handler.queue();
+        let queue_len = queue.len();
+        tracing::warn!("Queue length: {queue_len}");
+
+        // calculate the indexes
+        let index = (original_position - 1) as usize;
+        let target_position = target_position.unwrap_or(2);
+        let target_index = (target_position - 1) as usize;
+
+        // error out if any index is 1, number 1 cannot be changed in any way
+        if index == 0 || target_index == 0 {
+            return Err(MusicCommandError::QueueMoveNoPos1 {
+                guild_info,
+                voice_channel_info,
+            }
+            .into());
+        }
+
+        // error out if selection is out of bounds
+        if index > queue_len || original_position == 0 {
+            return Err(MusicCommandError::QueueOutOfBounds {
+                index,
+                guild_info,
+                voice_channel_info,
+            }
+            .into());
+        }
+
+        // we have checked the index earlier, so this should not panic
+        let data = queue
+            .modify_queue(|queue_mut| -> Option<std::sync::Arc<YoutubeMetadata>> {
+                if let Some(item) = queue_mut.remove(index) {
+                    let data = item.data::<YoutubeMetadata>();
+
+                    queue_mut.insert(target_index, item);
+                    tracing::info!("moved index {index} to {target_index}");
+
+                    return Some(data);
+                } else {
+                    None
+                }
+            })
+            .expect("index was valid");
+
+        // notify
+        let embed = metadata_to_embed(
+            utils::EmbedOperation::MoveInQueue {
+                source: original_position as usize,
+                target: target_position as usize,
+            },
+            &data,
+            None,
+        );
+
+        ctx.send(poise::CreateReply::default().embed(embed)).await?;
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+    Ok(())
 }

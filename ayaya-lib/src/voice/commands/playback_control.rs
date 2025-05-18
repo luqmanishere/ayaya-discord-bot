@@ -9,7 +9,7 @@ use crate::{
         error::MusicCommandError,
         utils::{self, metadata_to_embed, YoutubeMetadata},
     },
-    Context,
+    CommandResult, Context,
 };
 
 /// Pause the party. Time is frozen in this bubble universe."
