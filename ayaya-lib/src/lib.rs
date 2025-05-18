@@ -388,7 +388,8 @@ async fn event_handler(
 /// Pong!
 #[poise::command(prefix_command, slash_command)]
 async fn ping(ctx: Context<'_>) -> Result<(), BotError> {
-    ctx.reply("Pong!").await?;
+    let ping = ctx.ping().await;
+    ctx.reply(format!("Pong! {}ms", ping.as_millis())).await?;
 
     Ok(())
 }
