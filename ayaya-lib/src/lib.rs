@@ -1,7 +1,9 @@
 #![deny(clippy::allow_attributes)]
+#![expect(clippy::result_large_err)]
+
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader, ErrorKind, Read},
+    io::{BufRead, BufReader, Read},
     path::PathBuf,
     str::FromStr,
     sync::Arc,
@@ -365,7 +367,7 @@ async fn event_handler(
                 .expect("yt-dlp runs");
             let stderr = child
                 .stderr
-                .ok_or_else(|| std::io::Error::new(ErrorKind::Other, "Could not capture stdout"))
+                .ok_or_else(|| std::io::Error::other("Could not capture stdout"))
                 .expect("cant get yt-dlp stdout");
 
             let reader = BufReader::new(stderr);
