@@ -30,6 +30,7 @@ pub fn voice_commands() -> Commands {
         shuffle(),
         shuffle_play(),
         queue_move(),
+        play_next(),
     ]
 }
 
@@ -55,7 +56,8 @@ pub fn voice_commands() -> Commands {
         "deafen",
         "delete",
         "loop_track",
-        "stop_loop"
+        "stop_loop",
+        "play_next"
     ),
     aliases("m")
 )]

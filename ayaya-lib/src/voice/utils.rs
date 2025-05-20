@@ -164,6 +164,7 @@ pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMe
 pub enum EmbedOperation {
     YoutubeSearch,
     AddToQueue,
+    AddToQueueNext,
     NowPlayingNotification,
     NowPlaying,
     SkipSong,
@@ -174,6 +175,7 @@ pub enum EmbedOperation {
     Seek(u64),
     MoveInQueue { source: usize, target: usize },
     NewPlaylist,
+    NewPlaylistNext,
 }
 
 impl std::fmt::Display for EmbedOperation {
@@ -181,6 +183,7 @@ impl std::fmt::Display for EmbedOperation {
         let out = match self {
             EmbedOperation::YoutubeSearch => "Search Result",
             EmbedOperation::AddToQueue => "Added to Queue",
+            EmbedOperation::AddToQueueNext => "Added to Queue - Next",
             EmbedOperation::NowPlayingNotification | EmbedOperation::NowPlaying => "Now Playing",
             EmbedOperation::SkipSong => "Skipping Song",
             EmbedOperation::DeleteFromQueue => "Delete From Queue",
@@ -189,7 +192,8 @@ impl std::fmt::Display for EmbedOperation {
             EmbedOperation::StopLoop => "Stop Track Loop",
             EmbedOperation::Seek(_) => "Seek",
             EmbedOperation::MoveInQueue { .. } => "Queue Item Moved",
-            EmbedOperation::NewPlaylist => "New Playlist",
+            EmbedOperation::NewPlaylist => "Added New Playlist",
+            EmbedOperation::NewPlaylistNext => "Added New Playlist - Next",
         };
         write!(f, "{out}")
     }

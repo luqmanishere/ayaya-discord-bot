@@ -56,7 +56,7 @@ impl PlayParse {
     }
 
     /// Handle the parsed input for play. Takes the poise context to facilitate communication
-    pub async fn run(self, ctx: Context<'_>, shuffle: bool) -> Result<(), BotError> {
+    pub async fn run(self, ctx: Context<'_>, shuffle: bool, next: bool) -> Result<(), BotError> {
         let manager = ctx.data().songbird.clone();
         let guild_id = get_guild_id(ctx)?;
         let calling_channel_id = ctx.channel_id();
@@ -129,7 +129,11 @@ impl PlayParse {
 
                     // broadcast playlist info
                     let embed = playlist_to_embed(
-                        &utils::EmbedOperation::NewPlaylist,
+                        if !next {
+                            &utils::EmbedOperation::NewPlaylist
+                        } else {
+                            &utils::EmbedOperation::NewPlaylistNext
+                        },
                         &playlist_info,
                         Some(ctx.author()),
                     );
@@ -148,7 +152,7 @@ impl PlayParse {
                 }
             }
         };
-        handle_sources(call, calling_channel_id, sources, ctx).await?;
+        handle_sources(call, calling_channel_id, sources, ctx, next).await?;
         Ok(())
     }
 }
@@ -165,13 +169,18 @@ impl std::fmt::Display for PlayParse {
 }
 
 /// Parses the input string and adds the result to the trackqueue
-pub async fn play_inner(ctx: Context<'_>, input: String, shuffle: bool) -> Result<(), BotError> {
+pub async fn play_inner(
+    ctx: Context<'_>,
+    input: String,
+    shuffle: bool,
+    next: bool,
+) -> Result<(), BotError> {
     let input_type = PlayParse::parse(ctx, &input);
 
     // join a channel first
     join_inner(ctx, false).await?;
 
-    input_type.run(ctx, shuffle).await
+    input_type.run(ctx, shuffle, next).await
 }
 
 /// Inserts a youtube source, sets events and notifies the calling channel
@@ -179,8 +188,9 @@ pub async fn play_inner(ctx: Context<'_>, input: String, shuffle: bool) -> Resul
 async fn handle_sources(
     call: Option<Arc<Mutex<songbird::Call>>>,
     calling_channel_id: serenity::ChannelId,
-    sources: Vec<youtube::YoutubeDl>,
+    mut sources: Vec<youtube::YoutubeDl>,
     ctx: Context<'_>,
+    next: bool,
 ) -> Result<(), BotError> {
     let stats = ctx.data().data_manager.stats();
     let guild_info = GuildInfo::from_ctx(ctx)?;
@@ -196,13 +206,25 @@ async fn handle_sources(
                 stats,
                 user.clone(),
                 guild_info.guild_id,
+                next,
             )
             .await?;
 
-            let embed = metadata_to_embed(utils::EmbedOperation::AddToQueue, &metadata, None);
+            let embed = metadata_to_embed(
+                if !next {
+                    utils::EmbedOperation::AddToQueue
+                } else {
+                    utils::EmbedOperation::AddToQueueNext
+                },
+                &metadata,
+                None,
+            );
             ctx.send(poise::CreateReply::default().embed(embed)).await?;
         }
         _num if _num > 1 => {
+            if next {
+                sources.reverse()
+            };
             for source in sources {
                 insert_source(
                     source,
@@ -212,6 +234,7 @@ async fn handle_sources(
                     stats.clone(),
                     user.clone(),
                     guild_info.guild_id,
+                    next,
                 )
                 .await?;
             }
@@ -226,6 +249,7 @@ async fn handle_sources(
 
 /// Process the given source, obtain its metadata and handle track insertion with events. This
 /// function is made to be used with tokio::spawn
+#[expect(clippy::too_many_arguments)]
 #[tracing::instrument(skip(
     call,
     serenity_http,
@@ -243,6 +267,7 @@ async fn insert_source(
     stats: StatsManager,
     user: serenity::User,
     guild_id: serenity::GuildId,
+    next: bool,
 ) -> Result<YoutubeMetadata, BotError> {
     // TODO: rework this entire thing
     info!("Gathering metadata for source");
@@ -298,7 +323,17 @@ async fn insert_source(
                     metadata.title.clone().unwrap_or_unknown(),
                     metadata.channel.clone().unwrap_or_unknown()
                 );
-                // Logging added playlist in discord will be annoyying af
+
+                if next {
+                    handler.queue().modify_queue(|queue| {
+                        if queue.len() > 1 {
+                            if let Some(track) = queue.pop_back() {
+                                queue.insert(1, track);
+                            }
+                        }
+                    });
+                }
+
                 Ok(youtube)
             } else {
                 error!("Call does not exist...");

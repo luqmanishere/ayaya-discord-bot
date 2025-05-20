@@ -329,7 +329,13 @@ async fn queue_pagination_interaction(
 
 /// Swap item positions in queue. Use the queue command to view the queue
 #[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
-#[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    aliases("qm"),
+    category = "Music"
+)]
 pub async fn queue_move(
     ctx: Context<'_>,
     #[description = "The item that is going to be moved. Position 1 is unchangable."]

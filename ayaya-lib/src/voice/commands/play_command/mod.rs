@@ -11,7 +11,7 @@ use crate::{
         error::MusicCommandError,
         utils::{create_search_interaction, yt_search},
     },
-    Context,
+    CommandResult, Context,
 };
 
 pub mod join;
@@ -52,7 +52,7 @@ pub async fn play(
 
     ctx.defer_or_broadcast().await?;
 
-    play_inner(ctx, url, false).await?;
+    play_inner(ctx, url, false, false).await?;
     Ok(())
 }
 
@@ -79,7 +79,7 @@ pub async fn shuffle_play(
 
     ctx.defer().await?;
 
-    play_inner(ctx, url, true).await?;
+    play_inner(ctx, url, true, false).await?;
     Ok(())
 }
 
@@ -109,7 +109,7 @@ pub async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<(), Bo
 
     match create_search_interaction(ctx, search).await {
         Ok(youtube_id) => {
-            play_inner(ctx, youtube_id, false).await?;
+            play_inner(ctx, youtube_id, false, false).await?;
         }
         Err(e) => {
             if let BotError::MusicCommandError(MusicCommandError::SearchTimeout) = e {
@@ -120,5 +120,30 @@ pub async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<(), Bo
         }
     };
 
+    Ok(())
+}
+
+/// Plays music from YT url or search term and put it on the next queue.
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    aliases("pn"),
+    guild_only,
+    category = "Music"
+)]
+pub async fn play_next(
+    ctx: Context<'_>,
+    #[description = "A url or a search term for youtube"]
+    #[min_length = 1]
+    #[autocomplete = "autocomplete_play"]
+    query: Vec<String>,
+) -> CommandResult {
+    // convert vec to a string
+    let url = query.join(" ").trim().to_string();
+
+    ctx.defer_or_broadcast().await?;
+
+    play_inner(ctx, url, false, true).await?;
     Ok(())
 }
