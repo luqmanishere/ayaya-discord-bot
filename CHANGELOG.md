@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2025-05-20
+
+### Added
+
+- Add command play_next
+- Add broadcast playlist info
+- Add move items in queue command
+
+### Changed
+
+- Make subcrates use workspace version
+- Ping command now shows api ping
+
+### Fixed
+
+- Clippy lints
+
+### Removed
+
+- Remove unneeded dependencies
+
 ## [0.11.0] - 2025-05-16
 
 ### Changed
@@ -290,6 +311,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Delete from queue
 - Remove unused workflow
 
+[0.12.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.11.0..v0.12.0
 [0.11.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.10.1..v0.11.0
 [0.10.1]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.10.0..v0.10.1
 [0.10.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.9.2..v0.10.0
