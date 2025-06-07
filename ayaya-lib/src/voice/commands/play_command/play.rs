@@ -178,7 +178,7 @@ pub async fn play_inner(
     let input_type = PlayParse::parse(ctx, &input);
 
     // join a channel first
-    join_inner(ctx, false).await?;
+    join_inner(ctx, false, false).await?;
 
     input_type.run(ctx, shuffle, next).await
 }

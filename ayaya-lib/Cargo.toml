@@ -2,6 +2,7 @@
 name = "ayaya-lib"
 version = { workspace = true }
 edition = "2021"
+rust-version = { workspace = true }
 
 [dependencies]
 # workspace deps
@@ -22,7 +23,7 @@ tracing = "0.1"
 tracing-error = { version = "0.2", features = ["traced-error"] }
 # color-eyre = "0.6"
 reqwest = { version = "0.12" }
-uuid = { version = "*", features = ["v7"] }
+uuid = { version = "*", features = ["v7", "v5"] }
 humantime = { version = "2" }
 youtube_dl = { version = "0.10", features = ["tokio"] }
 time = { version = "0.3", features = ["local-offset"] }
@@ -41,6 +42,8 @@ migration-sqlite = { path = "../migration-sqlite" }
 age = { version = "0.11" }
 lru-mem = { version = "0.3" }
 prometheus-client = { version = "0.22" }
+sha1_smol = { version = "1" }
+tempfile = { version = "3" }
 
 [dependencies.songbird]
 version = "0.5.0"

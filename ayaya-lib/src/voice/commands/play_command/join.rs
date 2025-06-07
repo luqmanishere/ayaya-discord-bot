@@ -18,7 +18,11 @@ use crate::{
 };
 
 #[tracing::instrument(skip(ctx))]
-pub async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), BotError> {
+pub async fn join_inner(
+    ctx: Context<'_>,
+    play_notify_flag: bool,
+    linger: bool,
+) -> Result<(), BotError> {
     let guild: serenity::Guild = get_guild(ctx)?;
     let guild_id = get_guild_id(ctx)?;
     let guild_info = GuildInfo::from_ctx(ctx)?;
@@ -127,7 +131,7 @@ pub async fn join_inner(ctx: Context<'_>, play_notify_flag: bool) -> Result<(), 
                             bot_user_id,
                             manager: ctx.data().songbird.clone(),
                             ctx: ctx.serenity_context().to_owned(),
-                            only_alone: false,
+                            only_alone: linger,
                         },
                     );
                 }

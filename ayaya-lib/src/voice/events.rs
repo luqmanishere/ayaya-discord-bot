@@ -56,14 +56,17 @@ pub struct BotInactiveCounter {
     pub only_alone: bool,
 }
 
-#[async_trait]
-impl VoiceEventHandler for BotInactiveCounter {
-    async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
-        // TODO: simplify
-        if let Some(handler_lock) = self.manager.get(self.guild_id) {
-            let handler = handler_lock.lock().await;
-            // TODO: clarify reasons for leaving, not playing or no listener
+enum Reason {
+    Alone,
+    PlaybackFinished,
+    #[expect(dead_code)]
+    Other(String),
+}
 
+impl BotInactiveCounter {
+    async fn check_inactive(&self) -> (bool, Option<Reason>) {
+        if let Some(handler) = self.manager.get(self.guild_id) {
+            // check if we are alone in the channel
             let alone_in_channel = {
                 match self.guild_id.to_guild_cached(&self.ctx) {
                     Some(guild) => {
@@ -74,48 +77,74 @@ impl VoiceEventHandler for BotInactiveCounter {
                 }
             };
 
-            let queue = handler.queue();
-            match queue.current() {
-                Some(track) => match track.get_info().await {
-                    Ok(track_state) => {
-                        if track_state.playing == PlayMode::End
-                            || (track_state.playing == PlayMode::Pause && !self.only_alone)
-                            || (track_state.playing == PlayMode::Stop && !self.only_alone)
-                            || alone_in_channel
-                        {
-                            let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
-                            info!(
-                                "Counter for channel {} in guild {} is {}/5",
-                                self.channel_id,
-                                self.guild_id,
-                                counter_before + 1
-                            );
-                        } else {
-                            self.counter.store(0, Ordering::Relaxed);
-                            info!(
-                                "Counter for channel {} in guild {} is reset to {}/5",
-                                self.channel_id,
-                                self.guild_id,
-                                self.counter.load(Ordering::Relaxed)
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        error!("unable to get track info: {e}")
-                    }
+            // skip queue checks if linger is on
+            if self.only_alone {
+                return (alone_in_channel, Some(Reason::Alone));
+            }
+
+            let queue = handler.lock().await.queue().clone();
+            let play_mode = match queue.current() {
+                Some(current) => match current.get_info().await {
+                    Ok(state) => Some(state.playing),
+                    Err(_) => None,
                 },
-                None => {
-                    let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
-                    info!(
-                        "Counter for channel {} in guild {} is {}/5",
-                        self.channel_id,
-                        self.guild_id,
-                        counter_before + 1
-                    );
-                }
+                None => None,
+            };
+
+            // if linger is not on, we leave when the bot stops playing
+            if let Some(PlayMode::Pause | PlayMode::Stop | PlayMode::End) = play_mode {
+                // leave only if alone
+                return (true, Some(Reason::PlaybackFinished));
+            }
+
+            // and finally, if we are alone, leave
+            if alone_in_channel {
+                (true, Some(Reason::Alone))
+            } else {
+                (false, None)
             }
         } else {
-            error!("Not in a voice channel?? TF????");
+            // if not in channel, leave
+            (true, None)
+        }
+    }
+}
+
+#[async_trait]
+impl VoiceEventHandler for BotInactiveCounter {
+    async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
+        // TODO: simplify
+        match self.check_inactive().await {
+            (true, reason) => {
+                let reason = if let Some(reason) = reason {
+                    format!(
+                        " Reason: {}",
+                        match reason {
+                            Reason::Alone => "Bot is alone",
+                            Reason::PlaybackFinished => "Playback is finished",
+                            Reason::Other(ref other) => other,
+                        }
+                    )
+                } else {
+                    String::default()
+                };
+                let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
+                info!(
+                    "Counter for channel {} in guild {} is {}/5{reason}",
+                    self.channel_id,
+                    self.guild_id,
+                    counter_before + 1
+                );
+            }
+            _ => {
+                self.counter.store(0, Ordering::Relaxed);
+                info!(
+                    "Counter for channel {} in guild {} is reset to {}/5",
+                    self.channel_id,
+                    self.guild_id,
+                    self.counter.load(Ordering::Relaxed)
+                );
+            }
         }
 
         let counter = self.counter.load(Ordering::Relaxed);

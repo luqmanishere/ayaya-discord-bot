@@ -1,6 +1,7 @@
 //! Manage database connection and caching
 //!
 pub mod permissions;
+pub mod sounds;
 pub mod stats;
 mod utils;
 
@@ -18,6 +19,7 @@ use sea_orm::{
     QuerySelect,
 };
 use sea_orm::{Database, DatabaseConnection};
+use sounds::SoundsManager;
 use stats::StatsManager;
 use time::UtcOffset;
 use utils::DataTiming;
@@ -43,6 +45,7 @@ pub struct DataManager {
     metrics_handler: Metrics,
     permissions: Permissions,
     stats: StatsManager,
+    sounds: SoundsManager,
     autocomplete_cache: Autocomplete,
 }
 
@@ -77,12 +80,14 @@ impl DataManager {
 
         let permissions = Permissions::new(db.clone(), metrics_handler.clone()).await?;
         let stats = StatsManager::new(stats_db.clone(), metrics_handler.clone());
+        let sounds = SoundsManager::new(stats_db.clone(), metrics_handler.clone());
         Ok(Self {
             db,
             stats_db,
             metrics_handler,
             permissions,
             stats,
+            sounds,
             autocomplete_cache: Arc::new(Mutex::new(LruCache::new(1000 * 1024))),
         })
     }
@@ -98,6 +103,15 @@ impl DataManager {
 
     pub fn stats(&self) -> StatsManager {
         self.stats.clone()
+    }
+
+    #[expect(dead_code)]
+    pub fn sounds_mut(&mut self) -> &mut SoundsManager {
+        &mut self.sounds
+    }
+
+    pub fn sounds(&self) -> SoundsManager {
+        self.sounds.clone()
     }
 
     /// Log command calls to the database. Will also increment the command counter.
@@ -376,6 +390,11 @@ pub mod error {
         FindSingleUsersSingleCommandCallError(DbErr),
         #[error("Database error in operation {operation}: {error}")]
         DatabaseError { operation: String, error: DbErr },
+        #[error("This sound is already present in the database for the user {user_id}. OP: {sound_name}")]
+        DuplicateSoundError {
+            sound_name: String,
+            user_id: poise::serenity_prelude::UserId,
+        },
     }
 
     impl ErrorName for DataError {
@@ -423,6 +442,7 @@ pub mod error {
                     "find_single_user_single_all_time_command_stats"
                 }
                 DataError::DatabaseError { operation, .. } => operation,
+                DataError::DuplicateSoundError { .. } => "duplicate_sound_error",
             };
             format!("data::{name}")
         }

@@ -5,6 +5,7 @@ use thiserror::Error;
 use crate::{
     error::ErrorName,
     utils::{ChannelInfo, GuildInfo},
+    voice::commands::soundboard::error::SoundboardError,
 };
 
 #[derive(Error, Diagnostic, Debug)]
@@ -270,6 +271,9 @@ pub enum MusicCommandError {
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
     },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SoundboardError(SoundboardError),
 }
 
 impl ErrorName for MusicCommandError {
@@ -302,6 +306,7 @@ impl ErrorName for MusicCommandError {
             MusicCommandError::EmptySource => "empty_source",
             MusicCommandError::FailedTrackLoop { .. } => "failed_track_loop",
             MusicCommandError::QueueMoveNoPos1 { .. } => "queue_move_no_pos1",
+            MusicCommandError::SoundboardError(error) => &ErrorName::name(error),
         };
         format!("music::{name}")
     }

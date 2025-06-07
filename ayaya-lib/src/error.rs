@@ -3,7 +3,11 @@ use poise::serenity_prelude as serenity;
 use thiserror::Error;
 use tracing::error;
 
-use crate::{metrics::ErrorType, voice::error::MusicCommandError, Data};
+use crate::{
+    metrics::ErrorType,
+    voice::{commands::soundboard::error::SoundboardError, error::MusicCommandError},
+    Data,
+};
 
 pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
     error!("error error error {}", error);
@@ -77,6 +81,15 @@ pub enum BotError {
     DownloadAttachmentError(serenity::Error),
     #[error("Error executing external command: {0}")]
     ExternalAsyncCommandError(tokio::io::Error),
+    #[error("Error executing external command: {0}")]
+    ExternalCommandError(std::io::Error),
+    #[error("Error accessing filesystem at: {} : {error}", path.display())]
+    FilesystemAccessError {
+        error: std::io::Error,
+        path: std::path::PathBuf,
+    },
+    #[error("Other error: {0}")]
+    OtherError(Box<std::io::Error>),
 }
 
 impl ErrorName for BotError {
@@ -92,8 +105,17 @@ impl ErrorName for BotError {
             BotError::DataManagerError(data_error) => &data_error.name(),
             BotError::DownloadAttachmentError(..) => "download_attachment_error",
             BotError::ExternalAsyncCommandError(..) => "external_async_commaand_error",
+            BotError::ExternalCommandError(..) => "external_command_error",
+            BotError::FilesystemAccessError { .. } => "filesystem_access_error",
+            BotError::OtherError(_) => "other_error",
         };
         format!("main::{name}")
+    }
+}
+
+impl From<SoundboardError> for BotError {
+    fn from(value: SoundboardError) -> Self {
+        MusicCommandError::SoundboardError(value).into()
     }
 }
 

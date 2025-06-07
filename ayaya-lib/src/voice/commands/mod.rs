@@ -2,6 +2,7 @@ use admin::*;
 use play_command::*;
 use playback_control::*;
 use queue::*;
+use soundboard::*;
 
 use crate::{error::BotError, Commands, Context};
 
@@ -9,6 +10,7 @@ mod admin;
 mod play_command;
 mod playback_control;
 mod queue;
+pub(crate) mod soundboard;
 
 pub fn voice_commands() -> Commands {
     vec![
@@ -31,6 +33,8 @@ pub fn voice_commands() -> Commands {
         shuffle_play(),
         queue_move(),
         play_next(),
+        upload_sound(),
+        play_sound(),
     ]
 }
 
@@ -72,7 +76,7 @@ pub async fn music(ctx: Context<'_>) -> Result<(), BotError> {
 
 #[poise::command(slash_command, prefix_command, hide_in_help, ephemeral)]
 pub async fn ting(ctx: Context<'_>) -> Result<(), BotError> {
-    join::join_inner(ctx, false).await?;
+    join::join_inner(ctx, false, true).await?;
 
     let manager = ctx.data().songbird.clone();
     let guild_id = crate::utils::get_guild_id(ctx)?;

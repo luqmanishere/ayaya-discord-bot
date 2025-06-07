@@ -3,17 +3,11 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "user_play_queries")]
+#[sea_orm(table_name = "upload_noticed")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub server_id: i64,
-    #[sea_orm(primary_key, auto_increment = false)]
     pub user_id: i64,
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub query: String,
-    pub query_type: String,
-    pub description: String,
-    pub count: i64,
+    pub agreed: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

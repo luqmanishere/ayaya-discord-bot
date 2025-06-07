@@ -27,8 +27,12 @@ mod youtube;
     aliases("j"),
     category = "Music"
 )]
-pub async fn join(ctx: Context<'_>) -> Result<(), BotError> {
-    join_inner(ctx, true).await
+pub async fn join(
+    ctx: Context<'_>,
+    #[description = "Linger mode: stay in the discord until everyone leaves, regardless on audio status"]
+    linger: Option<bool>,
+) -> Result<(), BotError> {
+    join_inner(ctx, true, linger.unwrap_or(false)).await
 }
 
 /// Plays music from YT url or search term. We are getting help from a higher being...

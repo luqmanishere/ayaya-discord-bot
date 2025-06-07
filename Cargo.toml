@@ -1,6 +1,7 @@
 [workspace.package]
 version = "0.12.0"
 edition = "2018"
+rust-version = "1.87.0"
 
 [workspace]
 resolver = "2"

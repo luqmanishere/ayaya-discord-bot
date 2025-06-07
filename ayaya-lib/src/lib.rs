@@ -69,7 +69,6 @@ pub struct Data {
     command_categories: Vec<String>,
     command_categories_map: HashMap<String, Option<String>>,
     ytdlp_config_path: PathBuf,
-    #[expect(dead_code)]
     data_dir: PathBuf,
     secret_key: String,
     #[expect(dead_code)]

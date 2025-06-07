@@ -49,12 +49,12 @@
             yt-dlp
             ffmpeg
             cmake
-            mold
             pkg-config
             sea-orm-cli
             just
             git-cliff
             cargo-edit
+            sqlite
           ];
           buildInputs = with pkgs; [iconv.dev libopus.dev cargo-shuttle openssl];
         };
