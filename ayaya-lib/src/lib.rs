@@ -1,5 +1,6 @@
 #![deny(clippy::allow_attributes)]
 #![expect(clippy::result_large_err)]
+#![deny(clippy::unwrap_used)]
 
 use std::{
     collections::HashMap,
@@ -414,7 +415,7 @@ async fn about(ctx: Context<'_>) -> Result<(), BotError> {
             let format = format_description::parse(
                 "[year]-[month]-[day] [hour repr:24 padding:zero]:[minute padding:zero]:[second padding:zero]",
             )
-            .unwrap();
+            .expect("unable to format date");
             let formatted = datetime.format(&format).unwrap_or("Unknown".to_string());
             infos.push(("Build Time", formatted.to_string(), true));
         }
@@ -488,14 +489,14 @@ async fn metrics_handler(
         return Response::builder()
             .status(StatusCode::UNAUTHORIZED)
             .body(Body::from("Unauthorized".to_string()))
-            .unwrap();
+            .expect("unable to build response");
     };
 
     let state = state.lock().await;
     let mut buffer = String::new();
     {
         let metrics_registry = state.metrics_registry.lock().await;
-        encode(&mut buffer, &metrics_registry).unwrap();
+        encode(&mut buffer, &metrics_registry).expect("unable to encode metrics");
     }
 
     Response::builder()
@@ -505,5 +506,5 @@ async fn metrics_handler(
             "application/openmetrics-text; version=1.0.0; charset=utf-8",
         )
         .body(Body::from(buffer))
-        .unwrap()
+        .expect("unable to build response")
 }

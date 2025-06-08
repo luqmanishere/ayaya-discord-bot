@@ -107,7 +107,7 @@ pub async fn upload_sound(
             temp_input_path.display().to_string().as_str(),
             outfile.display().to_string().as_str(),
         ])
-        .stdout(send.try_clone().unwrap())
+        .stdout(send.try_clone().expect("unable to clone pipe"))
         .stderr(send)
         .spawn()
         .map_err(BotError::ExternalCommandError)?;
@@ -117,7 +117,11 @@ pub async fn upload_sound(
         .map_err(|error| BotError::OtherError(Box::new(error)))?;
     tracing::debug!("ffmpeg{}", String::from_utf8(output).unwrap_or_default());
 
-    let success = command.wait().await.unwrap().success();
+    let success = command
+        .wait()
+        .await
+        .expect("error waiting for command")
+        .success();
 
     if !success {
         ctx.reply("Unable to add sound, not an audio file?").await?;

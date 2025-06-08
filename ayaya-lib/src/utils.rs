@@ -42,7 +42,7 @@ pub fn songbird_channel_to_serenity_channel(
     serenity::ChannelId::from(channel_id)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GuildInfo {
     pub guild_name: String,
     pub guild_id: serenity::GuildId,

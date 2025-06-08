@@ -26,10 +26,10 @@ pub async fn pause(ctx: Context<'_>, _args: String) -> Result<(), BotError> {
             ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
                 .await?;
         let queue = handler.queue();
-        let track_uuid = queue.current().unwrap().uuid();
+        let track_uuid = queue.current().expect("unable to get current track").uuid();
         let song_name = queue
             .current()
-            .unwrap()
+            .expect("unable to get current track")
             .data::<YoutubeMetadata>()
             .title
             .clone()
@@ -75,10 +75,10 @@ pub async fn resume(ctx: Context<'_>) -> Result<(), BotError> {
             ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
                 .await?;
         let queue = handler.queue();
-        let track_uuid = queue.current().unwrap().uuid();
+        let track_uuid = queue.current().expect("unable to get current track").uuid();
         let song_name = queue
             .current()
-            .unwrap()
+            .expect("unable to get current track")
             .data::<YoutubeMetadata>()
             .title
             .clone()
@@ -141,8 +141,11 @@ pub async fn skip(ctx: Context<'_>) -> Result<(), BotError> {
             ChannelInfo::from_songbird_current_channel(ctx, handler.current_channel(), &guild_info)
                 .await?;
         let queue = handler.queue();
-        let track_uuid = queue.current().unwrap().uuid();
-        let song_metadata = queue.current().unwrap().data::<YoutubeMetadata>();
+        let track_uuid = queue.current().expect("unable to get current track").uuid();
+        let song_metadata = queue
+            .current()
+            .expect("unable to get current track")
+            .data::<YoutubeMetadata>();
 
         queue
             .skip()

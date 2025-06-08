@@ -106,7 +106,7 @@ impl Permissions {
         let entry = {
             if let Some(entry) = self.permission_cache_access(&cache_key).await {
                 let (decoded, _): (Option<command_allow_user::Model>, _) =
-                    bincode::decode_from_slice(&entry, bincode::config::standard()).unwrap();
+                    bincode::decode_from_slice(&entry, bincode::config::standard())?;
                 decoded
             } else {
                 let model = CommandAllowUser::find()
@@ -116,7 +116,7 @@ impl Permissions {
                     .one(&self.db)
                     .map_err(|error| DataError::FindAllowedUserError { error })
                     .await?;
-                let encode = bincode::encode_to_vec(&model, bincode::config::standard()).unwrap();
+                let encode = bincode::encode_to_vec(&model, bincode::config::standard())?;
                 self.permission_cache_insert(cache_key, encode).await;
                 model
             }
@@ -157,7 +157,7 @@ impl Permissions {
         let entry = {
             if let Some(entry) = self.permission_cache_access(&cache_key).await {
                 let (decoded, _): (Vec<require_command_role::Model>, _) =
-                    bincode::decode_from_slice(&entry, bincode::config::standard()).unwrap();
+                    bincode::decode_from_slice(&entry, bincode::config::standard())?;
                 decoded
             } else {
                 let model = RequireCommandRole::find()
@@ -208,7 +208,7 @@ impl Permissions {
         let entry = {
             if let Some(entry) = self.permission_cache_access(&cache_key).await {
                 let (decoded, _): (Vec<require_category_role::Model>, _) =
-                    bincode::decode_from_slice(&entry, bincode::config::standard()).unwrap();
+                    bincode::decode_from_slice(&entry, bincode::config::standard())?;
                 decoded
             } else {
                 let model = RequireCategoryRole::find()

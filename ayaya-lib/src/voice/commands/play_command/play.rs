@@ -40,7 +40,8 @@ impl PlayParse {
         };
 
         if new_input.starts_with("http") {
-            let url = url::Url::parse(&new_input).unwrap();
+            // TODO: err
+            let url = url::Url::parse(&new_input).expect("unable to parse url");
             let pairs = url.query_pairs().filter(|(name, _)| !name.eq("si"));
             let mut url = url.clone();
             url.query_pairs_mut().clear().extend_pairs(pairs);
@@ -317,7 +318,7 @@ async fn insert_source(
                             http: serenity_http_clone,
                         },
                     )
-                    .unwrap();
+                    .map_err(|error| MusicCommandError::FailedAddEvent { error })?;
                 info!(
                     "Added track {} ({}) to channel {calling_channel_id}",
                     metadata.title.clone().unwrap_or_unknown(),
@@ -353,7 +354,7 @@ pub async fn autocomplete_play(
     ctx: Context<'_>,
     partial: &str,
 ) -> impl Iterator<Item = serenity::AutocompleteChoice> {
-    let guild_id = GuildInfo::from_ctx(ctx).unwrap().guild_id;
+    let guild_id = GuildInfo::from_ctx(ctx).unwrap_or_default().guild_id;
     let user = ctx.author();
     // make all comparisons lowercase == easier comparisons
     let partial = partial.to_lowercase();
@@ -365,7 +366,7 @@ pub async fn autocomplete_play(
         .stats()
         .get_user_play_queries(guild_id.get(), user)
         .await
-        .unwrap();
+        .expect("unable to get play history");
 
     // sort then reverse, so the most common sits above
     completions.sort_by_key(|e| e.count);

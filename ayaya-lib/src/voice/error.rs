@@ -274,6 +274,10 @@ pub enum MusicCommandError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     SoundboardError(SoundboardError),
+    #[error("Failed to add queue event: {error}")]
+    FailedAddEvent {
+        error: songbird::error::ControlError,
+    },
 }
 
 impl ErrorName for MusicCommandError {
@@ -307,6 +311,7 @@ impl ErrorName for MusicCommandError {
             MusicCommandError::FailedTrackLoop { .. } => "failed_track_loop",
             MusicCommandError::QueueMoveNoPos1 { .. } => "queue_move_no_pos1",
             MusicCommandError::SoundboardError(error) => &ErrorName::name(error),
+            MusicCommandError::FailedAddEvent { .. } => "failed_add_event",
         };
         format!("music::{name}")
     }

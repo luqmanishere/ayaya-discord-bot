@@ -332,14 +332,18 @@ impl DataManager {
     pub fn add_autocomplete(&mut self, key: String, value: String) {
         self.autocomplete_cache
             .lock()
-            .unwrap()
+            .expect("is lock poisoned?")
             .insert(key, value)
             .expect("entries should not be too large");
     }
 
     /// Get the autocomplete entry
     pub fn get_autocomplete(&mut self, key: String) -> Option<String> {
-        self.autocomplete_cache.lock().unwrap().get(&key).cloned()
+        self.autocomplete_cache
+            .lock()
+            .expect("is lock poisoned")
+            .get(&key)
+            .cloned()
     }
 }
 
@@ -395,6 +399,10 @@ pub mod error {
             sound_name: String,
             user_id: poise::serenity_prelude::UserId,
         },
+        #[error(transparent)]
+        BincodeDecodeError(#[from] bincode::error::DecodeError),
+        #[error(transparent)]
+        BincodeEncodeError(#[from] bincode::error::EncodeError),
     }
 
     impl ErrorName for DataError {
@@ -443,6 +451,8 @@ pub mod error {
                 }
                 DataError::DatabaseError { operation, .. } => operation,
                 DataError::DuplicateSoundError { .. } => "duplicate_sound_error",
+                DataError::BincodeDecodeError(..) => "bincode_decode_error",
+                DataError::BincodeEncodeError(..) => "bincode_encode_error",
             };
             format!("data::{name}")
         }
