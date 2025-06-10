@@ -116,12 +116,42 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_table(
+                Table::create()
+                    .table(RequireCategoryRole::Table)
+                    .if_not_exists()
+                    .col(pk_uuid(RequireCategoryRole::EntryId))
+                    .col(big_unsigned(RequireCategoryRole::ServerId).not_null())
+                    .col(big_unsigned(RequireCategoryRole::RoleId).not_null())
+                    .col(string(RequireCategoryRole::Category).not_null())
+                    .index(
+                        Index::create()
+                            .col(RequireCategoryRole::ServerId)
+                            .col(RequireCategoryRole::RoleId)
+                            .col(RequireCategoryRole::Category)
+                            .unique(),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(YoutubeCookies::Table)
+                    .if_not_exists()
+                    .col(pk_auto(YoutubeCookies::EntryId))
+                    .col(timestamp_with_time_zone(YoutubeCookies::Date))
+                    .col(blob(YoutubeCookies::Cookies))
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Replace the sample below with your own migration scripts
-
         manager
             .drop_table(Table::drop().table(BanUserCommandUse::Table).to_owned())
             .await?;
@@ -148,7 +178,17 @@ impl MigrationTrait for Migration {
 
         manager
             .drop_table(Table::drop().table(BanShitMusic::Table).to_owned())
-            .await
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(RequireCategoryRole::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(YoutubeCookies::Table).to_owned())
+            .await?;
+
+        Ok(())
     }
 }
 
@@ -219,4 +259,21 @@ enum CommandCallLog {
     UserId,
     Command,
     CommandTimeStamp,
+}
+
+#[derive(DeriveIden)]
+enum RequireCategoryRole {
+    Table,
+    EntryId,
+    ServerId,
+    RoleId,
+    Category,
+}
+
+#[derive(DeriveIden)]
+enum YoutubeCookies {
+    Table,
+    EntryId,
+    Date,
+    Cookies,
 }

@@ -547,12 +547,10 @@ dependencies = [
  "axum-auth",
  "base64 0.22.1",
  "bincode",
- "entity",
  "entity-sqlite",
  "humantime",
  "lru-mem",
  "miette",
- "migration",
  "migration-sqlite",
  "poise",
  "prometheus-client",
@@ -1499,17 +1497,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "entity"
-version = "0.12.0"
-dependencies = [
- "bincode",
- "sea-orm",
-]
-
-[[package]]
 name = "entity-sqlite"
 version = "0.12.0"
 dependencies = [
+ "bincode",
  "sea-orm",
 ]
 
@@ -3806,14 +3797,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.101",
-]
-
-[[package]]
-name = "migration"
-version = "0.12.0"
-dependencies = [
- "async-std",
- "sea-orm-migration",
 ]
 
 [[package]]

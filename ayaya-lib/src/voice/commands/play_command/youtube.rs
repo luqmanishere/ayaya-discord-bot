@@ -202,7 +202,7 @@ impl YoutubeDl {
             // .extra_arg("-4")
             // commentd out to try fix dropped args
             // .extra_arg("--extractor-args")
-            // .extra_arg("youtube:player_client=web_creator,mweb")
+            // .extra_arg("youtube:player_client=tv,ios")
             .process_timeout(std::time::Duration::from_secs(45)) // the length of a youtube ad
             .run_async()
             .await

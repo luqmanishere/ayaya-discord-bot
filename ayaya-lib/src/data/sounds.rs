@@ -1,9 +1,6 @@
 use entity_sqlite::prelude::*;
 use poise::serenity_prelude as serenity;
-use sea_orm::prelude::*;
-use sea_orm::ActiveValue;
-use sea_orm::DatabaseConnection;
-use sea_orm::IntoActiveModel;
+use sea_orm::{prelude::*, ActiveValue, DatabaseConnection, IntoActiveModel};
 
 use crate::data::error::DataError;
 use crate::data::utils::DataTiming;
@@ -199,15 +196,11 @@ impl SoundsManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::*;
 
-    use migration::MigratorTrait;
     use migration_sqlite::Migrator as SqliteMigrator;
-    use poise::serenity_prelude as serenity;
+    use migration_sqlite::MigratorTrait;
     use sea_orm::Database;
-
-    const GUILD_ID: u64 = 594465820151644180;
-    const USER_ID_1: serenity::UserId = serenity::UserId::new(594465820151644181);
-    const USER_ID_2: serenity::UserId = serenity::UserId::new(594465820151644182);
 
     async fn get_manager() -> SoundsManager {
         let db = Database::connect("sqlite::memory:").await.unwrap();
@@ -224,7 +217,7 @@ mod tests {
         manager
             .add_sound(
                 &USER_ID_1,
-                GUILD_ID,
+                GUILD_ID_1,
                 sound_id,
                 "Example 1".to_string(),
                 None,
@@ -240,7 +233,7 @@ mod tests {
         let sound_id = uuid::Uuid::new_v4();
 
         manager
-            .add_sound(&USER_ID_1, GUILD_ID, sound_id, "Ex".to_string(), None)
+            .add_sound(&USER_ID_1, GUILD_ID_1, sound_id, "Ex".to_string(), None)
             .await
             .unwrap();
 
@@ -261,7 +254,7 @@ mod tests {
         manager
             .add_sound(
                 &USER_ID_1,
-                GUILD_ID,
+                GUILD_ID_1,
                 sound_id,
                 "Ex".to_string(),
                 Some(false),

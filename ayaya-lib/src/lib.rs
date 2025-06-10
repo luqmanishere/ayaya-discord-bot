@@ -44,6 +44,7 @@ use voice::voice_commands;
 use crate::voice::commands::music;
 
 pub(crate) mod admin;
+pub(crate) mod constants;
 pub(crate) mod data;
 pub(crate) mod error;
 pub(crate) mod memes;
@@ -229,7 +230,7 @@ async fn pre_command(ctx: poise::Context<'_, Data, BotError>) {
     let mut data_manager = ctx.data().data_manager.clone();
     tokio::spawn(async move {
         match data_manager
-            .log_command_call(guild_id, &author, command_name)
+            .log_command_call(guild_id, &author.id, command_name)
             .await
         {
             Ok(_) => {}
@@ -357,8 +358,8 @@ async fn event_handler(
             #[expect(clippy::zombie_processes)]
             let child = std::process::Command::new("yt-dlp")
                 .arg("-v")
-                .arg("--extractor-args")
-                .arg("youtube:player_client=web_creator,mweb")
+                // .arg("--extractor-args")
+                // .arg("youtube:player_client=web_creator,mweb")
                 .arg("-O")
                 .arg("title,channel")
                 .arg("https://www.youtube.com/watch?v=1aPOj0ERTEc")

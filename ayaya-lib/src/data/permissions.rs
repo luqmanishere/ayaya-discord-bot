@@ -7,7 +7,7 @@ use serenity::futures::TryFutureExt;
 use tokio::sync::Mutex;
 
 use crate::metrics::{DataOperationType, Metrics};
-use entity::prelude::*;
+use entity_sqlite::prelude::*;
 
 use super::{error::DataError, utils::DataTiming, DataResult};
 
@@ -83,7 +83,7 @@ impl Permissions {
         guild_id: u64,
         user_id: u64,
         command: &str,
-    ) -> DataResult<Option<entity::command_allow_user::Model>> {
+    ) -> DataResult<Option<entity_sqlite::command_allow_user::Model>> {
         const OP: &str = "find_user_allowed";
         let _timing = DataTiming::new(
             OP.to_string(),
@@ -91,7 +91,7 @@ impl Permissions {
             Some(self.metrics_handler.clone()),
         );
 
-        use entity::command_allow_user;
+        use entity_sqlite::command_allow_user;
         self.metrics_handler
             .data_access(OP.to_string(), DataOperationType::Read)
             .await;
@@ -134,7 +134,7 @@ impl Permissions {
         &mut self,
         guild_id: u64,
         command: &str,
-    ) -> DataResult<Vec<entity::require_command_role::Model>> {
+    ) -> DataResult<Vec<entity_sqlite::require_command_role::Model>> {
         const OP: &str = "find_command_roles_allowed";
         let _timing = DataTiming::new(
             OP.to_string(),
@@ -142,7 +142,7 @@ impl Permissions {
             Some(self.metrics_handler.clone()),
         );
 
-        use entity::require_command_role;
+        use entity_sqlite::require_command_role;
         self.metrics_handler
             .data_access(OP.to_string(), DataOperationType::Read)
             .await;
@@ -185,7 +185,7 @@ impl Permissions {
         &mut self,
         guild_id: u64,
         command_category: &str,
-    ) -> DataResult<Vec<entity::require_category_role::Model>> {
+    ) -> DataResult<Vec<entity_sqlite::require_category_role::Model>> {
         const OP: &str = "find_category_roles_allowed";
         let _timing = DataTiming::new(
             OP.to_string(),
@@ -193,7 +193,7 @@ impl Permissions {
             Some(self.metrics_handler.clone()),
         );
 
-        use entity::require_category_role;
+        use entity_sqlite::require_category_role;
         self.metrics_handler
             .data_access(OP.to_string(), DataOperationType::Read)
             .await;
@@ -237,9 +237,9 @@ impl Permissions {
     pub async fn new_command_role_restriction(
         &mut self,
         guild_id: u64,
-        role: &serenity::Role,
+        role_id: &serenity::RoleId,
         command: &str,
-    ) -> DataResult<entity::require_command_role::Model> {
+    ) -> DataResult<entity_sqlite::require_command_role::Model> {
         const OP: &str = "new_command_role_restriction";
         let _timing = DataTiming::new(
             OP.to_string(),
@@ -250,19 +250,19 @@ impl Permissions {
             .data_access(OP, DataOperationType::Write)
             .await;
 
-        use entity::require_command_role;
+        use entity_sqlite::require_command_role;
         let existing = self
             .find_command_roles_allowed(guild_id, command)
             .await?
             .into_iter()
-            .find(|e| e.role_id == role.id.get());
+            .find(|e| e.role_id == role_id.get() as i64);
         if existing.is_some() {
             Err(DataError::NewCommandRoleRestrictionDuplicate)
         } else {
             let model = require_command_role::ActiveModel {
                 entry_id: sea_orm::ActiveValue::Set(Uuid::now_v7()),
-                server_id: sea_orm::ActiveValue::Set(guild_id),
-                role_id: sea_orm::ActiveValue::Set(role.id.get()),
+                server_id: sea_orm::ActiveValue::Set(guild_id as i64),
+                role_id: sea_orm::ActiveValue::Set(role_id.get() as i64),
                 command: sea_orm::ActiveValue::Set(command.to_string()),
             }
             .insert(&self.db)
@@ -291,9 +291,9 @@ impl Permissions {
     pub async fn new_category_role_restriction(
         &mut self,
         guild_id: u64,
-        role: &serenity::Role,
+        role_id: &serenity::RoleId,
         command_category: &str,
-    ) -> DataResult<entity::require_category_role::Model> {
+    ) -> DataResult<entity_sqlite::require_category_role::Model> {
         const OP: &str = "new_category_role_restriction";
         let _timing = DataTiming::new(
             OP.to_string(),
@@ -304,19 +304,19 @@ impl Permissions {
             .data_access(OP, DataOperationType::Write)
             .await;
 
-        use entity::require_category_role;
+        use entity_sqlite::require_category_role;
         let existing = self
             .find_category_roles_allowed(guild_id, command_category)
             .await?
             .into_iter()
-            .find(|e| e.role_id == role.id.get());
+            .find(|e| e.role_id == role_id.get() as i64);
         if existing.is_some() {
             Err(DataError::NewCategoryRoleRestrictionDuplicate)
         } else {
             let model = require_category_role::ActiveModel {
                 entry_id: sea_orm::ActiveValue::Set(Uuid::now_v7()),
-                server_id: sea_orm::ActiveValue::Set(guild_id),
-                role_id: sea_orm::ActiveValue::Set(role.id.get()),
+                server_id: sea_orm::ActiveValue::Set(guild_id as i64),
+                role_id: sea_orm::ActiveValue::Set(role_id.get() as i64),
                 category: sea_orm::ActiveValue::Set(command_category.to_string()),
             }
             .insert(&self.db)
@@ -339,7 +339,7 @@ impl Permissions {
         guild_id: u64,
         user_id: u64,
         command: &str,
-    ) -> DataResult<entity::command_allow_user::Model> {
+    ) -> DataResult<entity_sqlite::command_allow_user::Model> {
         const OP: &str = "new_command_user_allowed";
         let _timing = DataTiming::new(
             OP.to_string(),
@@ -350,15 +350,15 @@ impl Permissions {
             .data_access(OP, DataOperationType::Write)
             .await;
 
-        use entity::command_allow_user;
+        use entity_sqlite::command_allow_user;
         let existing = self.find_user_allowed(guild_id, user_id, command).await?;
         if existing.is_some() {
             Err(DataError::NewCommandAllowedUserDuplicate)
         } else {
             let model = command_allow_user::ActiveModel {
                 entry_id: sea_orm::ActiveValue::Set(Uuid::now_v7()),
-                server_id: sea_orm::ActiveValue::Set(guild_id),
-                user_id: sea_orm::ActiveValue::Set(user_id),
+                server_id: sea_orm::ActiveValue::Set(guild_id as i64),
+                user_id: sea_orm::ActiveValue::Set(user_id as i64),
                 command: sea_orm::ActiveValue::Set(command.to_string()),
             }
             .insert(&self.db)
@@ -386,7 +386,7 @@ impl Permissions {
         &self,
         guild_id: u64,
         command: &str,
-    ) -> DataResult<Vec<entity::command_allow_user::Model>> {
+    ) -> DataResult<Vec<entity_sqlite::command_allow_user::Model>> {
         const OP: &str = "findall_user_allowed";
         let _timing = DataTiming::new(
             OP.to_string(),
@@ -397,7 +397,7 @@ impl Permissions {
             .data_access(OP, DataOperationType::Read)
             .await;
 
-        use entity::command_allow_user;
+        use entity_sqlite::command_allow_user;
         CommandAllowUser::find()
             .filter(command_allow_user::Column::ServerId.eq(guild_id))
             .filter(command_allow_user::Column::Command.eq(command))
@@ -436,5 +436,154 @@ pub struct PermissionCacheKey {
 impl HeapSize for PermissionCacheKey {
     fn heap_size(&self) -> usize {
         self.comorcat.heap_size() + self.operation.heap_size()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::constants::*;
+
+    use migration_sqlite::{Migrator as SqliteMigrator, MigratorTrait};
+    use sea_orm::Database;
+
+    async fn get_manager() -> Permissions {
+        let db = Database::connect("sqlite::memory:").await.unwrap();
+        SqliteMigrator::up(&db, None).await.unwrap();
+        Permissions::new(db, Metrics::default()).await.unwrap()
+    }
+
+    // TODO: simulate add data
+    async fn simulate_add_user_allowed(manager: &mut Permissions) {
+        manager
+            .new_command_user_allowed(GUILD_ID_1, USER_ID_1.get(), COMMAND_1)
+            .await
+            .unwrap();
+        manager
+            .new_command_user_allowed(GUILD_ID_1, USER_ID_2.get(), COMMAND_1)
+            .await
+            .unwrap();
+    }
+
+    async fn simulate_new_command_role_restriction(manager: &mut Permissions) {
+        manager
+            .new_command_role_restriction(GUILD_ID_1, &ROLE_ID_1, COMMAND_1)
+            .await
+            .unwrap();
+    }
+
+    async fn simulate_new_command_category(manager: &mut Permissions) {
+        manager
+            .new_category_role_restriction(GUILD_ID_1, &ROLE_ID_1, COMMAND_CATEGORY_1)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn find_user_allowed() {
+        let mut manager = get_manager().await;
+        simulate_add_user_allowed(&mut manager).await;
+
+        let res1 = manager
+            .find_user_allowed(GUILD_ID_1, USER_ID_1.get(), COMMAND_1)
+            .await
+            .unwrap();
+
+        let res2 = manager
+            .find_user_allowed(GUILD_ID_1, USER_ID_3.get(), COMMAND_1)
+            .await
+            .unwrap();
+
+        let res3 = manager
+            .find_user_allowed(GUILD_ID_1, USER_ID_2.get(), COMMAND_1)
+            .await
+            .unwrap();
+
+        assert!(res1.is_some());
+        assert!(res2.is_none());
+        assert!(res3.is_some());
+    }
+
+    #[tokio::test]
+    async fn find_command_roles_allowed() {
+        let mut manager = get_manager().await;
+        simulate_new_command_role_restriction(&mut manager).await;
+
+        let res = manager
+            .find_command_roles_allowed(GUILD_ID_1, COMMAND_1)
+            .await
+            .unwrap();
+
+        assert!(res.len() == 1);
+        assert!(res.first().unwrap().role_id != ROLE_ID_2.get() as i64);
+    }
+
+    #[tokio::test]
+    async fn find_category_roles_allowed() {
+        let mut manager = get_manager().await;
+        simulate_new_command_category(&mut manager).await;
+
+        let res = manager
+            .find_category_roles_allowed(GUILD_ID_1, COMMAND_CATEGORY_1)
+            .await
+            .unwrap();
+
+        assert!(res.len() == 1);
+        assert!(res.first().unwrap().role_id == ROLE_ID_1.get() as i64);
+        assert!(res.first().unwrap().category == COMMAND_CATEGORY_1);
+    }
+
+    #[tokio::test]
+    async fn new_command_role_restriction() {
+        let mut manager = get_manager().await;
+
+        let res = manager
+            .new_command_role_restriction(GUILD_ID_1, &ROLE_ID_1, COMMAND_1)
+            .await
+            .unwrap();
+
+        assert!(res.command == COMMAND_1);
+    }
+
+    #[tokio::test]
+    async fn new_category_role_restriction() {
+        let mut manager = get_manager().await;
+
+        let res = manager
+            .new_category_role_restriction(GUILD_ID_1, &ROLE_ID_1, COMMAND_CATEGORY_1)
+            .await
+            .unwrap();
+
+        assert!(res.category == COMMAND_CATEGORY_1);
+    }
+
+    #[tokio::test]
+    async fn new_command_user_allowed() {
+        let mut manager = get_manager().await;
+
+        let res = manager
+            .new_command_user_allowed(GUILD_ID_1, USER_ID_1.get(), COMMAND_1)
+            .await
+            .unwrap();
+        assert!(res.command == COMMAND_1);
+    }
+
+    #[tokio::test]
+    async fn findall_user_allowed() {
+        let mut manager = get_manager().await;
+        simulate_add_user_allowed(&mut manager).await;
+
+        let res = manager
+            .findall_user_allowed(GUILD_ID_1, COMMAND_1)
+            .await
+            .unwrap();
+        assert!(res.len() == 2);
+        assert!(
+            res.iter()
+                .filter(|e| e.user_id == USER_ID_3.get() as i64)
+                .count()
+                == 0
+        );
     }
 }

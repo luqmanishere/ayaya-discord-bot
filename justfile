@@ -4,14 +4,14 @@ default:
     just -l
 
 # create a fresh sqlite db and generate entities 
-refresh-sqlite: fresh-sqlite generate-sqlite
+refresh-sqlite-all: fresh-sqlite generate-sqlite-all
 
 # refresh dev sqlite db
 fresh-sqlite:
     sea-orm-cli migrate fresh -d migration-sqlite -u {{sqlite-url}}
 
 # generate entities for sqlite db
-generate-sqlite:
+generate-sqlite-all:
     sea-orm-cli generate entity --date-time-crate time -o entity-sqlite/src -u "sqlite://dev/stats.sqlite?mode=rwc" -l --with-prelude all
 
 # generate a new migration with NAME
@@ -27,3 +27,12 @@ db-down:
 bump-minor:
     git cliff --bump minor -o CHANGELOG.md
     cargo set-version --bump minor
+
+test:
+    cargo nextest run
+
+podman-build:
+    podman build --tag "luqmanishere/ayayadc-dev" .
+
+podman-run:
+    podman run -v ./secrets:/secrets -e DISCORD_TOKEN_FILE=/secrets/dev-discordtoken -e DATABASE_URL_FILE=/secrets/dev-dburl -e AGE_SECRET_KEY_FILE=/secrets/dev-age -it localhost/luqmanishere/ayayadc-dev:latest

@@ -94,7 +94,7 @@ pub async fn server_all_time_single(
                     format!(
                         "{}. {}: {}",
                         i + 1,
-                        match ctx.cache().user(e.user_id) {
+                        match ctx.cache().user(e.user_id as u64) {
                             Some(res) => res.display_name().to_string(),
                             None => format!("Unknown({})", e.user_id),
                         },

@@ -166,7 +166,7 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
         .await?;
     if !command_roles_allowed.is_empty() {
         for role in command_roles_allowed {
-            let role_id = role.role_id;
+            let role_id = role.role_id as u64;
             if ctx.author().has_role(ctx, guild_id, role_id).await? {
                 return Ok(true);
             }
@@ -187,7 +187,7 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
             .await?;
         if !category_roles_allowed.is_empty() {
             for role in category_roles_allowed {
-                let role_id = role.role_id;
+                let role_id = role.role_id as u64;
                 if ctx.author().has_role(ctx, guild_id, role_id).await? {
                     return Ok(true);
                 }

@@ -1,7 +1,6 @@
 /target
 /.direnv
 /.env
-/.git
 /.stfolder
 /.stignore
 /.github

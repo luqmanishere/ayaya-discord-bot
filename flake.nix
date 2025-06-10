@@ -55,6 +55,8 @@
             git-cliff
             cargo-edit
             sqlite
+            cargo-llvm-cov
+            cargo-nextest
           ];
           buildInputs = with pkgs; [iconv.dev libopus.dev cargo-shuttle openssl];
         };

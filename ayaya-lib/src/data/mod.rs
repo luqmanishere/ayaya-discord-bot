@@ -7,11 +7,10 @@ mod utils;
 
 use std::sync::{Arc, Mutex};
 
-use entity::prelude::*;
+use entity_sqlite::prelude::*;
 use error::DataError;
 use lru_mem::LruCache;
-use migration::{Migrator as MysqlMigrator, MigratorTrait};
-use migration_sqlite::Migrator as SqliteMigrator;
+use migration_sqlite::{Migrator as SqliteMigrator, MigratorTrait};
 use permissions::Permissions;
 use poise::serenity_prelude as serenity;
 use sea_orm::{
@@ -61,14 +60,15 @@ impl DataManager {
         let db: DatabaseConnection = Database::connect(connect_options)
             .await
             .map_err(|error| DataError::DatabaseConnectionError { error })?;
-        MysqlMigrator::up(&db, None)
+        SqliteMigrator::up(&db, None)
             .await
             .map_err(|error| DataError::MigrationError { error })?; // always upgrade db to the latest version
 
-        #[cfg(debug_assertions)]
-        let mut connect_options_stats = ConnectOptions::new("sqlite://dev/stats.sqlite?mode=rwc");
-        #[cfg(not(debug_assertions))]
-        let mut connect_options_stats = ConnectOptions::new(_stats_url);
+        let mut connect_options_stats = if cfg!(debug_assertions) {
+            ConnectOptions::new("sqlite://dev/stats.sqlite?mode=rwc")
+        } else {
+            ConnectOptions::new(_stats_url)
+        };
 
         connect_options_stats.sqlx_logging(false);
         let stats_db: DatabaseConnection = Database::connect(connect_options_stats)
@@ -118,7 +118,7 @@ impl DataManager {
     pub async fn log_command_call(
         &mut self,
         guild_id: u64,
-        author: &serenity::User,
+        user_id: &serenity::UserId,
         command_name: String,
     ) -> DataResult<()> {
         const OP: &str = "log_command_call";
@@ -134,10 +134,10 @@ impl DataManager {
         let db = &self.db;
         let now_odt = time::OffsetDateTime::now_utc()
             .to_offset(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
-        let call_log = entity::command_call_log::ActiveModel {
+        let call_log = entity_sqlite::command_call_log::ActiveModel {
             log_id: sea_orm::ActiveValue::Set(uuid::Uuid::new_v4()),
-            server_id: sea_orm::ActiveValue::Set(guild_id),
-            user_id: sea_orm::ActiveValue::Set(author.id.get()),
+            server_id: sea_orm::ActiveValue::Set(guild_id as i64),
+            user_id: sea_orm::ActiveValue::Set(user_id.get() as i64),
             command: sea_orm::ActiveValue::Set(command_name.clone()),
             command_time_stamp: sea_orm::ActiveValue::Set(now_odt),
         };
@@ -146,7 +146,7 @@ impl DataManager {
             .await
             .map_err(|error| DataError::LogCommandCallError { error })?;
 
-        self.increment_command_counter(guild_id, author, command_name)
+        self.increment_command_counter(guild_id, user_id, command_name)
             .await?;
         Ok(())
     }
@@ -159,22 +159,21 @@ impl DataManager {
     pub async fn increment_command_counter(
         &mut self,
         guild_id: u64,
-        author: &serenity::User,
+        user_id: &serenity::UserId,
         command_name: String,
     ) -> DataResult<()> {
         self.metrics_handler
             .data_access("increment_command_counter", DataOperationType::Write)
             .await;
         let db = &self.db;
-        use entity::user_command_all_time_statistics;
-        let user: Option<user_command_all_time_statistics::Model> =
-            UserCommandAllTimeStatistics::find()
-                .filter(user_command_all_time_statistics::Column::ServerId.eq(guild_id))
-                .filter(user_command_all_time_statistics::Column::UserId.eq(author.id.get()))
-                .filter(user_command_all_time_statistics::Column::Command.eq(command_name.clone()))
-                .one(db)
-                .await
-                .map_err(|error| DataError::IncrementCommandCounterError { error })?;
+        use entity_sqlite::user_command_all_time_statistics;
+        let user = UserCommandAllTimeStatistics::find()
+            .filter(user_command_all_time_statistics::Column::ServerId.eq(guild_id))
+            .filter(user_command_all_time_statistics::Column::UserId.eq(user_id.get()))
+            .filter(user_command_all_time_statistics::Column::Command.eq(command_name.clone()))
+            .one(db)
+            .await
+            .map_err(|error| DataError::IncrementCommandCounterError { error })?;
 
         if let Some(stats) = user {
             let count = stats.count + 1;
@@ -186,8 +185,8 @@ impl DataManager {
                 .map_err(|error| DataError::IncrementCommandCounterError { error })?;
         } else {
             user_command_all_time_statistics::ActiveModel {
-                server_id: sea_orm::ActiveValue::Set(guild_id),
-                user_id: sea_orm::ActiveValue::Set(author.id.get()),
+                server_id: sea_orm::ActiveValue::Set(guild_id as i64),
+                user_id: sea_orm::ActiveValue::Set(user_id.get() as i64),
                 command: sea_orm::ActiveValue::Set(command_name),
                 count: sea_orm::ActiveValue::Set(1),
             }
@@ -203,7 +202,9 @@ impl DataManager {
     /// # Errors
     ///
     /// This function will return an error if there is an error with the database.
-    pub async fn find5_command_log(&self) -> DataResult<Vec<entity::command_call_log::Model>> {
+    pub async fn find5_command_log(
+        &self,
+    ) -> DataResult<Vec<entity_sqlite::command_call_log::Model>> {
         const OP: &str = "find5_command_log";
         let _timing = DataTiming::new(
             OP.to_string(),
@@ -232,7 +233,7 @@ impl DataManager {
         guild_id: u64,
         user_id: u64,
         command: &str,
-    ) -> DataResult<Option<entity::user_command_all_time_statistics::Model>> {
+    ) -> DataResult<Option<entity_sqlite::user_command_all_time_statistics::Model>> {
         const OP: &str = "find_user_all_time_command_stats";
         let _timing = DataTiming::new(
             OP.to_string(),
@@ -243,7 +244,7 @@ impl DataManager {
             .data_access("find_user_all_time_command_stats", DataOperationType::Read)
             .await;
 
-        use entity::user_command_all_time_statistics;
+        use entity_sqlite::user_command_all_time_statistics;
         UserCommandAllTimeStatistics::find()
             .filter(user_command_all_time_statistics::Column::ServerId.eq(guild_id))
             .filter(user_command_all_time_statistics::Column::UserId.eq(user_id))
@@ -262,7 +263,7 @@ impl DataManager {
         &self,
         guild_id: u64,
         command_name: String,
-    ) -> DataResult<Vec<entity::user_command_all_time_statistics::Model>> {
+    ) -> DataResult<Vec<entity_sqlite::user_command_all_time_statistics::Model>> {
         const OP: &str = "rank_users_command_call";
         let _timing = DataTiming::new(
             OP.to_string(),
@@ -273,7 +274,7 @@ impl DataManager {
             .data_access(OP, DataOperationType::Read)
             .await;
 
-        use entity::user_command_all_time_statistics;
+        use entity_sqlite::user_command_all_time_statistics;
         UserCommandAllTimeStatistics::find()
             .filter(user_command_all_time_statistics::Column::ServerId.eq(guild_id))
             .filter(user_command_all_time_statistics::Column::Command.eq(command_name))
@@ -282,7 +283,9 @@ impl DataManager {
             .map_err(DataError::FindSingleUsersSingleCommandCallError)
     }
 
-    pub async fn get_latest_cookies(&self) -> DataResult<Option<entity::youtube_cookies::Model>> {
+    pub async fn get_latest_cookies(
+        &self,
+    ) -> DataResult<Option<entity_sqlite::youtube_cookies::Model>> {
         const OP: &str = "get_latest_cookies";
         let _timing = DataTiming::new(
             OP.to_string(),
@@ -293,7 +296,7 @@ impl DataManager {
             .data_access("get_latest_cookies", DataOperationType::Read)
             .await;
 
-        use entity::youtube_cookies;
+        use entity_sqlite::youtube_cookies;
         YoutubeCookies::find()
             .select()
             .order_by(youtube_cookies::Column::EntryId, sea_orm::Order::Desc)
@@ -314,7 +317,7 @@ impl DataManager {
             .data_access("add_new_cookie", DataOperationType::Write)
             .await;
 
-        use entity::youtube_cookies;
+        use entity_sqlite::youtube_cookies;
         let _model = youtube_cookies::ActiveModel {
             entry_id: ActiveValue::NotSet,
             date: ActiveValue::Set(time::OffsetDateTime::now_utc()),
@@ -457,4 +460,80 @@ pub mod error {
             format!("data::{name}")
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::constants::*;
+
+    async fn get_data_manager() -> DataManager {
+        let url = "sqlite::memory:";
+        DataManager::new(url, url, Metrics::default())
+            .await
+            .unwrap()
+    }
+
+    async fn simulate_command_call(dm: &mut DataManager, count: i64) {
+        for _ in 0..count {
+            dm.log_command_call(GUILD_ID_1, &USER_ID_1, COMMAND_1.to_string())
+                .await
+                .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn log_command_call() {
+        let mut manager = get_data_manager().await;
+
+        simulate_command_call(&mut manager, 10).await;
+    }
+
+    #[tokio::test]
+    async fn increment_command_counter() {
+        let mut manager = get_data_manager().await;
+
+        manager
+            .increment_command_counter(GUILD_ID_1, &USER_ID_1, COMMAND_1.to_string())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn find5_command_log() {
+        let mut manager = get_data_manager().await;
+        simulate_command_call(&mut manager, 10).await;
+
+        let res = manager.find5_command_log().await.unwrap();
+        assert!(res.len() == 5);
+    }
+
+    #[tokio::test]
+    async fn find_single_user_single_all_time_command_stats() {
+        let mut manager = get_data_manager().await;
+        simulate_command_call(&mut manager, 10).await;
+
+        let res = manager
+            .find_single_user_single_all_time_command_stats(GUILD_ID_1, USER_ID_1.get(), COMMAND_1)
+            .await
+            .unwrap();
+
+        assert!(res.unwrap().count == 10);
+    }
+
+    #[tokio::test]
+    async fn find_all_users_single_command_call() {
+        let mut manager = get_data_manager().await;
+        simulate_command_call(&mut manager, 10).await;
+
+        let res = manager
+            .find_all_users_single_command_call(GUILD_ID_1, COMMAND_1.to_string())
+            .await
+            .unwrap();
+
+        // TODO: test with many users
+        assert!(res.len() == 1);
+    }
+
+    // TODO: test cookies
 }

@@ -36,7 +36,7 @@ pub async fn restrict_command_role(
 
     let model = data_manager
         .permissions_mut()
-        .new_command_role_restriction(guild_id, &role, &command);
+        .new_command_role_restriction(guild_id, &role.id, &command);
 
     match model.await {
         Ok(res) => {
@@ -78,7 +78,7 @@ pub async fn restrict_category_role(
 
     let model = data_manager
         .permissions_mut()
-        .new_category_role_restriction(guild_id, &role, &category);
+        .new_category_role_restriction(guild_id, &role.id, &category);
 
     match model.await {
         Ok(res) => {
@@ -188,13 +188,15 @@ pub async fn list_command_restrictions(
 
     message.push_line("### Allowed Users");
     for (i, model) in allowed_users.iter().enumerate() {
-        let user = serenity::UserId::new(model.user_id).to_user(ctx).await?;
+        let user = serenity::UserId::new(model.user_id as u64)
+            .to_user(ctx)
+            .await?;
         message.push_line(format!("{}. {}", i + 1, user.name));
     }
     message.push_line("### Command Roles");
     let roles = serenity::GuildId::new(guild_id).roles(ctx).await?;
     for (i, model) in required_roles_command.iter().enumerate() {
-        let role = if let Some(role) = roles.get(&serenity::RoleId::new(model.role_id)) {
+        let role = if let Some(role) = roles.get(&serenity::RoleId::new(model.role_id as u64)) {
             role.name.clone()
         } else {
             "Unknown Role".to_string()
@@ -203,7 +205,7 @@ pub async fn list_command_restrictions(
     }
     message.push_line("### Category Roles");
     for (i, model) in required_roles_category.iter().enumerate() {
-        let role = if let Some(role) = roles.get(&serenity::RoleId::new(model.role_id)) {
+        let role = if let Some(role) = roles.get(&serenity::RoleId::new(model.role_id as u64)) {
             role.name.clone()
         } else {
             "Unknown Role".to_string()

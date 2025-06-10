@@ -24,11 +24,11 @@ async fn main() -> miette::Result<()> {
     // Configure the client with your Discord bot token in the environment.
     // DISCORD_TOKEN_FILE is searched first, then DISCORD_TOKEN.
     // IF DISCORD_TOKEN_FILE is found, the token is read from the file.
-    let token = file_or_env_var("DISCORD_TOKEN")?;
+    let token = file_or_env_var("DISCORD_TOKEN")?.trim().to_string();
 
-    let db_str = file_or_env_var("DATABASE_URL")?;
+    let db_str = file_or_env_var("DATABASE_URL")?.trim().to_string();
 
-    let secret_key = file_or_env_var("AGE_SECRET_KEY")?;
+    let secret_key = file_or_env_var("AGE_SECRET_KEY")?.trim().to_string();
 
     // data store dir
     // TODO: allow configuration
