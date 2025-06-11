@@ -30,6 +30,10 @@ bump-minor:
     git cliff --bump minor -o CHANGELOG.md
     cargo set-version --bump minor
 
+bump-patch:
+    git cliff --bump patch -o CHANGELOG.md
+    cargo set-version --bump path
+
 test:
     cargo nextest run
 
@@ -37,4 +41,4 @@ podman-build:
     podman build --tag "luqmanishere/ayayadc-dev" .
 
 podman-run:
-    podman run -v ./secrets:/secrets -e DISCORD_TOKEN_FILE=/secrets/dev-discordtoken -e DATABASE_URL_FILE=/secrets/dev-dburl -e AGE_SECRET_KEY_FILE=/secrets/dev-age -it localhost/luqmanishere/ayayadc-dev:latest
+    podman run -v ./secrets:/secrets -v ./dev/local_share:/root/.local/share/ayayadc -e DISCORD_TOKEN_FILE=/secrets/dev-discordtoken -e AGE_SECRET_KEY_FILE=/secrets/dev-age -it localhost/luqmanishere/ayayadc-dev:latest

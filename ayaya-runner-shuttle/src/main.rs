@@ -86,9 +86,9 @@ async fn main(
         .get("DISCORD_TOKEN")
         .context("'DISCORD_TOKEN' was not found")?;
 
-    let db_str = secret_store
-        .get("DATABASE_URL")
-        .context("'DATABASE_URL' was not found")?;
+    // let db_str = secret_store
+    //     .get("DATABASE_URL")
+    //     .context("'DATABASE_URL' was not found")?;
 
     let loki = match secret_store.get("GRAFANA_USER") {
         Some(grafana_user) => {
@@ -117,7 +117,7 @@ async fn main(
 
     let data_dir = home.join(".local/share/ayayadc");
 
-    let client = ayayabot(token, db_str, loki, yt_dlp_config_dir, secret_key, data_dir)
+    let client = ayayabot(token, loki, yt_dlp_config_dir, secret_key, data_dir)
         .await
         .map_err(|e| shuttle_runtime::Error::Custom(anyhow::anyhow!(e.to_string())))?;
     Ok(client)

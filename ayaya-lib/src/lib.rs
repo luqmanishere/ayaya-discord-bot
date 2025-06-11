@@ -81,7 +81,6 @@ pub struct Data {
 
 pub async fn ayayabot(
     token: String,
-    db_str: String,
     loki: Option<LokiOpts>,
     ytdlp_config_path: PathBuf,
     secret_key: String,
@@ -95,9 +94,10 @@ pub async fn ayayabot(
     let metrics = Metrics::new();
     metrics.register_metrics(metrics_registry.clone()).await;
 
-    let stats_db = data_dir.join("stats.sqlite");
-    let stats_url = format!("sqlite://{}?mode=rwc", stats_db.display());
-    let data_manager = DataManager::new(&db_str, &stats_url, metrics.clone())
+    // merged everything into one database
+    let db_path = data_dir.join("stats.sqlite");
+    let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
+    let data_manager = DataManager::new(&db_url, metrics.clone())
         .await
         .map_err(|e| miette::miette!("database error: {}", e))?;
 

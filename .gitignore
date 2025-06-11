@@ -13,3 +13,4 @@
 Secrets*.toml
 /.cargo
 /dev/stats.sqlite*
+/dev/local_share

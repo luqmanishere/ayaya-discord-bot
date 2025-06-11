@@ -39,8 +39,6 @@ pub type Autocomplete = Arc<Mutex<LruCache<String, String>>>;
 #[derive(Clone, Debug)]
 pub struct DataManager {
     db: DatabaseConnection, // this is already clone
-    #[expect(dead_code)]
-    stats_db: DatabaseConnection,
     metrics_handler: Metrics,
     permissions: Permissions,
     stats: StatsManager,
@@ -50,12 +48,12 @@ pub struct DataManager {
 
 impl DataManager {
     /// A new instance of the manager
-    pub async fn new(
-        main_url: &str,
-        _stats_url: &str,
-        metrics_handler: Metrics,
-    ) -> DataResult<Self> {
-        let mut connect_options = ConnectOptions::new(main_url);
+    pub async fn new(db_url: &str, metrics_handler: Metrics) -> DataResult<Self> {
+        let mut connect_options = if cfg!(debug_assertions) && !cfg!(test) {
+            ConnectOptions::new("sqlite://dev/stats.sqlite?mode=rwc")
+        } else {
+            ConnectOptions::new(db_url)
+        };
         connect_options.sqlx_logging(false); // disable sqlx logging
         let db: DatabaseConnection = Database::connect(connect_options)
             .await
@@ -64,26 +62,11 @@ impl DataManager {
             .await
             .map_err(|error| DataError::MigrationError { error })?; // always upgrade db to the latest version
 
-        let mut connect_options_stats = if cfg!(debug_assertions) && !cfg!(test) {
-            ConnectOptions::new("sqlite://dev/stats.sqlite?mode=rwc")
-        } else {
-            ConnectOptions::new(_stats_url)
-        };
-
-        connect_options_stats.sqlx_logging(false);
-        let stats_db: DatabaseConnection = Database::connect(connect_options_stats)
-            .await
-            .map_err(|error| DataError::DatabaseConnectionError { error })?;
-        SqliteMigrator::up(&stats_db, None)
-            .await
-            .map_err(|error| DataError::MigrationError { error })?;
-
         let permissions = Permissions::new(db.clone(), metrics_handler.clone()).await?;
-        let stats = StatsManager::new(stats_db.clone(), metrics_handler.clone());
-        let sounds = SoundsManager::new(stats_db.clone(), metrics_handler.clone());
+        let stats = StatsManager::new(db.clone(), metrics_handler.clone());
+        let sounds = SoundsManager::new(db.clone(), metrics_handler.clone());
         Ok(Self {
             db,
-            stats_db,
             metrics_handler,
             permissions,
             stats,
@@ -469,9 +452,7 @@ mod tests {
 
     async fn get_data_manager() -> DataManager {
         let url = "sqlite::memory:";
-        DataManager::new(url, url, Metrics::default())
-            .await
-            .unwrap()
+        DataManager::new(url, Metrics::default()).await.unwrap()
     }
 
     async fn simulate_command_call(dm: &mut DataManager, count: i64) {

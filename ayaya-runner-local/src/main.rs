@@ -26,8 +26,6 @@ async fn main() -> miette::Result<()> {
     // IF DISCORD_TOKEN_FILE is found, the token is read from the file.
     let token = file_or_env_var("DISCORD_TOKEN")?.trim().to_string();
 
-    let db_str = file_or_env_var("DATABASE_URL")?.trim().to_string();
-
     let secret_key = file_or_env_var("AGE_SECRET_KEY")?.trim().to_string();
 
     // data store dir
@@ -39,7 +37,7 @@ async fn main() -> miette::Result<()> {
             .wrap_err("Unable to create data dir")?;
     }
 
-    let ayayadc = ayayabot(token, db_str, None, yt_dlp_config_dir, secret_key, data_dir).await?;
+    let ayayadc = ayayabot(token, None, yt_dlp_config_dir, secret_key, data_dir).await?;
     ayayadc
         .local_bind(net::SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(127, 0, 0, 1),
