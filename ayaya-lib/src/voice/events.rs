@@ -57,7 +57,7 @@ pub struct BotInactiveCounter {
 }
 
 #[derive(Debug)]
-enum Reason {
+enum Status {
     Alone,
     PlaybackFinished,
     Playback,
@@ -66,25 +66,25 @@ enum Reason {
     Other(String),
 }
 
-impl std::fmt::Display for Reason {
+impl std::fmt::Display for Status {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            " Reason: {}",
+            " Status: {}",
             match self {
-                Reason::Alone => "Bot is alone",
-                Reason::PlaybackFinished => "Playback is finished",
-                Reason::Playback => "Bot is playing music",
-                Reason::Inactive => "Bot is inactive",
-                Reason::Linger => "Linger is active.",
-                Reason::Other(ref other) => other,
+                Status::Alone => "Bot is alone",
+                Status::PlaybackFinished => "Playback is finished",
+                Status::Playback => "Bot is playing music",
+                Status::Inactive => "Bot is inactive",
+                Status::Linger => "Linger is active.",
+                Status::Other(ref other) => other,
             }
         )
     }
 }
 
 impl BotInactiveCounter {
-    async fn check_inactive(&self) -> (bool, Option<Reason>) {
+    async fn check_inactive(&self) -> (bool, Option<Status>) {
         if let Some(handler) = self.manager.get(self.guild_id) {
             // check if we are alone in the channel
             let alone_in_channel = {
@@ -101,13 +101,13 @@ impl BotInactiveCounter {
             // skip queue checks if linger is on
             if linger {
                 tracing::info!("linger is on");
-                (alone_in_channel, Some(Reason::Linger))
+                (alone_in_channel, Some(Status::Linger))
             } else {
                 tracing::info!("linger is off");
 
                 // first check if we are alone
                 if alone_in_channel {
-                    return (true, Some(Reason::Alone));
+                    return (true, Some(Status::Alone));
                 }
 
                 // then check the queue
@@ -123,12 +123,12 @@ impl BotInactiveCounter {
                 // if linger is not on, we leave when the bot stops playing, or is inactive
                 match play_mode {
                     Some(PlayMode::Pause | PlayMode::Stop | PlayMode::End) => {
-                        (true, Some(Reason::PlaybackFinished))
+                        (true, Some(Status::PlaybackFinished))
                     }
-                    Some(PlayMode::Play) => (false, Some(Reason::Playback)),
+                    Some(PlayMode::Play) => (false, Some(Status::Playback)),
                     other => (
                         true,
-                        Some(other.map_or(Reason::Inactive, |e| Reason::Other(format!("{e:?}")))),
+                        Some(other.map_or(Status::Inactive, |e| Status::Other(format!("{e:?}")))),
                     ),
                 }
             }
@@ -144,23 +144,23 @@ impl VoiceEventHandler for BotInactiveCounter {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
         let check_inactive = self.check_inactive().await;
         match check_inactive {
-            (true, reason) => {
-                let reason = reason.map_or(String::default(), |e| e.to_string());
+            (true, status) => {
+                let status = status.map_or(String::default(), |e| e.to_string());
 
                 let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
                 info!(
-                    "Counter for channel {} in guild {} is {}/5.{reason}.",
+                    "Counter for channel {} in guild {} is {}/5.{status}.",
                     self.channel_id,
                     self.guild_id,
                     counter_before + 1
                 );
             }
-            (false, reason) => {
-                let reason = reason.map_or(String::default(), |e| e.to_string());
+            (false, status) => {
+                let status = status.map_or(String::default(), |e| e.to_string());
 
                 self.counter.store(0, Ordering::Relaxed);
                 info!(
-                    "Counter for channel {} in guild {} is reset to {}/5.{reason}",
+                    "Counter for channel {} in guild {} is reset to {}/5.{status}",
                     self.channel_id,
                     self.guild_id,
                     self.counter.load(Ordering::Relaxed)

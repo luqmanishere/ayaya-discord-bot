@@ -32,7 +32,7 @@ bump-minor:
 
 bump-patch:
     git cliff --bump patch -o CHANGELOG.md
-    cargo set-version --bump path
+    cargo set-version --bump patch
 
 test:
     cargo nextest run
