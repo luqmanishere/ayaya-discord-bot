@@ -64,7 +64,7 @@ impl DataManager {
             .await
             .map_err(|error| DataError::MigrationError { error })?; // always upgrade db to the latest version
 
-        let mut connect_options_stats = if cfg!(debug_assertions) {
+        let mut connect_options_stats = if cfg!(debug_assertions) && !cfg!(test) {
             ConnectOptions::new("sqlite://dev/stats.sqlite?mode=rwc")
         } else {
             ConnectOptions::new(_stats_url)

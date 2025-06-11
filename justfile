@@ -1,5 +1,7 @@
 sqlite-url := "sqlite://dev/stats.sqlite?mode=rwc"
 
+alias t := test
+
 default:
     just -l
 
