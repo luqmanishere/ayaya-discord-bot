@@ -18,7 +18,6 @@ COPY --from=planner /usr/src/ayayadc/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 # Build the whole project
 COPY . .
-COPY .git/ ./.git/
 RUN cargo build --release
 
 FROM debian:bookworm-slim AS runner
