@@ -32,7 +32,8 @@ pub async fn join(
     #[description = "Linger mode: stay in the discord until everyone leaves, regardless on audio status"]
     linger: Option<bool>,
 ) -> Result<(), BotError> {
-    join_inner(ctx, true, linger.unwrap_or(false)).await
+    join_inner(ctx, true, linger.unwrap_or(false)).await?;
+    Ok(())
 }
 
 /// Plays music from YT url or search term. We are getting help from a higher being...

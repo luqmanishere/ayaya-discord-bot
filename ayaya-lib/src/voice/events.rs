@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
 };
 
@@ -53,14 +53,34 @@ pub struct BotInactiveCounter {
     pub ctx: SerenityContext,
     pub manager: Arc<Songbird>,
     pub counter: Arc<AtomicUsize>,
-    pub only_alone: bool,
+    pub linger: Arc<AtomicBool>,
 }
 
+#[derive(Debug)]
 enum Reason {
     Alone,
     PlaybackFinished,
-    #[expect(dead_code)]
+    Playback,
+    Inactive,
+    Linger,
     Other(String),
+}
+
+impl std::fmt::Display for Reason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            " Reason: {}",
+            match self {
+                Reason::Alone => "Bot is alone",
+                Reason::PlaybackFinished => "Playback is finished",
+                Reason::Playback => "Bot is playing music",
+                Reason::Inactive => "Bot is inactive",
+                Reason::Linger => "Linger is active.",
+                Reason::Other(ref other) => other,
+            }
+        )
+    }
 }
 
 impl BotInactiveCounter {
@@ -76,32 +96,41 @@ impl BotInactiveCounter {
                     None => true,
                 }
             };
+            let linger = self.linger.load(Ordering::Relaxed);
 
             // skip queue checks if linger is on
-            if self.only_alone {
-                return (alone_in_channel, Some(Reason::Alone));
-            }
-
-            let queue = handler.lock().await.queue().clone();
-            let play_mode = match queue.current() {
-                Some(current) => match current.get_info().await {
-                    Ok(state) => Some(state.playing),
-                    Err(_) => None,
-                },
-                None => None,
-            };
-
-            // if linger is not on, we leave when the bot stops playing
-            if let Some(PlayMode::Pause | PlayMode::Stop | PlayMode::End) = play_mode {
-                // leave only if alone
-                return (true, Some(Reason::PlaybackFinished));
-            }
-
-            // and finally, if we are alone, leave
-            if alone_in_channel {
-                (true, Some(Reason::Alone))
+            if linger {
+                tracing::info!("linger is on");
+                (alone_in_channel, Some(Reason::Linger))
             } else {
-                (false, None)
+                tracing::info!("linger is off");
+
+                // first check if we are alone
+                if alone_in_channel {
+                    return (true, Some(Reason::Alone));
+                }
+
+                // then check the queue
+                let queue = handler.lock().await.queue().clone();
+                let play_mode = match queue.current() {
+                    Some(current) => match current.get_info().await {
+                        Ok(state) => Some(state.playing),
+                        Err(_) => None,
+                    },
+                    None => None,
+                };
+
+                // if linger is not on, we leave when the bot stops playing, or is inactive
+                match play_mode {
+                    Some(PlayMode::Pause | PlayMode::Stop | PlayMode::End) => {
+                        (true, Some(Reason::PlaybackFinished))
+                    }
+                    Some(PlayMode::Play) => (false, Some(Reason::Playback)),
+                    other => (
+                        true,
+                        Some(other.map_or(Reason::Inactive, |e| Reason::Other(format!("{e:?}")))),
+                    ),
+                }
             }
         } else {
             // if not in channel, leave
@@ -113,33 +142,25 @@ impl BotInactiveCounter {
 #[async_trait]
 impl VoiceEventHandler for BotInactiveCounter {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
-        // TODO: simplify
-        match self.check_inactive().await {
+        let check_inactive = self.check_inactive().await;
+        match check_inactive {
             (true, reason) => {
-                let reason = if let Some(reason) = reason {
-                    format!(
-                        " Reason: {}",
-                        match reason {
-                            Reason::Alone => "Bot is alone",
-                            Reason::PlaybackFinished => "Playback is finished",
-                            Reason::Other(ref other) => other,
-                        }
-                    )
-                } else {
-                    String::default()
-                };
+                let reason = reason.map_or(String::default(), |e| e.to_string());
+
                 let counter_before = self.counter.fetch_add(1, Ordering::Relaxed);
                 info!(
-                    "Counter for channel {} in guild {} is {}/5{reason}",
+                    "Counter for channel {} in guild {} is {}/5.{reason}.",
                     self.channel_id,
                     self.guild_id,
                     counter_before + 1
                 );
             }
-            _ => {
+            (false, reason) => {
+                let reason = reason.map_or(String::default(), |e| e.to_string());
+
                 self.counter.store(0, Ordering::Relaxed);
                 info!(
-                    "Counter for channel {} in guild {} is reset to {}/5",
+                    "Counter for channel {} in guild {} is reset to {}/5.{reason}",
                     self.channel_id,
                     self.guild_id,
                     self.counter.load(Ordering::Relaxed)
@@ -209,3 +230,38 @@ impl VoiceEventHandler for TrackPlayNotifier {
         Some(Event::Track(songbird::TrackEvent::Play))
     }
 }
+
+// pub struct VoiceLeaveCleanup {
+//     pub channel_id: ChannelId,
+//     pub guild_id: GuildId,
+//     pub ctx: SerenityContext,
+//     pub manager: Arc<Songbird>,
+//     pub counter: Arc<AtomicUsize>,
+//     pub linger_map: Arc<Mutex<HashMap<GuildId, Arc<AtomicBool>>>>,
+//     pub bot_user_id: UserId,
+// }
+
+// #[async_trait]
+// impl VoiceEventHandler for VoiceLeaveCleanup {
+//     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+//         if let EventContext::(ev) = ctx {
+//             if let Some(dis) = ev.reason {
+//                 match dis {
+//                     songbird::events::context_data::DisconnectReason::AttemptDiscarded => todo!(),
+//                     songbird::events::context_data::DisconnectReason::Internal => todo!(),
+//                     songbird::events::context_data::DisconnectReason::Io => todo!(),
+//                     songbird::events::context_data::DisconnectReason::ProtocolViolation => todo!(),
+//                     songbird::events::context_data::DisconnectReason::TimedOut => todo!(),
+//                     songbird::events::context_data::DisconnectReason::Requested => todo!(),
+//                     songbird::events::context_data::DisconnectReason::WsClosed(close_code) => {
+//                         todo!()
+//                     }
+//                     _ => todo!(),
+//                 }
+//             }
+//             tracing::info!("removed from voice channel");
+//             self.manager.remove(self.guild_id).await;
+//         }
+//         None
+//     }
+// }

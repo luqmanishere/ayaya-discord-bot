@@ -7,6 +7,7 @@ use crate::{error::BotError, utils::GuildInfo, CommandResult, Context};
 
 use super::join;
 
+/// Upload a sound to the server. Guaranteed to accept valid MP3 files.
 #[poise::command(
     slash_command,
     prefix_command,
@@ -151,6 +152,7 @@ pub async fn upload_sound(
     Ok(())
 }
 
+/// Play an uploaded sound.
 #[poise::command(slash_command, guild_only, prefix_command, category = "Soundboard")]
 pub async fn play_sound(
     ctx: Context<'_>,
@@ -159,10 +161,21 @@ pub async fn play_sound(
     sound_id: uuid::Uuid,
 ) -> Result<(), BotError> {
     ctx.defer_ephemeral().await?;
-    join::join_inner(ctx, false, true).await?;
+
+    let guild_id = crate::utils::get_guild_id(ctx)?;
+
+    if join::join_inner(ctx, false, true).await? {
+        ctx.data()
+            .linger_map
+            .lock()
+            .await
+            .get_mut(&guild_id)
+            .expect("joined channel without linger map")
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        tracing::debug!("set channel to linger");
+    };
 
     let manager = ctx.data().songbird.clone();
-    let guild_id = crate::utils::get_guild_id(ctx)?;
     let call = manager.get(guild_id).expect("exists");
     let path = ctx
         .data()

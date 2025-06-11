@@ -7,7 +7,7 @@ use std::{
     io::{BufRead, BufReader, Read},
     path::PathBuf,
     str::FromStr,
-    sync::Arc,
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use admin::admin_commands;
@@ -73,6 +73,7 @@ pub struct Data {
     ytdlp_config_path: PathBuf,
     data_dir: PathBuf,
     secret_key: String,
+    linger_map: Arc<TokioMutex<HashMap<serenity::GuildId, Arc<AtomicBool>>>>,
     #[expect(dead_code)]
     metrics_registry: Arc<TokioMutex<Registry>>,
     metrics: Metrics,
@@ -173,6 +174,7 @@ pub async fn ayayabot(
                     command_categories_map,
                     ytdlp_config_path,
                     data_dir,
+                    linger_map: Default::default(),
                     secret_key,
                     metrics_registry: metrics_registry_poise,
                     metrics,

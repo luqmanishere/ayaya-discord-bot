@@ -1,6 +1,9 @@
 //! This module contains functions supporting the join command
 use std::{
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -17,12 +20,13 @@ use crate::{
     Context,
 };
 
+/// Returns true if already in a channel, false if newly joined
 #[tracing::instrument(skip(ctx))]
 pub async fn join_inner(
     ctx: Context<'_>,
     play_notify_flag: bool,
     linger: bool,
-) -> Result<(), BotError> {
+) -> Result<bool, BotError> {
     let guild: serenity::Guild = get_guild(ctx)?;
     let guild_id = get_guild_id(ctx)?;
     let guild_info = GuildInfo::from_ctx(ctx)?;
@@ -54,6 +58,7 @@ pub async fn join_inner(
                 .await
                 .map_err(BotError::GeneralSerenityError)?;
             }
+            Ok(true)
         }
         None => {
             let user_voice_state =
@@ -120,6 +125,7 @@ pub async fn join_inner(
                         .await?;
 
                     let bot_user_id = { *ctx.data().user_id.read().await };
+                    let linger = Arc::new(AtomicBool::new(linger));
 
                     // inactive counter bot
                     call.add_global_event(
@@ -131,9 +137,11 @@ pub async fn join_inner(
                             bot_user_id,
                             manager: ctx.data().songbird.clone(),
                             ctx: ctx.serenity_context().to_owned(),
-                            only_alone: linger,
+                            linger: linger.clone(),
                         },
                     );
+
+                    ctx.data().linger_map.lock().await.insert(guild_id, linger);
                 }
                 Err(e) => {
                     let voice_channel_info =
@@ -149,8 +157,7 @@ pub async fn join_inner(
                     .into());
                 }
             }
+            Ok(false)
         }
     }
-
-    Ok(())
 }
