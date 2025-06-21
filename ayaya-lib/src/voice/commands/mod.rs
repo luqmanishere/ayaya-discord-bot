@@ -35,6 +35,7 @@ pub fn voice_commands() -> Commands {
         play_next(),
         upload_sound(),
         play_sound(),
+        rename_sound(),
     ]
 }
 

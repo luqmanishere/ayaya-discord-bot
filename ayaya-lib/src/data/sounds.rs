@@ -77,11 +77,74 @@ impl SoundsManager {
         Ok(())
     }
 
+    /// Get sound details from uuid
+    pub async fn get_sound_details(
+        &self,
+        sound_id: uuid::Uuid,
+    ) -> Option<entity_sqlite::sounds::Model> {
+        const OP: &str = "get_sound_details";
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Read)
+            .await;
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+
+        use entity_sqlite::sounds;
+
+        Sounds::find()
+            .filter(sounds::Column::SoundId.eq(sound_id))
+            .one(&self.sounds_db)
+            .await
+            .ok()?
+    }
+
+    /// Get sound details from uuid
+    pub async fn rename_sound(&self, sound_id: uuid::Uuid, new_name: String) -> DataResult<()> {
+        const OP: &str = "get_sound_details";
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Read)
+            .await;
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+
+        use entity_sqlite::sounds;
+
+        let model = Sounds::find()
+            .filter(sounds::Column::SoundId.eq(sound_id))
+            .one(&self.sounds_db)
+            .await
+            .map_err(|error| DataError::DatabaseError {
+                operation: OP.to_string(),
+                error,
+            })?;
+
+        if let Some(model) = model {
+            let mut active = model.into_active_model();
+            active.sound_name = ActiveValue::Set(new_name);
+            active
+                .save(&self.sounds_db)
+                .await
+                .map_err(|error| DataError::DatabaseError {
+                    operation: OP.to_string(),
+                    error,
+                })?;
+            Ok(())
+        } else {
+            Err(DataError::NotFound(sound_id.to_string()))
+        }
+    }
+
     pub async fn get_user_sounds_and_public(
         &self,
         user_id: &serenity::UserId,
     ) -> DataResult<Vec<entity_sqlite::sounds::Model>> {
-        const OP: &str = "get_user_sounds";
+        const OP: &str = "get_user_sounds_and_public";
         self.metrics_handler
             .data_access(OP, DataOperationType::Read)
             .await;
@@ -98,6 +161,33 @@ impl SoundsManager {
                     .eq(user_id.get())
                     .or(sounds::Column::Public.eq(true)),
             )
+            .all(&self.sounds_db)
+            .await
+            .map_err(|error| DataError::DatabaseError {
+                operation: OP.to_string(),
+                error,
+            })?;
+
+        Ok(sounds)
+    }
+
+    pub async fn get_user_sounds(
+        &self,
+        user_id: &serenity::UserId,
+    ) -> DataResult<Vec<entity_sqlite::sounds::Model>> {
+        const OP: &str = "get_user_sounds";
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Read)
+            .await;
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+
+        use entity_sqlite::sounds;
+        let sounds = Sounds::find()
+            .filter(sounds::Column::UserId.eq(user_id.get()))
             .all(&self.sounds_db)
             .await
             .map_err(|error| DataError::DatabaseError {

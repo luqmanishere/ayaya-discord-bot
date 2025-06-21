@@ -100,7 +100,6 @@ impl BotInactiveCounter {
 
             // skip queue checks if linger is on
             if linger {
-                tracing::info!("linger is on");
                 (alone_in_channel, Some(Status::Linger))
             } else {
                 tracing::info!("linger is off");

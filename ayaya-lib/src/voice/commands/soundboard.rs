@@ -1,9 +1,15 @@
-use std::io::Read;
+use std::{io::Read, sync::Arc};
 
 use error::SoundboardError;
 use poise::serenity_prelude as serenity;
+use tokio::sync::Mutex;
 
-use crate::{error::BotError, utils::GuildInfo, CommandResult, Context};
+use crate::{
+    error::BotError,
+    utils::GuildInfo,
+    voice::utils::{embed_template, EmbedOperation},
+    CommandResult, Context,
+};
 
 use super::join;
 
@@ -191,7 +197,49 @@ pub async fn play_sound(
     }
 
     // TODO: which sound is played?
-    ctx.reply("Sound played.").await?;
+    let sound_data = ctx
+        .data()
+        .data_manager
+        .sounds()
+        .get_sound_details(sound_id)
+        .await
+        .expect("valid sound was not found");
+    create_sound_repeat(ctx, &ctx.author().id, sound_data, call).await?;
+    Ok(())
+}
+
+/// Rename a sound that you uploaded
+#[poise::command(slash_command, guild_only, prefix_command, category = "Soundboard")]
+pub async fn rename_sound(
+    ctx: Context<'_>,
+    #[autocomplete = "autocomplete_rename_sound"]
+    #[description = "The sound identifier. Refer to the autocomplete"]
+    sound_id: uuid::Uuid,
+    new_description: String,
+) -> Result<(), BotError> {
+    ctx.defer_ephemeral().await?;
+
+    let old_sound = ctx
+        .data()
+        .data_manager
+        .sounds()
+        .get_sound_details(sound_id)
+        .await
+        .expect("sound exists");
+
+    ctx.data()
+        .data_manager
+        .sounds()
+        .rename_sound(sound_id, new_description.clone())
+        .await?;
+
+    // TODO: embed
+    ctx.reply(format!(
+        "Renamed {} to {new_description}",
+        old_sound.sound_name
+    ))
+    .await?;
+
     Ok(())
 }
 
@@ -205,6 +253,26 @@ async fn autocomplete_play_sound(
 
     let sounds = sound_manager
         .get_user_sounds_and_public(&user.id)
+        .await
+        .unwrap_or_default();
+
+    sounds
+        .iter()
+        .filter(|e| e.sound_name.to_lowercase().contains(&partial))
+        .map(|e| serenity::AutocompleteChoice::new(e.sound_name.clone(), e.sound_id.to_string()))
+        .collect()
+}
+
+async fn autocomplete_rename_sound(
+    ctx: Context<'_>,
+    partial: &str,
+) -> Vec<serenity::AutocompleteChoice> {
+    let user = ctx.author();
+    let sound_manager = ctx.data().data_manager.sounds();
+    let partial = partial.to_lowercase();
+
+    let sounds = sound_manager
+        .get_user_sounds(&user.id)
         .await
         .unwrap_or_default();
 
@@ -273,6 +341,75 @@ pub async fn create_public_upload_notice(ctx: Context<'_>) -> Result<Option<bool
     }
 
     Ok(None)
+}
+
+/// Create an interaction for repeating soundboard triggers
+pub async fn create_sound_repeat(
+    ctx: Context<'_>,
+    user_id: &serenity::UserId,
+    sound: entity_sqlite::sounds::Model,
+    call: Arc<Mutex<songbird::Call>>,
+) -> Result<(), BotError> {
+    // Define some unique identifiers for the navigation buttons
+    let ctx_id = ctx.id();
+    let user_id = user_id.get();
+    let sound_id = sound.sound_id;
+    let repeat_id = format!("{ctx_id}_{user_id}_{sound_id}");
+    let mut count = 1;
+
+    let buttons = vec![serenity::CreateButton::new(&repeat_id)
+        .style(serenity::ButtonStyle::Success)
+        .label("Repeat")];
+    let embed = |count: i32| {
+        let description = serenity::MessageBuilder::default()
+            .push_line(format!("# {}", sound.sound_name))
+            .push_line(format!("Played {count} time(s). Play again?"))
+            .build();
+
+        embed_template(&EmbedOperation::SoundPlayed).description(description.to_string())
+    };
+    let components = serenity::CreateActionRow::Buttons(buttons);
+    let reply = poise::CreateReply::default()
+        .embed(embed(count))
+        .components(vec![components]);
+
+    ctx.send(reply).await?;
+
+    // Loop through incoming interactions with the navigation buttons
+    while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
+        // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
+        // button was pressed
+        .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+        // Timeout when no navigation button has been pressed for 1 minute
+        .timeout(std::time::Duration::from_secs(300))
+        .await
+    {
+        if press.data.custom_id == repeat_id {
+            let path = ctx
+                .data()
+                .data_dir
+                .join("sounds")
+                .join(format!("{sound_id}.mp3"));
+            tracing::info!("path: {}", path.display());
+            let input = songbird::input::File::new(path);
+
+            {
+                let mut lock = call.lock().await;
+                lock.play(input.into());
+            }
+            count += 1;
+            press
+                .create_response(
+                    ctx,
+                    serenity::CreateInteractionResponse::UpdateMessage(
+                        serenity::CreateInteractionResponseMessage::new().embed(embed(count)),
+                    ),
+                )
+                .await?;
+        }
+    }
+
+    Ok(())
 }
 
 pub mod error {

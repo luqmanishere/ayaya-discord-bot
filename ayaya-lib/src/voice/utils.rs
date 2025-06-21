@@ -176,6 +176,7 @@ pub enum EmbedOperation {
     MoveInQueue { source: usize, target: usize },
     NewPlaylist,
     NewPlaylistNext,
+    SoundPlayed,
 }
 
 impl std::fmt::Display for EmbedOperation {
@@ -194,6 +195,7 @@ impl std::fmt::Display for EmbedOperation {
             EmbedOperation::MoveInQueue { .. } => "Queue Item Moved",
             EmbedOperation::NewPlaylist => "Added New Playlist",
             EmbedOperation::NewPlaylistNext => "Added New Playlist - Next",
+            EmbedOperation::SoundPlayed => "Sound Played",
         };
         write!(f, "{out}")
     }

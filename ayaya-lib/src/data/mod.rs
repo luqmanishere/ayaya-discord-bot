@@ -385,6 +385,8 @@ pub mod error {
             sound_name: String,
             user_id: poise::serenity_prelude::UserId,
         },
+        #[error("Not found in database. Input error? : {0}")]
+        NotFound(String),
         #[error(transparent)]
         BincodeDecodeError(#[from] bincode::error::DecodeError),
         #[error(transparent)]
@@ -437,6 +439,7 @@ pub mod error {
                 }
                 DataError::DatabaseError { operation, .. } => operation,
                 DataError::DuplicateSoundError { .. } => "duplicate_sound_error",
+                DataError::NotFound(_) => "not_found",
                 DataError::BincodeDecodeError(..) => "bincode_decode_error",
                 DataError::BincodeEncodeError(..) => "bincode_encode_error",
             };
