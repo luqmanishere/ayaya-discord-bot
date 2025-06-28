@@ -23,7 +23,7 @@ pub async fn command_log_raw(ctx: Context<'_>) -> Result<(), BotError> {
 
     let logs = data_manager.find5_command_log().await?;
 
-    ctx.reply(format!("```\n{:#?}\n```", logs)).await?;
+    ctx.reply(format!("```\n{logs:#?}\n```")).await?;
     Ok(())
 }
 

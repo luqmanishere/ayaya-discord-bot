@@ -175,7 +175,7 @@ impl VoiceEventHandler for BotInactiveCounter {
             if let Err(e) = manager.remove(self.guild_id).await {
                 check_msg(
                     self.channel_id
-                        .say(&self.ctx.http, format!("Failed: {:?}", e))
+                        .say(&self.ctx.http, format!("Failed: {e:?}"))
                         .await,
                 );
                 error!("Failed: {:?}", e);

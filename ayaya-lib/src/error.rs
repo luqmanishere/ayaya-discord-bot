@@ -26,7 +26,7 @@ pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
             ..
         } => {
             error!("unrecognized command: {}", msg_content);
-            msg.reply(ctx, format!("unrecognized command: {}", msg_content))
+            msg.reply(ctx, format!("unrecognized command: {msg_content}"))
                 .await
                 .expect("no errors");
         }
@@ -123,20 +123,20 @@ pub fn command_error_embed(command: String, error: BotError) -> serenity::Create
     serenity::CreateEmbed::default()
         .color(serenity::Color::DARK_RED)
         .author(
-            serenity::CreateEmbedAuthor::new(format!("Error In Command | {}", command)).icon_url(
+            serenity::CreateEmbedAuthor::new(format!("Error In Command | {command}")).icon_url(
                 "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
             ),
         )
         .description(
             serenity::MessageBuilder::default()
-                .push_line(format!("### {}", error))
+                .push_line(format!("### {error}"))
                 .push_line({
                     let error_help = { error.help().map(|e| e.to_string()) };
                     let error_help = match error_help {
                         Some(error_str) => error_str,
                         None => "Undescribed error, please ping @solemnattic".to_string(),
                     };
-                    format!("**Help**: {}", error_help)
+                    format!("**Help**: {error_help}")
                 })
                 .to_string(),
         )

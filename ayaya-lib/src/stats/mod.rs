@@ -124,7 +124,7 @@ pub async fn server_all_time_single(
             ctx.send(reply).await?;
         }
         Err(_) => {
-            ctx.reply(format!("Data for command name `{}` is not found", command))
+            ctx.reply(format!("Data for command name `{command}` is not found"))
                 .await?;
         }
     }

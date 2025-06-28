@@ -2,6 +2,7 @@
 name = "ayaya-runner-local"
 version = { workspace = true }
 edition = "2021"
+rust-version = { workspace = true }
 
 [dependencies]
 # workspace deps

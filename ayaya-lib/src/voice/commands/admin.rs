@@ -98,7 +98,7 @@ pub async fn mute(ctx: Context<'_>) -> Result<(), BotError> {
         check_msg(ctx.channel_id().say(ctx, "Already muted").await);
     } else {
         if let Err(e) = handler.mute(true).await {
-            check_msg(ctx.channel_id().say(ctx, format!("Failed: {:?}", e)).await);
+            check_msg(ctx.channel_id().say(ctx, format!("Failed: {e:?}")).await);
         }
 
         ctx.say("Now muted").await?;
@@ -131,7 +131,7 @@ pub async fn deafen(ctx: Context<'_>) -> Result<(), BotError> {
     } else {
         if let Err(e) = handler.deafen(true).await {
             error!("Failed to deafen: {e}");
-            ctx.say(format!("Failed to deafen: {:?}", e)).await?;
+            ctx.say(format!("Failed to deafen: {e:?}")).await?;
         }
 
         ctx.say("Deafened").await?;

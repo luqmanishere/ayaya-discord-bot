@@ -205,7 +205,7 @@ impl std::fmt::Display for EmbedOperation {
 pub fn embed_template(operation: &EmbedOperation) -> serenity::CreateEmbed {
     serenity::CreateEmbed::default()
         .author(
-            serenity::CreateEmbedAuthor::new(format!("{}", operation)).icon_url(
+            serenity::CreateEmbedAuthor::new(format!("{operation}")).icon_url(
                 "https://cliply.co/wp-content/uploads/2019/04/371903520_SOCIAL_ICONS_YOUTUBE.png",
             ),
         )
@@ -320,8 +320,8 @@ pub async fn create_search_interaction(
 ) -> Result<String, BotError> {
     // Define some unique identifiers for the navigation buttons
     let ctx_id = ctx.id();
-    let prev_button_id = format!("{}prev", ctx_id);
-    let next_button_id = format!("{}next", ctx_id);
+    let prev_button_id = format!("{ctx_id}prev");
+    let next_button_id = format!("{ctx_id}next");
 
     let button_id_gen = |count: usize| format!("{ctx_id}-search-{count}");
 

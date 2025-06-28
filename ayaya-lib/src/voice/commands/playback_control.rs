@@ -46,7 +46,7 @@ pub async fn pause(ctx: Context<'_>, _args: String) -> Result<(), BotError> {
         // TODO: replace these messages with embeds
         check_msg(
             ctx.channel_id()
-                .say(ctx, format!("{} - paused", song_name))
+                .say(ctx, format!("{song_name} - paused"))
                 .await,
         );
     } else {
@@ -96,7 +96,7 @@ pub async fn resume(ctx: Context<'_>) -> Result<(), BotError> {
         // TODO: embed
         check_msg(
             ctx.channel_id()
-                .say(ctx, format!("{} - resumed", song_name))
+                .say(ctx, format!("{song_name} - resumed"))
                 .await,
         );
     } else {
