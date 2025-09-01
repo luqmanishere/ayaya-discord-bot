@@ -79,18 +79,8 @@ impl DataManager {
         &mut self.permissions
     }
 
-    #[expect(dead_code)]
-    pub fn stats_mut(&mut self) -> &mut StatsManager {
-        &mut self.stats
-    }
-
     pub fn stats(&self) -> StatsManager {
         self.stats.clone()
-    }
-
-    #[expect(dead_code)]
-    pub fn sounds_mut(&mut self) -> &mut SoundsManager {
-        &mut self.sounds
     }
 
     pub fn sounds(&self) -> SoundsManager {
