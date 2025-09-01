@@ -1,10 +1,19 @@
 //! Contains commands reserved for the bot's owner: ie me.
+use ::serenity::futures::StreamExt;
 use poise::serenity_prelude as serenity;
 
-use crate::{error::BotError, CommandResult, Commands, Context};
+use crate::{
+    data::archive::ArchiveService, error::BotError, utils::GuildInfo, CommandResult, Commands,
+    Context,
+};
 
 pub fn owner_commands() -> Commands {
-    vec![command_log_raw(), upload_cookies(), dep_versions()]
+    vec![
+        command_log_raw(),
+        upload_cookies(),
+        dep_versions(),
+        history(),
+    ]
 }
 
 /// Prints command logs raw. Owner only.
@@ -94,5 +103,79 @@ pub async fn dep_versions(ctx: Context<'_>) -> CommandResult {
     // TODO: add other external programs version
 
     ctx.reply(message.build()).await?;
+    Ok(())
+}
+
+#[poise::command(
+    slash_command,
+    prefix_command,
+    owners_only,
+    ephemeral,
+    hide_in_help,
+    guild_only,
+    category = "Owner Commands"
+)]
+
+pub async fn history(ctx: Context<'_>) -> CommandResult {
+    ctx.defer().await?;
+    let guild = GuildInfo::from_ctx(ctx)?;
+
+    let channels = guild.guild_id.channels(ctx).await?;
+
+    let folder = std::path::PathBuf::from(format!("dev/{}_{}", guild.guild_name, guild.guild_id));
+    std::fs::create_dir_all(&folder).unwrap();
+
+    for (channel_id, _guild_channel) in channels {
+        tracing::info!(
+            "Streaming messages from channel {} ({channel_id}) from guild {} ({})",
+            _guild_channel.name,
+            guild.guild_name,
+            guild.guild_id
+        );
+
+        let mut messages_buf = vec![];
+
+        let mut messages_iter = channel_id.messages_iter(ctx).boxed();
+        while let Some(messages_result) = messages_iter.next().await {
+            match messages_result {
+                Ok(message) => {
+                    messages_buf.push(message.clone());
+                    match ctx
+                        .data()
+                        .data_manager
+                        .archive()
+                        .process_message(message)
+                        .await
+                    {
+                        Ok(_) => {}
+                        Err(e) => {
+                            tracing::error!("Failed to archive message: {e}");
+                        }
+                    }
+                }
+                Err(err) => tracing::error!("Error getting message: {err}"),
+            }
+        }
+
+        let file_name = folder.join(format!("{}_{}.json", _guild_channel.name, channel_id.get()));
+        let to_write = serde_json::to_string_pretty(&messages_buf).unwrap();
+        std::fs::write(&file_name, to_write).unwrap();
+        tracing::info!(
+            "Wrote messages from {} ({channel_id}) to {}",
+            _guild_channel.name,
+            file_name.display()
+        );
+    }
+
+    tracing::info!(
+        "Finished downloading messages from guild {} ({})",
+        guild.guild_name,
+        guild.guild_id
+    );
+    ctx.reply(format!(
+        "Finished downloading messages from guild {} ({})",
+        guild.guild_name, guild.guild_id
+    ))
+    .await?;
     Ok(())
 }

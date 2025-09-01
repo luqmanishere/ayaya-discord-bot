@@ -1,5 +1,6 @@
 //! Manage database connection and caching
 //!
+pub mod archive;
 pub mod permissions;
 pub mod sounds;
 pub mod stats;
@@ -23,6 +24,7 @@ use stats::StatsManager;
 use time::UtcOffset;
 use utils::DataTiming;
 
+use crate::data::archive::{ArchiveService, Service, SqliteMessageRepository};
 use crate::metrics::{DataOperationType, Metrics};
 
 pub type DataResult<T> = Result<T, DataError>;
@@ -44,11 +46,17 @@ pub struct DataManager {
     stats: StatsManager,
     sounds: SoundsManager,
     autocomplete_cache: Autocomplete,
+
+    archive: Service<SqliteMessageRepository>,
 }
 
 impl DataManager {
     /// A new instance of the manager
-    pub async fn new(db_url: &str, metrics_handler: Metrics) -> DataResult<Self> {
+    pub async fn new(
+        db_url: &str,
+        data_path: std::path::PathBuf,
+        metrics_handler: Metrics,
+    ) -> DataResult<Self> {
         let mut connect_options = if cfg!(debug_assertions) && !cfg!(test) {
             ConnectOptions::new("sqlite://dev/stats.sqlite?mode=rwc")
         } else {
@@ -65,6 +73,8 @@ impl DataManager {
         let permissions = Permissions::new(db.clone(), metrics_handler.clone()).await?;
         let stats = StatsManager::new(db.clone(), metrics_handler.clone());
         let sounds = SoundsManager::new(db.clone(), metrics_handler.clone());
+
+        let archive = Service::new(SqliteMessageRepository::new(data_path).await?);
         Ok(Self {
             db,
             metrics_handler,
@@ -72,6 +82,7 @@ impl DataManager {
             stats,
             sounds,
             autocomplete_cache: Arc::new(Mutex::new(LruCache::new(1000 * 1024))),
+            archive,
         })
     }
 
@@ -95,6 +106,10 @@ impl DataManager {
 
     pub fn sounds(&self) -> SoundsManager {
         self.sounds.clone()
+    }
+
+    pub fn archive(&self) -> impl ArchiveService {
+        self.archive.clone()
     }
 
     /// Log command calls to the database. Will also increment the command counter.
@@ -455,7 +470,9 @@ mod tests {
 
     async fn get_data_manager() -> DataManager {
         let url = "sqlite::memory:";
-        DataManager::new(url, Metrics::default()).await.unwrap()
+        DataManager::new(url, std::path::PathBuf::default(), Metrics::default())
+            .await
+            .unwrap()
     }
 
     async fn simulate_command_call(dm: &mut DataManager, count: i64) {

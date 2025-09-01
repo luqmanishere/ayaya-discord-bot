@@ -97,7 +97,7 @@ pub async fn ayayabot(
     // merged everything into one database
     let db_path = data_dir.join("stats.sqlite");
     let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
-    let data_manager = DataManager::new(&db_url, metrics.clone())
+    let data_manager = DataManager::new(&db_url, data_dir.clone(), metrics.clone())
         .await
         .map_err(|e| miette::miette!("database error: {}", e))?;
 

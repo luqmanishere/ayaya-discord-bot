@@ -1,4 +1,5 @@
 sqlite-url := "sqlite://dev/stats.sqlite?mode=rwc"
+archive-url := "sqlite://dev/archive.sqlite?mode=rwc"
 
 alias t := test
 
@@ -26,6 +27,25 @@ db-up:
 db-down:
     sea-orm-cli migrate down -d migration-sqlite -u {{sqlite-url}}
 
+# archive db
+
+refresh-archive-all: fresh-archive generate-archive-all
+
+fresh-archive:
+    sea-orm-cli migrate fresh -d migration-archive -u {{archive-url}}
+
+generate-archive-all:
+    sea-orm-cli generate entity --date-time-crate time -o entity-archive/src -u "{{archive-url}}" -l 
+
+generate-archive-migration NAME:
+    sea-orm-cli migrate generate -d migration-archive -u {{archive-url}} {{NAME}}
+
+db-archive-up:
+    sea-orm-cli migrate up -d migration-archive -u {{archive-url}}
+
+db-archive-down:
+    sea-orm-cli migrate dwon -d migration-archive -u {{archive-url}}
+
 bump-minor:
     git cliff --bump minor -o CHANGELOG.md
     cargo set-version --bump minor
@@ -41,4 +61,5 @@ podman-build:
     podman build --tag "luqmanishere/ayayadc-dev" .
 
 podman-run:
-    podman run -v ./secrets:/secrets -v ./dev/local_share:/root/.local/share/ayayadc -e DISCORD_TOKEN_FILE=/secrets/dev-discordtoken -e AGE_SECRET_KEY_FILE=/secrets/dev-age -it localhost/luqmanishere/ayayadc-dev:latest
+    podman run -d -v ./secrets:/secrets -v ./dev/local_share:/root/.local/share/ayayadc -e DISCORD_TOKEN_FILE=/secrets/dev-discordtoken -e AGE_SECRET_KEY_FILE=/secrets/dev-age -it localhost/luqmanishere/ayayadc-dev:latest
+ 
