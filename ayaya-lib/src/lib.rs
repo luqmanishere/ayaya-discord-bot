@@ -38,6 +38,7 @@ use tokio::sync::{Mutex as TokioMutex, RwLock};
 use tracing::{debug, error, info, level_filters::LevelFilter, subscriber::set_global_default};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{fmt::time::OffsetTime, layer::SubscriberExt, EnvFilter};
+use tracker::tracker;
 use utils::GuildInfo;
 use voice::voice_commands;
 
@@ -51,6 +52,7 @@ pub(crate) mod memes;
 pub(crate) mod metrics;
 pub(crate) mod owner;
 pub(crate) mod stats;
+pub(crate) mod tracker;
 pub(crate) mod utils;
 pub(crate) mod voice;
 
@@ -110,7 +112,7 @@ pub async fn ayayabot(
     let manager = songbird::Songbird::serenity();
 
     // we do this for
-    let mut commands = vec![about(), help(), ping(), music(), gay()];
+    let mut commands = vec![about(), help(), ping(), music(), gay(), tracker()];
     commands.append(&mut voice_commands());
     commands.append(&mut owner_commands());
     commands.append(&mut stats_commands());

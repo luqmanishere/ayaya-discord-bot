@@ -1,0 +1,15 @@
+{
+  "code": 0,
+  "message": "success",
+  "data": [
+    {
+      "cardPoolType": "Weapons Accurate Modulation",
+      "resourceId": 21040023,
+      "qualityLevel": 3,
+      "resourceType": "Weapon",
+      "name": "Originite: Type IV",
+      "count": 1,
+      "time": "2025-09-01 09:41:47"
+    }
+  ]
+}

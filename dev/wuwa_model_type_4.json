@@ -1,0 +1,654 @@
+{
+    "code": 0,
+    "message": "success",
+    "data": [
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Night",
+            "count": 1,
+            "time": "2025-08-29 01:01:33"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Voyager",
+            "count": 1,
+            "time": "2025-08-29 01:01:26"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Voyager",
+            "count": 1,
+            "time": "2025-08-20 03:20:40"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21030023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type III",
+            "count": 1,
+            "time": "2025-08-20 03:20:40"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21030013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Pistols of Night",
+            "count": 1,
+            "time": "2025-08-20 03:20:40"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21030013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Pistols of Night",
+            "count": 1,
+            "time": "2025-08-20 03:20:40"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 1601,
+            "qualityLevel": 4,
+            "resourceType": "Resonator",
+            "name": "Taoqi",
+            "count": 1,
+            "time": "2025-08-20 03:20:40"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Gauntlets of Voyager",
+            "count": 1,
+            "time": "2025-08-20 03:20:40"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21030043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Pistols of Voyager",
+            "count": 1,
+            "time": "2025-08-20 03:20:40"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type I",
+            "count": 1,
+            "time": "2025-08-20 03:20:40"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Voyager",
+            "count": 1,
+            "time": "2025-08-20 03:20:40"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type I",
+            "count": 1,
+            "time": "2025-08-20 03:20:40"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21020043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Sword of Voyager",
+            "count": 1,
+            "time": "2025-06-17 11:31:57"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Gauntlets of Voyager",
+            "count": 1,
+            "time": "2025-06-17 11:31:57"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Gauntlets of Night",
+            "count": 1,
+            "time": "2025-06-17 11:31:57"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040024,
+            "qualityLevel": 4,
+            "resourceType": "Weapon",
+            "name": "Marcato",
+            "count": 1,
+            "time": "2025-06-17 11:31:57"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type I",
+            "count": 1,
+            "time": "2025-06-17 11:31:57"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21020043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Sword of Voyager",
+            "count": 1,
+            "time": "2025-06-17 11:31:57"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type I",
+            "count": 1,
+            "time": "2025-06-17 11:31:57"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Gauntlets of Night",
+            "count": 1,
+            "time": "2025-06-17 11:31:57"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21020013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Sword of Night",
+            "count": 1,
+            "time": "2025-06-17 11:31:57"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Voyager",
+            "count": 1,
+            "time": "2025-06-17 11:31:57"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Voyager",
+            "count": 1,
+            "time": "2025-06-14 01:03:12"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21030023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type III",
+            "count": 1,
+            "time": "2025-06-14 01:03:12"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Night",
+            "count": 1,
+            "time": "2025-06-14 01:03:12"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 1106,
+            "qualityLevel": 4,
+            "resourceType": "Resonator",
+            "name": "Youhu",
+            "count": 1,
+            "time": "2025-06-14 01:03:12"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Night",
+            "count": 1,
+            "time": "2025-06-14 01:03:12"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type IV",
+            "count": 1,
+            "time": "2025-06-14 01:03:12"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Night",
+            "count": 1,
+            "time": "2025-06-14 01:03:12"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Gauntlets of Voyager",
+            "count": 1,
+            "time": "2025-06-14 01:03:12"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type IV",
+            "count": 1,
+            "time": "2025-06-14 01:03:12"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Night",
+            "count": 1,
+            "time": "2025-06-14 01:03:12"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type I",
+            "count": 1,
+            "time": "2025-06-14 01:03:03"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21020013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Sword of Night",
+            "count": 1,
+            "time": "2025-06-14 01:03:03"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type IV",
+            "count": 1,
+            "time": "2025-06-14 01:03:03"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 1102,
+            "qualityLevel": 4,
+            "resourceType": "Resonator",
+            "name": "Sanhua",
+            "count": 1,
+            "time": "2025-06-14 01:03:03"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 1601,
+            "qualityLevel": 4,
+            "resourceType": "Resonator",
+            "name": "Taoqi",
+            "count": 1,
+            "time": "2025-06-14 01:03:03"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21020013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Sword of Night",
+            "count": 1,
+            "time": "2025-06-14 01:03:03"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Voyager",
+            "count": 1,
+            "time": "2025-06-14 01:03:03"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Night",
+            "count": 1,
+            "time": "2025-06-14 01:03:03"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type IV",
+            "count": 1,
+            "time": "2025-06-14 01:03:03"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Voyager",
+            "count": 1,
+            "time": "2025-06-14 01:03:03"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type I",
+            "count": 1,
+            "time": "2025-06-14 01:02:54"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Gauntlets of Night",
+            "count": 1,
+            "time": "2025-06-14 01:02:54"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Voyager",
+            "count": 1,
+            "time": "2025-06-14 01:02:54"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Night",
+            "count": 1,
+            "time": "2025-06-14 01:02:54"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21030024,
+            "qualityLevel": 4,
+            "resourceType": "Weapon",
+            "name": "Cadenza",
+            "count": 1,
+            "time": "2025-06-14 01:02:54"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Voyager",
+            "count": 1,
+            "time": "2025-06-14 01:02:54"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Voyager",
+            "count": 1,
+            "time": "2025-06-14 01:02:54"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Gauntlets of Night",
+            "count": 1,
+            "time": "2025-06-14 01:02:54"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Night",
+            "count": 1,
+            "time": "2025-06-14 01:02:54"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type IV",
+            "count": 1,
+            "time": "2025-06-14 01:02:54"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Voyager",
+            "count": 1,
+            "time": "2025-06-12 14:01:30"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21030013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Pistols of Night",
+            "count": 1,
+            "time": "2025-06-12 14:01:30"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21020023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type II",
+            "count": 1,
+            "time": "2025-06-12 14:01:30"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Voyager",
+            "count": 1,
+            "time": "2025-06-12 14:01:30"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050015,
+            "qualityLevel": 5,
+            "resourceType": "Weapon",
+            "name": "Cosmic Ripples",
+            "count": 1,
+            "time": "2025-06-12 14:01:30"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010084,
+            "qualityLevel": 4,
+            "resourceType": "Weapon",
+            "name": "Waning Redshift",
+            "count": 1,
+            "time": "2025-06-12 14:01:30"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21030023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type III",
+            "count": 1,
+            "time": "2025-06-12 14:01:30"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type IV",
+            "count": 1,
+            "time": "2025-06-12 14:01:30"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21020013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Sword of Night",
+            "count": 1,
+            "time": "2025-06-12 14:01:30"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Night",
+            "count": 1,
+            "time": "2025-06-12 14:01:30"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Gauntlets of Night",
+            "count": 1,
+            "time": "2025-06-02 01:28:17"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 1303,
+            "qualityLevel": 4,
+            "resourceType": "Resonator",
+            "name": "Yuanwu",
+            "count": 1,
+            "time": "2025-06-02 01:28:17"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050023,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Originite: Type V",
+            "count": 1,
+            "time": "2025-06-02 01:28:17"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Night",
+            "count": 1,
+            "time": "2025-06-02 01:28:17"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21040043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Gauntlets of Voyager",
+            "count": 1,
+            "time": "2025-06-02 01:28:17"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050043,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Rectifier of Voyager",
+            "count": 1,
+            "time": "2025-06-02 01:28:17"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21010013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Broadblade of Night",
+            "count": 1,
+            "time": "2025-06-02 01:28:17"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21030013,
+            "qualityLevel": 3,
+            "resourceType": "Weapon",
+            "name": "Pistols of Night",
+            "count": 1,
+            "time": "2025-06-02 01:28:17"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 1602,
+            "qualityLevel": 4,
+            "resourceType": "Resonator",
+            "name": "Danjin",
+            "count": 1,
+            "time": "2025-06-02 01:28:17"
+        },
+        {
+            "cardPoolType": "Full-Range Modualtion",
+            "resourceId": 21050015,
+            "qualityLevel": 5,
+            "resourceType": "Weapon",
+            "name": "Cosmic Ripples",
+            "count": 1,
+            "time": "2025-06-02 01:28:17"
+        }
+    ]
+}

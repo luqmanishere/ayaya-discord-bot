@@ -4,6 +4,7 @@ pub mod permissions;
 pub mod sounds;
 pub mod stats;
 mod utils;
+pub mod wuwa_tracker;
 
 use std::sync::{Arc, Mutex};
 
@@ -14,8 +15,8 @@ use migration_sqlite::{Migrator as SqliteMigrator, MigratorTrait};
 use permissions::Permissions;
 use poise::serenity_prelude as serenity;
 use sea_orm::{
-    prelude::*, ActiveValue, ConnectOptions, EntityOrSelect, IntoActiveModel, QueryOrder,
-    QuerySelect,
+    ActiveValue, ConnectOptions, EntityOrSelect, IntoActiveModel, QueryOrder, QuerySelect,
+    prelude::*,
 };
 use sea_orm::{Database, DatabaseConnection};
 use sounds::SoundsManager;
@@ -23,7 +24,10 @@ use stats::StatsManager;
 use time::UtcOffset;
 use utils::DataTiming;
 
-use crate::metrics::{DataOperationType, Metrics};
+use crate::{
+    data::wuwa_tracker::WuwaPullsManager,
+    metrics::{DataOperationType, Metrics},
+};
 
 pub type DataResult<T> = Result<T, DataError>;
 pub type Autocomplete = Arc<Mutex<LruCache<String, String>>>;
@@ -43,6 +47,7 @@ pub struct DataManager {
     permissions: Permissions,
     stats: StatsManager,
     sounds: SoundsManager,
+    wuwa_tracker: WuwaPullsManager,
     autocomplete_cache: Autocomplete,
 }
 
@@ -65,12 +70,14 @@ impl DataManager {
         let permissions = Permissions::new(db.clone(), metrics_handler.clone()).await?;
         let stats = StatsManager::new(db.clone(), metrics_handler.clone());
         let sounds = SoundsManager::new(db.clone(), metrics_handler.clone());
+        let wuwa_tracker = WuwaPullsManager::new(db.clone(), metrics_handler.clone());
         Ok(Self {
             db,
             metrics_handler,
             permissions,
             stats,
             sounds,
+            wuwa_tracker,
             autocomplete_cache: Arc::new(Mutex::new(LruCache::new(1000 * 1024))),
         })
     }
@@ -85,6 +92,10 @@ impl DataManager {
 
     pub fn sounds(&self) -> SoundsManager {
         self.sounds.clone()
+    }
+
+    pub fn wuwa_tracker(&self) -> WuwaPullsManager {
+        self.wuwa_tracker.clone()
     }
 
     /// Log command calls to the database. Will also increment the command counter.
@@ -370,7 +381,11 @@ pub mod error {
         FindSingleUsersSingleCommandCallError(DbErr),
         #[error("Database error in operation {operation}: {error}")]
         DatabaseError { operation: String, error: DbErr },
-        #[error("This sound is already present in the database for the user {user_id}. OP: {sound_name}")]
+        #[error("Duplicate item {object} found.")]
+        DuplicateEntry { object: String },
+        #[error(
+            "This sound is already present in the database for the user {user_id}. OP: {sound_name}"
+        )]
         DuplicateSoundError {
             sound_name: String,
             user_id: poise::serenity_prelude::UserId,
@@ -429,6 +444,7 @@ pub mod error {
                 }
                 DataError::DatabaseError { operation, .. } => operation,
                 DataError::DuplicateSoundError { .. } => "duplicate_sound_error",
+                DataError::DuplicateEntry { .. } => "duplicate_entry",
                 DataError::NotFound(_) => "not_found",
                 DataError::BincodeDecodeError(..) => "bincode_decode_error",
                 DataError::BincodeEncodeError(..) => "bincode_encode_error",

@@ -5,7 +5,7 @@ alias t := test
 default:
     just -l
 
-# create a fresh sqlite db and generate entities 
+# create a fresh sqlite db and generate entities
 refresh-sqlite-all: fresh-sqlite generate-sqlite-all
 
 # refresh dev sqlite db
@@ -15,6 +15,9 @@ fresh-sqlite:
 # generate entities for sqlite db
 generate-sqlite-all:
     sea-orm-cli generate entity --date-time-crate time -o entity-sqlite/src -u "sqlite://dev/stats.sqlite?mode=rwc" -l --with-prelude all
+
+generate-sqlite-tables TABLES:
+    sea-orm-cli generate entity --date-time-crate time -o entity-sqlite/src -u "sqlite://dev/stats.sqlite?mode=rwc" -l --with-prelude all --tables {{TABLES}}
 
 # generate a new migration with NAME
 generate-migration NAME:

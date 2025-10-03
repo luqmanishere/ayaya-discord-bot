@@ -1,21 +1,20 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 use poise::serenity_prelude::{self as serenity, UserId};
 use serenity::{
-    async_trait,
+    Context as SerenityContext, async_trait,
     http::Http,
     model::{id::GuildId, prelude::ChannelId},
-    Context as SerenityContext,
 };
 use songbird::{
-    tracks::PlayMode, Event, EventContext, EventHandler as VoiceEventHandler, Songbird,
+    Event, EventContext, EventHandler as VoiceEventHandler, Songbird, tracks::PlayMode,
 };
 use tracing::{error, info};
 
-use super::utils::{metadata_to_embed, EmbedOperation, YoutubeMetadata};
+use super::utils::{EmbedOperation, YoutubeMetadata, metadata_to_embed};
 use crate::utils::check_msg;
 
 pub struct SongFader {
@@ -26,7 +25,7 @@ pub struct SongFader {
 #[async_trait]
 impl VoiceEventHandler for SongFader {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
-        if let EventContext::Track(&[(state, track)]) = ctx {
+        if let EventContext::Track([(state, track)]) = ctx {
             let _ = track.set_volume(state.volume / 2.0);
 
             if state.volume < 1e-2 {
@@ -77,7 +76,7 @@ impl std::fmt::Display for Status {
                 Status::Playback => "Bot is playing music",
                 Status::Inactive => "Bot is inactive",
                 Status::Linger => "Linger is active.",
-                Status::Other(ref other) => other,
+                Status::Other(other) => other,
             }
         )
     }

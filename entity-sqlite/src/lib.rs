@@ -14,4 +14,7 @@ pub mod sounds;
 pub mod upload_noticed;
 pub mod user_command_all_time_statistics;
 pub mod user_play_queries;
+pub mod wuwa_pull;
+pub mod wuwa_resource;
+pub mod wuwa_user;
 pub mod youtube_cookies;

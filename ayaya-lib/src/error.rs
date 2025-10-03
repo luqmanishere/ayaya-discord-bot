@@ -4,9 +4,9 @@ use thiserror::Error;
 use tracing::error;
 
 use crate::{
+    Data,
     metrics::ErrorType,
     voice::{commands::soundboard::error::SoundboardError, error::MusicCommandError},
-    Data,
 };
 
 pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
@@ -90,6 +90,24 @@ pub enum BotError {
     },
     #[error("Other error: {0}")]
     OtherError(Box<std::io::Error>),
+    #[error("Error parsing url: {0}")]
+    UrlParseError(#[from] url::ParseError),
+    #[error("Error (de)serializing JSON: {0}")]
+    JsonError(#[from] serde_json::Error),
+    #[error("Generic error: {0}")]
+    GenericError(Box<dyn std::error::Error + Send + Sync>),
+    #[error("Generic error: {0}")]
+    StringError(String),
+}
+
+impl BotError {
+    pub fn generic<E: std::error::Error + Send + Sync + 'static>(e: E) -> Self {
+        Self::GenericError(Box::new(e))
+    }
+
+    pub fn string(s: String) -> Self {
+        Self::StringError(s)
+    }
 }
 
 impl ErrorName for BotError {
@@ -108,6 +126,10 @@ impl ErrorName for BotError {
             BotError::ExternalCommandError(..) => "external_command_error",
             BotError::FilesystemAccessError { .. } => "filesystem_access_error",
             BotError::OtherError(_) => "other_error",
+            BotError::UrlParseError(_) => "url_parse_error",
+            BotError::JsonError(_) => "json_error",
+            BotError::GenericError(_) => "generic_error",
+            BotError::StringError(_) => "generic_error",
         };
         format!("main::{name}")
     }
