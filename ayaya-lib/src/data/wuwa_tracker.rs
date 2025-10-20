@@ -61,7 +61,7 @@ impl WuwaPullsManager {
             .await
             .map_err(|error| DataError::DatabaseError {
                 operation: OP.to_string(),
-                error: error,
+                error,
             })?;
         }
 
@@ -71,7 +71,7 @@ impl WuwaPullsManager {
     pub async fn get_wuwa_user_from_user_id(
         &self,
         user_id: u64,
-    ) -> DataResult<Option<entity_sqlite::wuwa_user::Model>> {
+    ) -> DataResult<Vec<entity_sqlite::wuwa_user::Model>> {
         const OP: &str = "get_wuwa_user_from_user_id";
         self.metrics_handler
             .data_access(OP, DataOperationType::Read)
@@ -85,7 +85,7 @@ impl WuwaPullsManager {
         use entity_sqlite::wuwa_user;
         let user = WuwaUser::find()
             .filter(wuwa_user::Column::UserId.eq(user_id))
-            .one(&self.db)
+            .all(&self.db)
             .await
             .map_err(|error| DataError::DatabaseError {
                 operation: OP.to_string(),
@@ -207,6 +207,32 @@ impl WuwaPullsManager {
             })?;
 
         Ok(new_pulls_len)
+    }
+
+    pub async fn get_pulls_from_wuwa_id(
+        &self,
+        wuwa_user_id: u64,
+    ) -> DataResult<Vec<entity_sqlite::wuwa_pull::Model>> {
+        const OP: &str = "get_pulls_from_wuwa_id";
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Write)
+            .await;
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Write,
+            Some(self.metrics_handler.clone()),
+        );
+
+        use entity_sqlite::wuwa_pull;
+        let pulls = WuwaPull::find()
+            .filter(wuwa_pull::Column::WuwaUserId.eq(wuwa_user_id))
+            .all(&self.db)
+            .await
+            .map_err(|e| DataError::DatabaseError {
+                operation: OP.to_string(),
+                error: e,
+            })?;
+        Ok(pulls)
     }
 
     pub async fn insert_resource(
@@ -350,8 +376,8 @@ mod tests {
 
         // Test user retrieval by user_id
         let retrieved_user = manager.get_wuwa_user_from_user_id(user_id).await.unwrap();
-        assert!(retrieved_user.is_some());
-        let user = retrieved_user.unwrap();
+        assert!(!retrieved_user.is_empty());
+        let user = retrieved_user.first().unwrap();
         assert_eq!(user.user_id, user_id as i64);
         assert_eq!(user.wuwa_user_id, wuwa_user_id as i32);
 

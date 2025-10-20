@@ -9,7 +9,7 @@ pub async fn tracker(_ctx: Context<'_>) -> Result<(), BotError> {
     Ok(())
 }
 
-#[poise::command(slash_command, subcommands("import_pulls"), aliases("p"))]
+#[poise::command(slash_command, subcommands("import_pulls", "stats"), aliases("p"))]
 pub async fn pulls(_ctx: Context<'_>) -> CommandResult {
     Ok(())
 }
@@ -41,9 +41,9 @@ pub async fn import_pulls(
                 // why is this code so messy
                 let new = not_url.strip_prefix("/record?").unwrap_or_default();
                 for c in new.split("&") {
-                    let (key, value) = c.split_once("=").unwrap();
+                    let (key, value) = c.split_once("=").expect("able to split");
 
-                    match key.as_ref() {
+                    match key {
                         "svr_id" => {
                             server_id = value;
                         }
@@ -92,9 +92,12 @@ pub async fn import_pulls(
                         .body(json)
                         .send()
                         .await
-                        .unwrap();
+                        .map_err(|e| BotError::StringError(e.to_string()))?;
 
-                    let wrapper = res.json::<DeserializeWrapper>().await.unwrap();
+                    let wrapper = res
+                        .json::<DeserializeWrapper>()
+                        .await
+                        .expect("deserialized properly");
                     pulls.extend(wrapper.data);
                 }
 
@@ -109,12 +112,56 @@ pub async fn import_pulls(
                     ))
                     .await?;
                 } else {
-                    ctx.reply(format!("No records found.")).await?;
+                    ctx.reply("No records found.").await?;
                 }
             }
         }
     }
 
+    Ok(())
+}
+
+/// Shows pull stats for a game
+#[poise::command(slash_command, aliases("s"), ephemeral)]
+async fn stats(
+    ctx: Context<'_>,
+    #[autocomplete = "autocomplete_game"]
+    #[description = "A supported game"]
+    game: SupportedGames,
+) -> CommandResult {
+    match game {
+        SupportedGames::WutheringWaves => {
+            // show current amount of pulls, 5 star pity count, 4 star pity count, and list of 5 star chars
+            let user_id = ctx.author().id;
+            let wuwa_tracker = ctx.data().data_manager.wuwa_tracker();
+
+            let player_ids = wuwa_tracker
+                .get_wuwa_user_from_user_id(user_id.get())
+                .await?;
+
+            if player_ids.is_empty() {
+                ctx.reply("No Wuwa Account found for you.").await?;
+            } else {
+                // show embed
+                for wuwa_player_id in player_ids {
+                    let pulls = wuwa_tracker
+                        .get_pulls_from_wuwa_id(wuwa_player_id.wuwa_user_id as u64)
+                        .await?;
+                    // TODO: alg
+                    let five_stars = pulls
+                        .iter()
+                        .filter(|e| e.quality_level == 5)
+                        .collect::<Vec<_>>();
+                    let limited_chars = five_stars
+                        .iter()
+                        .filter(|e| e.pull_type == CardPoolType::EventCharacterConvene as i32)
+                        .count();
+                    let msg = format!("Limited 5 star characters obtained: {limited_chars}");
+                    ctx.reply(msg).await?;
+                }
+            }
+        }
+    }
     Ok(())
 }
 
@@ -232,7 +279,7 @@ where
     );
 
     let s: &str = Deserialize::deserialize(deserializer)?;
-    let ti = time::PrimitiveDateTime::parse(s, FORMAT).unwrap();
+    let ti = time::PrimitiveDateTime::parse(s, FORMAT).expect("format proper");
     Ok(ti)
 }
 
