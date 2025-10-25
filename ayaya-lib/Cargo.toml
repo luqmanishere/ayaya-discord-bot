@@ -5,49 +5,48 @@ edition = "2024"
 rust-version = { workspace = true }
 
 [dependencies]
+age = { version = "0.11" }
+anyhow = "1"
+axum = { version = "0.7" }
+axum-auth = { version = "0.7" }
+base64 = "0.22.1"
+bincode = { workspace = true }
+entity-sqlite = { path = "../entity-sqlite" }
+humantime = { version = "2" }
+lru-mem = { version = "0.3" }
+miette = { workspace = true }
+migration-sqlite = { path = "../migration-sqlite" }
+prometheus-client = { version = "0.22" }
+rand = "0.8"
+# color-eyre = "0.6"
+reqwest = { version = "0.12", features = ["json"] }
+sea-orm = { workspace = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
+sha1_smol = { version = "1" }
 # workspace deps
 shuttle-runtime = { workspace = true }
-tokio = { workspace = true }
+strum = { version = "0.26", features = ["derive"] }
+tempfile = { version = "3" }
 thiserror = { workspace = true }
-miette = { workspace = true }
-sea-orm = { workspace = true }
-bincode = { workspace = true }
-serde = {version = "1", features = ["derive"]}
-
+time = { version = "0.3", features = ["local-offset"] }
+tokio = { workspace = true }
+tracing = "0.1"
+tracing-error = { version = "0.2", features = ["traced-error"] }
+tracing-loki = "0.2.5"
 tracing-subscriber = { version = "0.3", features = [
   "env-filter",
   "fmt",
   "std",
   "time",
 ] }
-tracing = "0.1"
-tracing-error = { version = "0.2", features = ["traced-error"] }
-# color-eyre = "0.6"
-reqwest = { version = "0.12" , features = ["json"]}
-uuid = { version = "*", features = ["v7", "v5"] }
-humantime = { version = "2" }
-youtube_dl = { version = "0.10", features = ["tokio"] }
-time = { version = "0.3", features = ["local-offset"] }
-anyhow = "1"
-tracing-loki = "0.2.5"
-base64 = "0.22.1"
 url = "2.5.2"
-rand = "0.8"
-axum = { version = "0.7" }
-axum-auth = { version = "0.7" }
-strum = { version = "0.26", features = ["derive"] }
-entity-sqlite = { path = "../entity-sqlite" }
-migration-sqlite = { path = "../migration-sqlite" }
-age = { version = "0.11" }
-lru-mem = { version = "0.3" }
-prometheus-client = { version = "0.22" }
-sha1_smol = { version = "1" }
-tempfile = { version = "3" }
-serde_json = {version = "1"}
+uuid = { version = "*", features = ["v5", "v7"] }
+youtube_dl = { version = "0.10", features = ["tokio"] }
 
-[dependencies.songbird]
-version = "0.5.0"
-features = ["builtin-queue", "driver", "serenity"]
+[dependencies.poise]
+git = "https://github.com/serenity-rs/poise.git"
+rev = "bbc837a1dd170d6ebb5c9208d7a9fd8b3dc27a27"
 
 [dependencies.serenity]
 version = "0.12"
@@ -56,23 +55,23 @@ version = "0.12"
 # rev = "c3d4a3386ea0710a81618f07771c83912c5f6196"
 features = [
   "cache",
+  "collector",
   "framework",
-  "voice",
+  "gateway",
   "http",
   "rustls_backend",
-  "gateway",
-  "collector",
+  "voice",
 ]
 
-[dependencies.poise]
-git = "https://github.com/serenity-rs/poise.git"
-rev = "bbc837a1dd170d6ebb5c9208d7a9fd8b3dc27a27"
+[dependencies.songbird]
+version = "0.5.0"
+features = ["builtin-queue", "driver", "serenity"]
 
 [dependencies.symphonia]
 version = "0.5"
-features = ["aac", "mp3", "isomp4", "alac"]
+features = ["all"]
 
 [build-dependencies]
+anyhow = { version = "1" }
 # All features enabled
 vergen-gix = { version = "1.0.0", features = ["build", "cargo", "rustc"] }
-anyhow = { version = "1" }

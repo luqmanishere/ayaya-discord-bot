@@ -1,8 +1,8 @@
 //! This module is a custom implementation of the YoutubeSource
 
 use reqwest::{
-    header::{HeaderMap, HeaderName, HeaderValue},
     Client,
+    header::{HeaderMap, HeaderName, HeaderValue},
 };
 use serenity::async_trait;
 use songbird::input::{
@@ -276,12 +276,14 @@ impl Compose for YoutubeDl {
         #[expect(clippy::single_match_else)]
         match result.protocol {
             Some(Protocol::M3U8Native) => {
+                tracing::info!("Using HLS, url: {}", result.url);
                 let mut req =
                     HlsRequest::new_with_headers(self.client.clone(), result.url, headers);
                 // TODO: monitor if making this async breaks anything
                 req.create_async().await
             }
             _ => {
+                tracing::info!("Using HTTP, url: {}", result.url);
                 let mut req = HttpRequest {
                     client: self.client.clone(),
                     request: result.url,
