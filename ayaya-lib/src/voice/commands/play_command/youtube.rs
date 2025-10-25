@@ -198,7 +198,7 @@ impl YoutubeDl {
             .youtube_dl_path(self.program)
             .extra_arg("--no-playlist")
             .extra_arg("-f")
-            .extra_arg("ba[abr>0][vcodec=none]/best")
+            .extra_arg("ba[abr>0][vcodec=none][protocol!=m3u8][protocol!=m3u8_native]")
             // .extra_arg("-4")
             // commentd out to try fix dropped args
             // .extra_arg("--extractor-args")
@@ -276,20 +276,21 @@ impl Compose for YoutubeDl {
         #[expect(clippy::single_match_else)]
         match result.protocol {
             Some(Protocol::M3U8Native) => {
-                tracing::info!("Using HLS, url: {}", result.url);
+                tracing::debug!("Using HLS, url: {}", result.url);
                 let mut req =
                     HlsRequest::new_with_headers(self.client.clone(), result.url, headers);
-                // TODO: monitor if making this async breaks anything
+
                 req.create_async().await
             }
             _ => {
-                tracing::info!("Using HTTP, url: {}", result.url);
+                tracing::debug!("Using HTTP, url: {}", result.url);
                 let mut req = HttpRequest {
                     client: self.client.clone(),
                     request: result.url,
                     headers,
                     content_length: result.filesize,
                 };
+
                 req.create_async().await
             }
         }
