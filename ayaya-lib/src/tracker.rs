@@ -1,6 +1,6 @@
 use poise::serenity_prelude as serenity;
 use serde::{Deserialize, Deserializer, Serialize};
-use snafu::ResultExt;
+use snafu::{OptionExt, ResultExt};
 use strum::VariantNames;
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
         BotError, DataManagerSnafu, GeneralSerenitySnafu, JsonSnafu, ReqwestSnafu, TrackerSnafu,
         UrlParseSnafu,
     },
-    tracker::error::{TrackerError, WuwaPlayerIdInvalidSnafu},
+    tracker::error::{InvalidUrlSnafu, TrackerError, WuwaPlayerIdInvalidSnafu},
 };
 
 #[poise::command(slash_command, subcommands("pulls"), aliases("t"))]
@@ -43,7 +43,10 @@ pub async fn import_pulls(
                 let mut server_id: &str = Default::default();
                 let mut record_id: &str = Default::default();
                 let mut player_id: u64 = 0;
-                let not_url = url.fragment().expect("has fragment");
+                let not_url = url
+                    .fragment()
+                    .context(InvalidUrlSnafu)
+                    .context(TrackerSnafu)?;
 
                 // parse the remaining info
                 // why is this code so messy
@@ -342,6 +345,9 @@ pub mod error {
         UserGameIdMismatch,
         #[snafu(display("The player id format is invalid"))]
         WuwaPlayerIdInvalid { source: ParseIntError },
+
+        #[snafu(display("The provided url is invalid."))]
+        InvalidUrl,
     }
 
     impl ErrorName for TrackerError {
@@ -350,6 +356,7 @@ pub mod error {
                 TrackerError::WuwaRequestIncomplete => "wuwa_request_incomplete",
                 TrackerError::UserGameIdMismatch => "user_game_id_mismatch",
                 TrackerError::WuwaPlayerIdInvalid { .. } => "wuwa_player_id_invalid",
+                TrackerError::InvalidUrl { .. } => "invalid_url",
             };
             format!("tracker::{str}")
         }
