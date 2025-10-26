@@ -29,13 +29,20 @@ db-up:
 db-down:
     sea-orm-cli migrate down -d migration-sqlite -u {{sqlite-url}}
 
-bump-minor:
-    git cliff --bump minor -o CHANGELOG.md
-    cargo set-version --bump minor
-
-bump-patch:
-    git cliff --bump patch -o CHANGELOG.md
-    cargo set-version --bump patch
+bump:
+    #!/usr/bin/env bash
+    DATE=$(date +%Y.%-m.%-d)
+    # Find the highest pre-release number for today's date
+    LATEST_TAG=$(git tag -l "v${DATE}-*" | sort -V | tail -n 1)
+    if [ -z "$LATEST_TAG" ]; then
+        PRERELEASE=0
+    else
+        PRERELEASE=$(echo "$LATEST_TAG" | sed "s/v${DATE}-//")
+        PRERELEASE=$((PRERELEASE + 1))
+    fi
+    VERSION="${DATE}-${PRERELEASE}"
+    git cliff --bump auto -o CHANGELOG.md --tag "v${VERSION}"
+    cargo set-version "${VERSION}"
 
 test:
     cargo nextest run

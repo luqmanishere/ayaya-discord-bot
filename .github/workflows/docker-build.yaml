@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - v[0-9]+.[0-9]+.[0-9]+
+      - v[0-9][0-9][0-9][0-9].[0-9]{1,2}.[0-9]{1,2}-[0-9]+
 
 env:
   DOCKERHUB_REPO: luqmanishere/ayayadc
@@ -99,7 +99,6 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
