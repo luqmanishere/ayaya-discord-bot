@@ -42,13 +42,7 @@ use tracker::tracker;
 use utils::GuildInfo;
 use voice::voice_commands;
 
-use crate::{
-    error::{
-        DataManagerSnafu, GeneralSerenitySnafu, LokiBuilderSnafu, SetGlobalDefaultSnafu,
-        TracingFilterParseSnafu, UrlParseSnafu,
-    },
-    voice::commands::music,
-};
+use crate::{error::*, voice::commands::music};
 
 pub(crate) mod admin;
 pub(crate) mod constants;
@@ -357,7 +351,7 @@ async fn event_handler(
                 &_data.ytdlp_config_path,
                 &_data.secret_key,
             )
-            .await;
+            .await?;
 
             // test yt-dlp
             #[expect(clippy::zombie_processes)]
@@ -393,7 +387,11 @@ async fn event_handler(
     Ok(())
 }
 
-async fn setup_cookies(data_manager: &DataManager, ytdlp_config_path: &Path, secret_key: &str) {
+async fn setup_cookies(
+    data_manager: &DataManager,
+    ytdlp_config_path: &Path,
+    secret_key: &str,
+) -> Result<(), BotError> {
     // only setup cookies in a shuttle env or a container env
     if std::env::var("SHUTTLE")
         .unwrap_or_default()
@@ -402,23 +400,31 @@ async fn setup_cookies(data_manager: &DataManager, ytdlp_config_path: &Path, sec
     {
         info!("shuttle detected!");
         let path = ytdlp_config_path.join("cookies.txt");
-        let key = age::x25519::Identity::from_str(secret_key).expect("key success");
-        let cookies = data_manager.get_latest_cookies().await.expect("no errors");
+        let key =
+            age::x25519::Identity::from_str(secret_key).map_err(|m| BotError::AgeKeyFromStr {
+                message: m.to_string(),
+            })?;
+        let cookies = data_manager
+            .get_latest_cookies()
+            .await
+            .context(DataManagerSnafu)?;
         if let Some(cookies) = cookies {
             let file = cookies.cookies;
-            let decryptor = age::Decryptor::new(file.as_slice()).expect("works");
+            let decryptor = age::Decryptor::new(file.as_slice()).context(AgeDecryptSnafu)?;
             let mut decrypted = vec![];
 
             let mut reader = decryptor
                 .decrypt(std::iter::once(&key as &dyn age::Identity))
-                .expect("decrypt success");
-            reader.read_to_end(&mut decrypted).expect("success");
-            std::fs::write(path, decrypted).expect("write success");
+                .context(AgeDecryptSnafu)?;
+            reader.read_to_end(&mut decrypted).context(IoSnafu)?;
+            std::fs::write(path, decrypted).context(IoSnafu)?;
             info!("wrote cookies to path");
         } else {
             error!("no cookies found");
         }
     }
+
+    Ok(())
 }
 
 /// Pong!

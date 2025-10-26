@@ -121,6 +121,12 @@ pub enum BotError {
     #[snafu(display("Error from std::io: {source}"))]
     IoError { source: std::io::Error },
 
+    #[snafu(display("Error creating identity from secret key: {message}"))]
+    AgeKeyFromStr { message: String },
+
+    #[snafu(display("Error decrypting file"))]
+    AgeDecrypt { source: age::DecryptError },
+
     #[snafu(display("Generic error: {source}"))]
     GenericError {
         source: Box<dyn std::error::Error + Send + Sync>,
@@ -195,6 +201,8 @@ impl ErrorName for BotError {
             BotError::ReqwestError { .. } => "reqwest_error",
             BotError::IoError { .. } => "io_error",
             BotError::GenericError { .. } => "generic_error",
+            BotError::AgeKeyFromStr { .. } => "age_key_from_str_error",
+            BotError::AgeDecrypt { .. } => "age_decrypt",
         };
         format!("main::{name}")
     }
