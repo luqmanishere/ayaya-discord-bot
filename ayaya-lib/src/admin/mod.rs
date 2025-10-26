@@ -1,9 +1,11 @@
 //! Command reserved for admins or specific users
 use poise::serenity_prelude as serenity;
+use snafu::ResultExt;
 
 use crate::{
-    utils::{autocomplete_command_names, GuildInfo},
     CommandResult, Commands, Context,
+    error::{DataManagerSnafu, GeneralSerenitySnafu},
+    utils::{GuildInfo, autocomplete_command_names},
 };
 
 pub fn admin_commands() -> Commands {
@@ -30,7 +32,7 @@ pub async fn restrict_command_role(
     #[autocomplete = "autocomplete_command_names"] command: String,
     role: serenity::Role,
 ) -> CommandResult {
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
     let mut data_manager = ctx.data().data_manager.clone();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
 
@@ -44,15 +46,17 @@ pub async fn restrict_command_role(
                 "Command restriction added for role `{}` & command `{}`.",
                 role.name, res.command
             ))
-            .await?;
+            .await
+            .context(GeneralSerenitySnafu)?;
         }
         Err(e) => {
             ctx.reply(format!(
                 "Error inserting restriction for role `{}` and command `{}` into database, {}",
                 role.name, command, "Maybe it already exists?"
             ))
-            .await?;
-            return Err(e.into());
+            .await
+            .context(GeneralSerenitySnafu)?;
+            return Err(e).context(DataManagerSnafu);
         }
     }
 
@@ -72,7 +76,7 @@ pub async fn restrict_category_role(
     #[autocomplete = "autocomplete_command_categories"] category: String,
     role: serenity::Role,
 ) -> CommandResult {
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
     let mut data_manager = ctx.data().data_manager.clone();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
 
@@ -86,7 +90,8 @@ pub async fn restrict_category_role(
                 "Category restriction added for role `{}` & category `{}`.",
                 role.name, res.category
             ))
-            .await?;
+            .await
+            .context(GeneralSerenitySnafu)?;
         }
         Err(e) => {
             // TODO: proper error for this
@@ -94,8 +99,9 @@ pub async fn restrict_category_role(
                 "Error inserting restriction for role `{}` and category `{}` into database",
                 role.name, category
             ))
-            .await?;
-            return Err(e.into());
+            .await
+            .context(GeneralSerenitySnafu)?;
+            return Err(e).context(DataManagerSnafu);
         }
     }
 
@@ -115,7 +121,7 @@ pub async fn allow_user_command(
     #[autocomplete = "autocomplete_command_names"] command: String,
     user: serenity::User,
 ) -> CommandResult {
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
     let mut data_manager = ctx.data().data_manager.clone();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
 
@@ -130,7 +136,8 @@ pub async fn allow_user_command(
                 "User allowance added for user `{}` & command `{}`.",
                 user.name, res.command
             ))
-            .await?;
+            .await
+            .context(GeneralSerenitySnafu)?;
         }
         Err(e) => {
             // TODO: proper error for this
@@ -138,8 +145,9 @@ pub async fn allow_user_command(
                 "Error inserting allowance for user `{}` and command `{}` into database",
                 user.name, command
             ))
-            .await?;
-            return Err(e.into());
+            .await
+            .context(GeneralSerenitySnafu)?;
+            return Err(e).context(DataManagerSnafu);
         }
     }
 
@@ -157,7 +165,7 @@ pub async fn list_command_restrictions(
     ctx: Context<'_>,
     #[autocomplete = "autocomplete_command_names"] command: String,
 ) -> CommandResult {
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
     let mut data_manager = ctx.data().data_manager.clone();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
     // TODO: properly store command categories
@@ -171,17 +179,20 @@ pub async fn list_command_restrictions(
     let allowed_users = data_manager
         .permissions_mut()
         .findall_user_allowed(guild_id, &command)
-        .await?;
+        .await
+        .context(DataManagerSnafu)?;
 
     let required_roles_command = data_manager
         .permissions_mut()
         .find_command_roles_allowed(guild_id, &command)
-        .await?;
+        .await
+        .context(DataManagerSnafu)?;
 
     let required_roles_category = data_manager
         .permissions_mut()
         .find_category_roles_allowed(guild_id, &command_category)
-        .await?;
+        .await
+        .context(DataManagerSnafu)?;
 
     let mut message = serenity::MessageBuilder::default();
     message.push_line(format!("# Restrictions info for command: {}", &command));
@@ -190,11 +201,15 @@ pub async fn list_command_restrictions(
     for (i, model) in allowed_users.iter().enumerate() {
         let user = serenity::UserId::new(model.user_id as u64)
             .to_user(ctx)
-            .await?;
+            .await
+            .context(GeneralSerenitySnafu)?;
         message.push_line(format!("{}. {}", i + 1, user.name));
     }
     message.push_line("### Command Roles");
-    let roles = serenity::GuildId::new(guild_id).roles(ctx).await?;
+    let roles = serenity::GuildId::new(guild_id)
+        .roles(ctx)
+        .await
+        .context(GeneralSerenitySnafu)?;
     for (i, model) in required_roles_command.iter().enumerate() {
         let role = if let Some(role) = roles.get(&serenity::RoleId::new(model.role_id as u64)) {
             role.name.clone()
@@ -215,7 +230,8 @@ pub async fn list_command_restrictions(
 
     let embed = serenity::CreateEmbed::default().description(message.to_string());
     ctx.send(poise::CreateReply::default().embed(embed).reply(true))
-        .await?;
+        .await
+        .context(GeneralSerenitySnafu)?;
 
     Ok(())
 }

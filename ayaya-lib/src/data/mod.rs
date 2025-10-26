@@ -19,11 +19,18 @@ use sea_orm::{
     prelude::*,
 };
 use sea_orm::{Database, DatabaseConnection};
+use snafu::ResultExt;
 use sounds::SoundsManager;
 use stats::StatsManager;
 use time::UtcOffset;
 use utils::DataTiming;
 
+use crate::data::error::{
+    AddNewCookieDatabaseSnafu, DatabaseConnectionSnafu, Find5CommandCallLogDatabaseSnafu,
+    FindSingleUsersSingleCommandCallSnafu, FindUserAllTimeCommandStatsDatabaseSnafu,
+    GetLatestCookiesDatabaseSnafu, IncrementCommandCounterSnafu, LogCommandCallSnafu,
+    MigrationSnafu,
+};
 use crate::{
     data::wuwa_tracker::WuwaPullsManager,
     metrics::{DataOperationType, Metrics},
@@ -62,10 +69,11 @@ impl DataManager {
         connect_options.sqlx_logging(false); // disable sqlx logging
         let db: DatabaseConnection = Database::connect(connect_options)
             .await
-            .map_err(|error| DataError::DatabaseConnectionError { error })?;
+            .context(DatabaseConnectionSnafu)?;
+
         SqliteMigrator::up(&db, None)
             .await
-            .map_err(|error| DataError::MigrationError { error })?; // always upgrade db to the latest version
+            .context(MigrationSnafu)?;
 
         let permissions = Permissions::new(db.clone(), metrics_handler.clone()).await?;
         let stats = StatsManager::new(db.clone(), metrics_handler.clone());
@@ -125,10 +133,7 @@ impl DataManager {
             command: sea_orm::ActiveValue::Set(command_name.clone()),
             command_time_stamp: sea_orm::ActiveValue::Set(now_odt),
         };
-        call_log
-            .insert(db)
-            .await
-            .map_err(|error| DataError::LogCommandCallError { error })?;
+        call_log.insert(db).await.context(LogCommandCallSnafu)?;
 
         self.increment_command_counter(guild_id, user_id, command_name)
             .await?;
@@ -157,16 +162,13 @@ impl DataManager {
             .filter(user_command_all_time_statistics::Column::Command.eq(command_name.clone()))
             .one(db)
             .await
-            .map_err(|error| DataError::IncrementCommandCounterError { error })?;
+            .context(IncrementCommandCounterSnafu)?;
 
         if let Some(stats) = user {
             let count = stats.count + 1;
             let mut model = stats.into_active_model();
             model.count = ActiveValue::set(count);
-            model
-                .save(db)
-                .await
-                .map_err(|error| DataError::IncrementCommandCounterError { error })?;
+            model.save(db).await.context(IncrementCommandCounterSnafu)?;
         } else {
             user_command_all_time_statistics::ActiveModel {
                 server_id: sea_orm::ActiveValue::Set(guild_id as i64),
@@ -176,7 +178,7 @@ impl DataManager {
             }
             .insert(db)
             .await
-            .map_err(|error| DataError::IncrementCommandCounterError { error })?;
+            .context(IncrementCommandCounterSnafu)?;
         }
         Ok(())
     }
@@ -203,7 +205,7 @@ impl DataManager {
             .limit(5)
             .all(&self.db)
             .await
-            .map_err(DataError::Find5CommandCallLogDatabaseError)
+            .context(Find5CommandCallLogDatabaseSnafu)
     }
 
     /// Find the user command all time statistics for a user in a guild. Returns [`None`] if the
@@ -235,7 +237,7 @@ impl DataManager {
             .filter(user_command_all_time_statistics::Column::Command.eq(command))
             .one(&self.db)
             .await
-            .map_err(DataError::FindUserAllTimeCommandStatsDatabaseError)
+            .context(FindUserAllTimeCommandStatsDatabaseSnafu)
     }
 
     /// Finds all the users data for a single command call
@@ -264,7 +266,7 @@ impl DataManager {
             .filter(user_command_all_time_statistics::Column::Command.eq(command_name))
             .all(&self.db)
             .await
-            .map_err(DataError::FindSingleUsersSingleCommandCallError)
+            .context(FindSingleUsersSingleCommandCallSnafu)
     }
 
     pub async fn get_latest_cookies(
@@ -287,7 +289,7 @@ impl DataManager {
             .limit(1)
             .one(&self.db)
             .await
-            .map_err(DataError::GetLatestCookiesDatabaseError)
+            .context(GetLatestCookiesDatabaseSnafu)
     }
 
     pub async fn add_new_cookie(&self, file: Vec<u8>) -> DataResult<()> {
@@ -309,7 +311,8 @@ impl DataManager {
         }
         .save(&self.db)
         .await
-        .map_err(DataError::AddNewCookieDatabaseError)?;
+        .context(AddNewCookieDatabaseSnafu)?;
+
         Ok(())
     }
 }
@@ -336,66 +339,94 @@ impl DataManager {
 
 pub mod error {
     use sea_orm::DbErr;
+    use snafu::Snafu;
 
     use crate::error::ErrorName;
 
-    #[derive(thiserror::Error, miette::Diagnostic, Debug)]
+    #[derive(Snafu, Debug)]
+    #[snafu(visibility(pub))]
     pub enum DataError {
-        #[error("Error connecting to database: {error}")]
-        DatabaseConnectionError { error: DbErr },
-        #[error("Error performing migration: {error}")]
-        MigrationError { error: DbErr },
-        #[error("Error incrementing command counter: {error}")]
-        IncrementCommandCounterError { error: DbErr },
-        #[error("Error logging command call: {error}")]
-        LogCommandCallError { error: DbErr },
-        #[error("Error finding allowed user: {error}")]
+        #[snafu(display("Error connecting to database: {source}"))]
+        DatabaseConnectionError { source: DbErr },
+
+        #[snafu(display("Error performing migration: {source}"))]
+        MigrationError { source: DbErr },
+
+        #[snafu(display("Error incrementing command counter: {source}"))]
+        IncrementCommandCounterError { source: DbErr },
+
+        #[snafu(display("Error logging command call: {source}"))]
+        LogCommandCallError { source: DbErr },
+
+        #[snafu(display("Error finding allowed user: {error}"))]
         FindAllowedUserError { error: DbErr },
-        #[error("Error finding allowed command roles: {error}")]
+
+        #[snafu(display("Error finding allowed command roles: {error}"))]
         FindCommandRolesAllowedError { error: DbErr },
-        #[error("Error finding allowed category roles: {0}")]
-        FindCategoryRolesAllowedDatabaseError(DbErr),
-        #[error("Database error while creating new command role restriction: {0}")]
-        NewCommandRoleRestrictionDatabaseError(DbErr),
-        #[error("A duplicate entry is found while creating new command role restriction")]
+
+        #[snafu(display("Error finding allowed category roles: {source}"))]
+        FindCategoryRolesAllowedDatabaseError { source: DbErr },
+
+        #[snafu(display("Database error while creating new command role restriction: {source}"))]
+        NewCommandRoleRestrictionDatabaseError { source: DbErr },
+
+        #[snafu(display("A duplicate entry is found while creating new command role restriction"))]
         NewCommandRoleRestrictionDuplicate,
-        #[error("Database error while creating new category role restriction: {0}")]
-        NewCategoryRoleRestrictionDatabaseError(DbErr),
-        #[error("A duplicate entry is found while creating new category role restriction")]
+
+        #[snafu(display("Database error while creating new category role restriction: {source}"))]
+        NewCategoryRoleRestrictionDatabaseError { source: DbErr },
+
+        #[snafu(display(
+            "A duplicate entry is found while creating new category role restriction"
+        ))]
         NewCategoryRoleRestrictionDuplicate,
-        #[error("A duplicate entry is found while creating new allowed user")]
+
+        #[snafu(display("A duplicate entry is found while creating new allowed user"))]
         NewCommandAllowedUserDuplicate,
-        #[error("Database error while creating new command allowed user: {0}")]
-        NewCommandAllowedUserDatabaseError(DbErr),
-        #[error("Database error while finding all allowed users: {0}")]
-        FindAllAllowedUserDatabaseError(DbErr),
-        #[error("Database error while finding command call log: {0}")]
-        Find5CommandCallLogDatabaseError(DbErr),
-        #[error("Database error while finding user all time command stats: {0}")]
-        FindUserAllTimeCommandStatsDatabaseError(DbErr),
-        #[error("Database error while getting cookies: {0}")]
-        GetLatestCookiesDatabaseError(DbErr),
-        #[error("Database error while adding cookies: {0}")]
-        AddNewCookieDatabaseError(DbErr),
-        #[error("Database error while getting user command stats: {0}")]
-        FindSingleUsersSingleCommandCallError(DbErr),
-        #[error("Database error in operation {operation}: {error}")]
+
+        #[snafu(display("Database error while creating new command allowed user: {source}"))]
+        NewCommandAllowedUserDatabaseError { source: DbErr },
+
+        #[snafu(display("Database error while finding all allowed users: {source}"))]
+        FindAllAllowedUserDatabaseError { source: DbErr },
+
+        #[snafu(display("Database error while finding command call log: {source}"))]
+        Find5CommandCallLogDatabaseError { source: DbErr },
+
+        #[snafu(display("Database error while finding user all time command stats: {source}"))]
+        FindUserAllTimeCommandStatsDatabaseError { source: DbErr },
+
+        #[snafu(display("Database error while getting cookies: {source}"))]
+        GetLatestCookiesDatabaseError { source: DbErr },
+
+        #[snafu(display("Database error while adding cookies: {source}"))]
+        AddNewCookieDatabaseError { source: DbErr },
+
+        #[snafu(display("Database error while getting user command stats: {source}"))]
+        FindSingleUsersSingleCommandCallError { source: DbErr },
+
+        #[snafu(display("Database error in operation {operation}: {error}"))]
         DatabaseError { operation: String, error: DbErr },
-        #[error("Duplicate item {object} found.")]
+
+        #[snafu(display("Duplicate item {object} found."))]
         DuplicateEntry { object: String },
-        #[error(
+
+        #[snafu(display(
             "This sound is already present in the database for the user {user_id}. OP: {sound_name}"
-        )]
+        ))]
         DuplicateSoundError {
             sound_name: String,
             user_id: poise::serenity_prelude::UserId,
         },
-        #[error("Not found in database. Input error? : {0}")]
-        NotFound(String),
-        #[error(transparent)]
-        BincodeDecodeError(#[from] bincode::error::DecodeError),
-        #[error(transparent)]
-        BincodeEncodeError(#[from] bincode::error::EncodeError),
+
+        #[snafu(display("Not found in database. Input error? : {err}"))]
+        NotFound { err: String },
+
+        #[snafu(transparent)]
+        BincodeDecodeError { source: bincode::error::DecodeError },
+
+        #[snafu(transparent)]
+        BincodeEncodeError { source: bincode::error::EncodeError },
     }
 
     impl ErrorName for DataError {
@@ -409,45 +440,47 @@ pub mod error {
                 DataError::FindCommandRolesAllowedError { .. } => {
                     "find_command_roles_allowed_error"
                 }
-                DataError::FindCategoryRolesAllowedDatabaseError(..) => {
+                DataError::FindCategoryRolesAllowedDatabaseError { .. } => {
                     "find_category_roles_allowed_database_error"
                 }
-                DataError::NewCommandRoleRestrictionDatabaseError(..) => {
+                DataError::NewCommandRoleRestrictionDatabaseError { .. } => {
                     "new_command_role_restriction_database_error"
                 }
                 DataError::NewCommandRoleRestrictionDuplicate => {
                     "new_command_role_restriction_duplicate"
                 }
-                DataError::NewCategoryRoleRestrictionDatabaseError(..) => {
+                DataError::NewCategoryRoleRestrictionDatabaseError { .. } => {
                     "new_category_role_restriction_database_error"
                 }
                 DataError::NewCategoryRoleRestrictionDuplicate => {
                     "new_category_role_restriction_duplicate"
                 }
                 DataError::NewCommandAllowedUserDuplicate => "new_command_allowed_user_duplicate",
-                DataError::NewCommandAllowedUserDatabaseError(..) => {
+                DataError::NewCommandAllowedUserDatabaseError { .. } => {
                     "new_command_allowed_user_database_error"
                 }
-                DataError::FindAllAllowedUserDatabaseError(..) => {
+                DataError::FindAllAllowedUserDatabaseError { .. } => {
                     "find_all_allowed_user_database_error"
                 }
-                DataError::Find5CommandCallLogDatabaseError(..) => {
+                DataError::Find5CommandCallLogDatabaseError { .. } => {
                     "find_5_command_call_log_database_error"
                 }
-                DataError::FindUserAllTimeCommandStatsDatabaseError(..) => {
+                DataError::FindUserAllTimeCommandStatsDatabaseError { .. } => {
                     "find_user_all_time_command_stats_database_error"
                 }
-                DataError::GetLatestCookiesDatabaseError(..) => "get_latest_cookies_database_error",
-                DataError::AddNewCookieDatabaseError(..) => "add_new_cookie_database_error",
-                DataError::FindSingleUsersSingleCommandCallError(..) => {
+                DataError::GetLatestCookiesDatabaseError { .. } => {
+                    "get_latest_cookies_database_error"
+                }
+                DataError::AddNewCookieDatabaseError { .. } => "add_new_cookie_database_error",
+                DataError::FindSingleUsersSingleCommandCallError { .. } => {
                     "find_single_user_single_all_time_command_stats"
                 }
                 DataError::DatabaseError { operation, .. } => operation,
                 DataError::DuplicateSoundError { .. } => "duplicate_sound_error",
                 DataError::DuplicateEntry { .. } => "duplicate_entry",
-                DataError::NotFound(_) => "not_found",
-                DataError::BincodeDecodeError(..) => "bincode_decode_error",
-                DataError::BincodeEncodeError(..) => "bincode_encode_error",
+                DataError::NotFound { .. } => "not_found",
+                DataError::BincodeDecodeError { .. } => "bincode_decode_error",
+                DataError::BincodeEncodeError { .. } => "bincode_encode_error",
             };
             format!("data::{name}")
         }

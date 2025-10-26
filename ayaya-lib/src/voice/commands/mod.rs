@@ -2,9 +2,13 @@ use admin::*;
 use play_command::*;
 use playback_control::*;
 use queue::*;
+use snafu::ResultExt;
 use soundboard::*;
 
-use crate::{error::BotError, Commands, Context};
+use crate::{
+    Commands, Context,
+    error::{BotError, GeneralSerenitySnafu},
+};
 
 mod admin;
 mod play_command;
@@ -71,7 +75,9 @@ pub async fn music(ctx: Context<'_>) -> Result<(), BotError> {
         // [configure aspects about the help message here]
         ..Default::default()
     };
-    poise::builtins::help(ctx, Some(&ctx.command().name), configuration).await?;
+    poise::builtins::help(ctx, Some(&ctx.command().name), configuration)
+        .await
+        .context(GeneralSerenitySnafu)?;
     Ok(())
 }
 

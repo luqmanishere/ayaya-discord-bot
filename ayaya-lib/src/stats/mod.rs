@@ -1,11 +1,12 @@
 //! Commands for stats
 //!
 use poise::serenity_prelude::{self as serenity, Mentionable};
+use snafu::ResultExt;
 
 use crate::{
-    error::BotError,
-    utils::{autocomplete_command_names, get_guild_name, GuildInfo},
     CommandResult, Commands, Context,
+    error::{BotError, DataManagerSnafu, GeneralSerenitySnafu},
+    utils::{GuildInfo, autocomplete_command_names, get_guild_name},
 };
 
 pub fn stats_commands() -> Commands {
@@ -24,7 +25,7 @@ pub async fn user_all_time_single(
     user: serenity::User,
     #[autocomplete = "autocomplete_command_names"] command: String,
 ) -> Result<(), BotError> {
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
 
     let data_manager = ctx.data().data_manager.clone();
     let user_id = user.id.get();
@@ -32,7 +33,8 @@ pub async fn user_all_time_single(
 
     match data_manager
         .find_single_user_single_all_time_command_stats(guild_id, user_id, &command)
-        .await?
+        .await
+        .context(DataManagerSnafu)?
     {
         Some(model) => {
             let msg = if guild_id == 0 {
@@ -47,7 +49,7 @@ pub async fn user_all_time_single(
                     command, guild_name, model.count
                 )
             };
-            ctx.reply(msg).await?;
+            ctx.reply(msg).await.context(GeneralSerenitySnafu)?;
         }
         None => {
             ctx.reply(format!(
@@ -55,7 +57,8 @@ pub async fn user_all_time_single(
                 user.mention(),
                 command
             ))
-            .await?;
+            .await
+            .context(GeneralSerenitySnafu)?;
         }
     }
 
@@ -73,7 +76,7 @@ pub async fn server_all_time_single(
     ctx: Context<'_>,
     #[autocomplete = "autocomplete_command_names"] command: String,
 ) -> CommandResult {
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
 
     let data_manager = ctx.data().data_manager.clone();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
@@ -121,11 +124,12 @@ pub async fn server_all_time_single(
             //     )
             // };
             let reply = poise::CreateReply::default().reply(true).embed(embed);
-            ctx.send(reply).await?;
+            ctx.send(reply).await.context(GeneralSerenitySnafu)?;
         }
         Err(_) => {
             ctx.reply(format!("Data for command name `{command}` is not found"))
-                .await?;
+                .await
+                .context(GeneralSerenitySnafu)?;
         }
     }
 

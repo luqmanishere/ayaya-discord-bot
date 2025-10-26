@@ -1,32 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+  "ayaya-lib",
+  "ayaya-runner-local",
+  "ayaya-runner-shuttle",
+  "entity-sqlite",
+  "migration-sqlite",
+]
+default-members = ["ayaya-lib", "ayaya-runner-local"]
+
 [workspace.package]
 version = "0.15.0"
 edition = "2018"
 rust-version = "1.88.0"
 
-[workspace]
-resolver = "2"
-members = [
-  "ayaya-lib",
-  "entity-sqlite",
-  "migration-sqlite",
-  "ayaya-runner-local",
-  "ayaya-runner-shuttle",
-]
-default-members = ["ayaya-lib", "ayaya-runner-local"]
-
 [workspace.dependencies]
+bincode = { version = "2.0.0-rc.3", features = ["serde"] }
 sea-orm = { version = "1", features = [
+  "macros",
+  "runtime-tokio-rustls",
   "sqlx-mysql",
   "sqlx-sqlite",
-  "runtime-tokio-rustls",
-  "macros",
-  "with-time",
   "with-json",
+  "with-time",
   "with-uuid",
 ] }
-bincode = { version = "2.0.0-rc.3", features = ["serde"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "tracing"] }
-miette = { version = "7", features = ["fancy"] }
-thiserror = { version = "1" }
 shuttle-runtime = { version = "0.51", default-features = false }
-
+snafu = { version = "0.8" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "tracing"] }

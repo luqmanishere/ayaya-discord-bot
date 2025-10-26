@@ -2,16 +2,17 @@
 
 use poise::serenity_prelude as serenity;
 use rand::seq::SliceRandom;
+use snafu::ResultExt;
 use tracing::{error, warn};
 
 use crate::{
-    error::BotError,
-    utils::{get_guild_id, ChannelInfo, GuildInfo, OptionExt},
+    CommandResult, Context,
+    error::{BotError, GeneralSerenitySnafu},
+    utils::{ChannelInfo, GuildInfo, OptionExt, get_guild_id},
     voice::{
         error::MusicCommandError,
-        utils::{self, metadata_to_embed, YoutubeMetadata},
+        utils::{self, YoutubeMetadata, metadata_to_embed},
     },
-    CommandResult, Context,
 };
 
 /// Shows the queue. The only kind of acceptable spoilers.
@@ -53,12 +54,14 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
             queue_vec
         } else {
             ctx.reply("Queue is empty, add some music to see something")
-                .await?;
+                .await
+                .context(GeneralSerenitySnafu)?;
             return Ok(());
         };
 
-        if let Err(BotError::MusicCommandError(MusicCommandError::SearchTimeout)) =
-            queue_pagination_interaction(ctx, queue_vec).await
+        if let Err(BotError::MusicCommandError {
+            source: MusicCommandError::SearchTimeout,
+        }) = queue_pagination_interaction(ctx, queue_vec).await
         {
             return Ok(());
         } else {
@@ -108,7 +111,8 @@ pub async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<(), BotEr
                             &metadata,
                             None,
                         )))
-                        .await?;
+                        .await
+                        .context(GeneralSerenitySnafu)?;
                     } else {
                         // TODO: notify user of error
                         error!(
@@ -182,7 +186,8 @@ pub async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
                     &metadata,
                     Some(&track_state),
                 )))
-                .await?;
+                .await
+                .context(GeneralSerenitySnafu)?;
             }
             None => {
                 ctx.send(poise::CreateReply::default().embed(metadata_to_embed(
@@ -190,7 +195,8 @@ pub async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
                     &YoutubeMetadata::default(),
                     None,
                 )))
-                .await?;
+                .await
+                .context(GeneralSerenitySnafu)?;
             }
         };
     } else {
@@ -202,7 +208,7 @@ pub async fn nowplaying(ctx: Context<'_>) -> Result<(), BotError> {
 
 #[poise::command(slash_command, prefix_command, guild_only, category = "Music")]
 pub async fn shuffle(ctx: Context<'_>) -> CommandResult {
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
 
     let manager = &ctx.data().songbird;
     let guild_info = GuildInfo::from_ctx(ctx)?;
@@ -217,7 +223,9 @@ pub async fn shuffle(ctx: Context<'_>) -> CommandResult {
                 queued.make_contiguous()[1..].shuffle(&mut rng);
             });
             // TODO: pretty embeds
-            ctx.say("Ayaya shuffled the queue!").await?;
+            ctx.say("Ayaya shuffled the queue!")
+                .await
+                .context(GeneralSerenitySnafu)?;
         }
     } else {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
@@ -263,7 +271,7 @@ async fn queue_pagination_interaction(
         let components = serenity::CreateActionRow::Buttons(buttons);
         reply.components(vec![components])
     };
-    ctx.send(reply).await?;
+    ctx.send(reply).await.context(GeneralSerenitySnafu)?;
 
     // Loop through incoming interactions with the navigation buttons
     while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
@@ -321,7 +329,8 @@ async fn queue_pagination_interaction(
                 ctx.serenity_context(),
                 serenity::CreateInteractionResponse::UpdateMessage(response),
             )
-            .await?;
+            .await
+            .context(GeneralSerenitySnafu)?;
     }
     // TODO: its own error
     Err(MusicCommandError::SearchTimeout.into())
@@ -343,7 +352,9 @@ pub async fn queue_move(
     #[description = "The target position. Leave to move to next position. Position 1 is unchangeable."]
     target_position: Option<u64>,
 ) -> CommandResult {
-    ctx.defer_or_broadcast().await?;
+    ctx.defer_or_broadcast()
+        .await
+        .context(GeneralSerenitySnafu)?;
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
     let manager = &ctx.data().songbird;
@@ -408,7 +419,9 @@ pub async fn queue_move(
             None,
         );
 
-        ctx.send(poise::CreateReply::default().embed(embed)).await?;
+        ctx.send(poise::CreateReply::default().embed(embed))
+            .await
+            .context(GeneralSerenitySnafu)?;
     } else {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }

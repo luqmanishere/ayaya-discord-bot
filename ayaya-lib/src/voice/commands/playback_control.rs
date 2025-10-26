@@ -1,15 +1,16 @@
 //! This module contains commands used to manipulate playback
 
 use poise::serenity_prelude as serenity;
+use snafu::ResultExt;
 
 use crate::{
-    error::BotError,
-    utils::{check_msg, get_guild_id, ChannelInfo, GuildInfo, OptionExt},
+    Context,
+    error::{BotError, GeneralSerenitySnafu},
+    utils::{ChannelInfo, GuildInfo, OptionExt, check_msg, get_guild_id},
     voice::{
         error::MusicCommandError,
-        utils::{self, metadata_to_embed, YoutubeMetadata},
+        utils::{self, YoutubeMetadata, metadata_to_embed},
     },
-    Context,
 };
 
 /// Pause the party. Time is frozen in this bubble universe."
@@ -158,7 +159,9 @@ pub async fn skip(ctx: Context<'_>) -> Result<(), BotError> {
 
         let embed = metadata_to_embed(utils::EmbedOperation::SkipSong, &song_metadata, None);
 
-        ctx.send(poise::CreateReply::default().embed(embed)).await?;
+        ctx.send(poise::CreateReply::default().embed(embed))
+            .await
+            .context(GeneralSerenitySnafu)?;
     } else {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }
@@ -236,7 +239,9 @@ pub async fn seek(
                         &metadata,
                         new_track_info.as_ref(),
                     );
-                    ctx.send(poise::CreateReply::default().embed(embed)).await?;
+                    ctx.send(poise::CreateReply::default().embed(embed))
+                        .await
+                        .context(GeneralSerenitySnafu)?;
                 } else {
                     return Err(MusicCommandError::NoDurationNoSeek {
                         guild_info,
@@ -373,7 +378,9 @@ pub async fn loop_track(ctx: Context<'_>, count: Option<usize>) -> Result<(), Bo
                             &metadata,
                             None,
                         );
-                        ctx.send(poise::CreateReply::default().embed(embed)).await?;
+                        ctx.send(poise::CreateReply::default().embed(embed))
+                            .await
+                            .context(GeneralSerenitySnafu)?;
                     }
                     None => {
                         track
@@ -390,7 +397,9 @@ pub async fn loop_track(ctx: Context<'_>, count: Option<usize>) -> Result<(), Bo
                             &metadata,
                             None,
                         );
-                        ctx.send(poise::CreateReply::default().embed(embed)).await?;
+                        ctx.send(poise::CreateReply::default().embed(embed))
+                            .await
+                            .context(GeneralSerenitySnafu)?;
                     }
                 }
             }
@@ -449,7 +458,9 @@ pub async fn stop_loop(ctx: Context<'_>) -> Result<(), BotError> {
                     })?;
 
                 let embed = metadata_to_embed(utils::EmbedOperation::StopLoop, &metadata, None);
-                ctx.send(poise::CreateReply::default().embed(embed)).await?;
+                ctx.send(poise::CreateReply::default().embed(embed))
+                    .await
+                    .context(GeneralSerenitySnafu)?;
             }
             None => {
                 let voice_channel_info = ChannelInfo::from_songbird_current_channel(

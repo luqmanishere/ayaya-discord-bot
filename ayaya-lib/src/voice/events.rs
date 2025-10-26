@@ -17,13 +17,13 @@ use tracing::{error, info};
 use super::utils::{EmbedOperation, YoutubeMetadata, metadata_to_embed};
 use crate::utils::check_msg;
 
-pub struct SongFader {
+pub struct _SongFader {
     pub chan_id: ChannelId,
     pub http: Arc<Http>,
 }
 
 #[async_trait]
-impl VoiceEventHandler for SongFader {
+impl VoiceEventHandler for _SongFader {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track([(state, track)]) = ctx {
             let _ = track.set_volume(state.volume / 2.0);

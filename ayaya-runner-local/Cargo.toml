@@ -6,7 +6,8 @@ rust-version = { workspace = true }
 
 [dependencies]
 # workspace deps
-miette = { workspace = true }
+snafu = {workspace = true}
+
 tokio = { workspace = true }
 
 dotenvy = { version = "0.15" }

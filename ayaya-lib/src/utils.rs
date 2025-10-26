@@ -1,8 +1,13 @@
 use poise::serenity_prelude::{self as serenity};
-use serenity::{model::channel::Message, Result as SerenityResult};
+use serenity::{Result as SerenityResult, model::channel::Message};
+use snafu::ResultExt;
 use tracing::error;
 
-use crate::{voice::error::MusicCommandError, BotError, Context};
+use crate::{
+    BotError, Context,
+    error::{DataManagerSnafu, GeneralSerenitySnafu},
+    voice::error::MusicCommandError,
+};
 
 /// Checks that a message successfully sent; if not, then logs why to stdout.
 pub fn check_msg(result: SerenityResult<Message>) {
@@ -77,7 +82,7 @@ pub struct ChannelInfo {
 impl ChannelInfo {
     pub async fn from_ctx(ctx: Context<'_>, is_voice: bool) -> Result<Self, BotError> {
         let channel_id = ctx.channel_id();
-        let channel_name = channel_id.name(ctx).await?;
+        let channel_name = channel_id.name(ctx).await.context(GeneralSerenitySnafu)?;
         Ok(Self {
             channel_name,
             channel_id,
@@ -95,7 +100,7 @@ impl ChannelInfo {
                 guild_info: guild_info.clone(),
             },
         )?);
-        let channel_name = channel_id.name(ctx).await?;
+        let channel_name = channel_id.name(ctx).await.context(GeneralSerenitySnafu)?;
         Ok(Self {
             channel_name,
             channel_id,
@@ -108,7 +113,7 @@ impl ChannelInfo {
         channel_id: serenity::ChannelId,
         is_voice: bool,
     ) -> Result<Self, BotError> {
-        let channel_name = channel_id.name(ctx).await?;
+        let channel_name = channel_id.name(ctx).await.context(GeneralSerenitySnafu)?;
         Ok(Self {
             channel_name,
             channel_id,
@@ -154,7 +159,8 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
     let user_allowed = data_manager
         .permissions_mut()
         .find_user_allowed(guild_id, user_id, &command)
-        .await?;
+        .await
+        .context(DataManagerSnafu)?;
     if let Some(_model) = user_allowed {
         return Ok(true);
     }
@@ -163,11 +169,17 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
     let command_roles_allowed = data_manager
         .permissions_mut()
         .find_command_roles_allowed(guild_id, &command)
-        .await?;
+        .await
+        .context(DataManagerSnafu)?;
     if !command_roles_allowed.is_empty() {
         for role in command_roles_allowed {
             let role_id = role.role_id as u64;
-            if ctx.author().has_role(ctx, guild_id, role_id).await? {
+            if ctx
+                .author()
+                .has_role(ctx, guild_id, role_id)
+                .await
+                .context(GeneralSerenitySnafu)?
+            {
                 return Ok(true);
             }
         }
@@ -176,7 +188,8 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
             "You are not allowed to use the command `{}` due not having the required roles.",
             &command
         ))
-        .await?;
+        .await
+        .context(GeneralSerenitySnafu)?;
         #[expect(clippy::needless_return)]
         return Ok(false);
     } else {
@@ -184,11 +197,17 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
         let category_roles_allowed = data_manager
             .permissions_mut()
             .find_category_roles_allowed(guild_id, &command_category)
-            .await?;
+            .await
+            .context(DataManagerSnafu)?;
         if !category_roles_allowed.is_empty() {
             for role in category_roles_allowed {
                 let role_id = role.role_id as u64;
-                if ctx.author().has_role(ctx, guild_id, role_id).await? {
+                if ctx
+                    .author()
+                    .has_role(ctx, guild_id, role_id)
+                    .await
+                    .context(GeneralSerenitySnafu)?
+                {
                     return Ok(true);
                 }
             }
@@ -197,7 +216,8 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
                 "You are not allowed to use the command `{}` due not having the required roles.",
                 &command
             ))
-            .await?;
+            .await
+            .context(GeneralSerenitySnafu)?;
             return Ok(false);
         }
 

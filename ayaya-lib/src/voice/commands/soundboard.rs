@@ -2,13 +2,20 @@ use std::{io::Read, sync::Arc};
 
 use error::SoundboardError;
 use poise::serenity_prelude as serenity;
+use snafu::ResultExt;
 use tokio::sync::Mutex;
 
 use crate::{
-    error::BotError,
-    utils::GuildInfo,
-    voice::utils::{embed_template, EmbedOperation},
     CommandResult, Context,
+    error::{
+        BotError, DataManagerSnafu, DownloadAttachmentSnafu, ExternalCommandSnafu,
+        FilesystemAccessSnafu, GeneralSerenitySnafu, IoSnafu,
+    },
+    utils::GuildInfo,
+    voice::{
+        error::MusicCommandError,
+        utils::{EmbedOperation, embed_template},
+    },
 };
 
 use super::join;
@@ -28,7 +35,7 @@ pub async fn upload_sound(
     #[description = "Whether others can use this sound. true or false."] public: Option<bool>,
 ) -> CommandResult {
     // TODO: logs
-    ctx.defer_ephemeral().await?;
+    ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
     let sound_manager = ctx.data().data_manager.sounds();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
     let user_id = ctx.author().id;
@@ -39,37 +46,42 @@ pub async fn upload_sound(
     if public
         && !sound_manager
             .get_user_public_upload_policy(&user_id)
-            .await?
+            .await
+            .context(DataManagerSnafu)?
     {
         let result = create_public_upload_notice(ctx).await?;
-        ctx.defer_ephemeral().await?;
+        ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
 
         match result {
             Some(true) => {
                 sound_manager
                     .set_user_public_upload_policy(&user_id, true)
-                    .await?;
+                    .await
+                    .context(DataManagerSnafu)?;
                 ctx.reply("Okay, we won't bother you with that anymore.")
-                    .await?;
+                    .await
+                    .context(GeneralSerenitySnafu)?;
             }
             Some(false) => {
                 sound_manager
                     .set_user_public_upload_policy(&user_id, false)
-                    .await?;
+                    .await
+                    .context(DataManagerSnafu)?;
                 return Err(SoundboardError::PolicyDeclined.into());
             }
             None => {
-                ctx.reply("Timeout. Upload canceled.").await?;
+                ctx.reply("Timeout. Upload canceled.")
+                    .await
+                    .context(GeneralSerenitySnafu)?;
                 return Err(SoundboardError::NoticeTimeout.into());
             }
         }
     }
 
-    ctx.defer_ephemeral().await?;
+    ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
 
     let sound_dir = ctx.data().data_dir.join("sounds");
-    std::fs::create_dir_all(&sound_dir).map_err(|error| BotError::FilesystemAccessError {
-        error,
+    std::fs::create_dir_all(&sound_dir).context(FilesystemAccessSnafu {
         path: sound_dir.clone(),
     })?;
 
@@ -82,7 +94,7 @@ pub async fn upload_sound(
         }
         Err(e) => {
             tracing::error!("error downloading file");
-            return Err(BotError::DownloadAttachmentError(e));
+            return Err(e).context(DownloadAttachmentSnafu);
         }
     };
 
@@ -97,11 +109,8 @@ pub async fn upload_sound(
     let tempdir = tempfile::tempdir().expect("tempdir can be created");
     let temp_input_path = tempdir.path().join(filename);
     tracing::info!("downloading to {}", temp_input_path.display());
-    std::fs::write(&temp_input_path, &downloaded_file).map_err(|error| {
-        BotError::FilesystemAccessError {
-            error,
-            path: temp_input_path.clone(),
-        }
+    std::fs::write(&temp_input_path, &downloaded_file).context(FilesystemAccessSnafu {
+        path: &temp_input_path,
     })?;
 
     let outfile = tempdir.path().join(format!("{sound_id}.mp3"));
@@ -117,11 +126,10 @@ pub async fn upload_sound(
         .stdout(send.try_clone().expect("unable to clone pipe"))
         .stderr(send)
         .spawn()
-        .map_err(BotError::ExternalCommandError)?;
+        .context(ExternalCommandSnafu)?;
 
     let mut output = Vec::new();
-    recv.read_to_end(&mut output)
-        .map_err(|error| BotError::OtherError(Box::new(error)))?;
+    recv.read_to_end(&mut output).context(IoSnafu)?;
     tracing::debug!("ffmpeg{}", String::from_utf8(output).unwrap_or_default());
 
     let success = command
@@ -131,8 +139,14 @@ pub async fn upload_sound(
         .success();
 
     if !success {
-        ctx.reply("Unable to add sound, not an audio file?").await?;
-        return Err(SoundboardError::NotAudioFile.into());
+        ctx.reply("Unable to add sound, not an audio file?")
+            .await
+            .context(GeneralSerenitySnafu)?;
+        return Err(BotError::MusicCommandError {
+            source: MusicCommandError::SoundboardError {
+                source: SoundboardError::NotAudioFile,
+            },
+        });
     }
 
     let final_file_path = sound_dir.join(format!("{sound_id}.mp3"));
@@ -147,14 +161,16 @@ pub async fn upload_sound(
             description.clone(),
             Some(public),
         )
-        .await?;
+        .await
+        .context(DataManagerSnafu)?;
     tracing::info!(
         "Added sound {description} with id {sound_id}, publicity {public:?} from user {}",
         ctx.author()
     );
 
     ctx.reply(format!("Added sound {description} with id {sound_id}"))
-        .await?;
+        .await
+        .context(GeneralSerenitySnafu)?;
     Ok(())
 }
 
@@ -166,7 +182,7 @@ pub async fn play_sound(
     #[description = "The sound identifier. Refer to the autocomplete"]
     sound_id: uuid::Uuid,
 ) -> Result<(), BotError> {
-    ctx.defer_ephemeral().await?;
+    ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
 
     let guild_id = crate::utils::get_guild_id(ctx)?;
 
@@ -217,7 +233,7 @@ pub async fn rename_sound(
     sound_id: uuid::Uuid,
     new_description: String,
 ) -> Result<(), BotError> {
-    ctx.defer_ephemeral().await?;
+    ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
 
     let old_sound = ctx
         .data()
@@ -231,14 +247,16 @@ pub async fn rename_sound(
         .data_manager
         .sounds()
         .rename_sound(sound_id, new_description.clone())
-        .await?;
+        .await
+        .context(DataManagerSnafu)?;
 
     // TODO: embed
     ctx.reply(format!(
         "Renamed {} to {new_description}",
         old_sound.sound_name
     ))
-    .await?;
+    .await
+    .context(GeneralSerenitySnafu)?;
 
     Ok(())
 }
@@ -318,7 +336,7 @@ pub async fn create_public_upload_notice(ctx: Context<'_>) -> Result<Option<bool
         reply.components(vec![components])
     };
 
-    ctx.send(reply).await?;
+    ctx.send(reply).await.context(GeneralSerenitySnafu)?;
 
     // Loop through incoming interactions with the navigation buttons
     while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
@@ -331,7 +349,8 @@ pub async fn create_public_upload_notice(ctx: Context<'_>) -> Result<Option<bool
     {
         press
             .create_response(ctx, serenity::CreateInteractionResponse::Acknowledge)
-            .await?;
+            .await
+            .context(GeneralSerenitySnafu)?;
 
         if press.data.custom_id == yes_id {
             return Ok(Some(true));
@@ -357,9 +376,11 @@ pub async fn create_sound_repeat(
     let repeat_id = format!("{ctx_id}_{user_id}_{sound_id}");
     let mut count = 1;
 
-    let buttons = vec![serenity::CreateButton::new(&repeat_id)
-        .style(serenity::ButtonStyle::Success)
-        .label("Repeat")];
+    let buttons = vec![
+        serenity::CreateButton::new(&repeat_id)
+            .style(serenity::ButtonStyle::Success)
+            .label("Repeat"),
+    ];
     let embed = |count: i32| {
         let description = serenity::MessageBuilder::default()
             .push_line(format!("# {}", sound.sound_name))
@@ -373,7 +394,7 @@ pub async fn create_sound_repeat(
         .embed(embed(count))
         .components(vec![components]);
 
-    ctx.send(reply).await?;
+    ctx.send(reply).await.context(GeneralSerenitySnafu)?;
 
     // Loop through incoming interactions with the navigation buttons
     while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
@@ -405,7 +426,8 @@ pub async fn create_sound_repeat(
                         serenity::CreateInteractionResponseMessage::new().embed(embed(count)),
                     ),
                 )
-                .await?;
+                .await
+                .context(GeneralSerenitySnafu)?;
         }
     }
 
@@ -413,21 +435,20 @@ pub async fn create_sound_repeat(
 }
 
 pub mod error {
-    use miette::Diagnostic;
-    use thiserror::Error;
 
-    use crate::error::ErrorName;
+    use snafu::Snafu;
 
-    #[derive(Error, Debug, Diagnostic)]
+    use crate::error::{ErrorName, UserFriendlyError};
+
+    #[derive(Debug, Snafu)]
     pub enum SoundboardError {
-        #[error("Timeout waiting for input on notice.")]
-        #[diagnostic(help("Just click the buttons, or you can just ignore me lmao."))]
+        #[snafu(display("Timeout waiting for input on notice."))]
         NoticeTimeout,
-        #[error("You chose to not allow public uploads.")]
-        #[diagnostic(help("Rerun the command with the public argument set to false."))]
+
+        #[snafu(display("You chose to not allow public uploads."))]
         PolicyDeclined,
-        #[error("File uploaded is not an audio file.")]
-        #[diagnostic(help("Upload a real audio file instead."))]
+
+        #[snafu(display("File uploaded is not an audio file."))]
         NotAudioFile,
     }
 
@@ -439,6 +460,24 @@ pub mod error {
                 SoundboardError::NotAudioFile => "not_audio_file",
             };
             format!("soundboard::{str}")
+        }
+    }
+
+    impl UserFriendlyError for SoundboardError {
+        fn help_text(&self) -> &str {
+            match self {
+                SoundboardError::NoticeTimeout => {
+                    "Just click the buttons, or you can just ignore me lmao."
+                }
+                SoundboardError::PolicyDeclined => {
+                    "Rerun the command with the public argument set to false."
+                }
+                SoundboardError::NotAudioFile => "Upload a real audio file instead.",
+            }
+        }
+
+        fn category(&self) -> crate::error::ErrorCategory {
+            crate::error::ErrorCategory::UserMistake
         }
     }
 }

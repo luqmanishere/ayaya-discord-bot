@@ -1,8 +1,8 @@
 //! This module contains functions supporting the join command
 use std::{
     sync::{
-        atomic::{AtomicBool, AtomicUsize},
         Arc,
+        atomic::{AtomicBool, AtomicUsize},
     },
     time::Duration,
 };
@@ -10,14 +10,15 @@ use std::{
 use ::serenity::futures::TryFutureExt as _;
 use poise::serenity_prelude as serenity;
 use serenity::Mentionable;
+use snafu::ResultExt;
 use songbird::Event;
 use tracing::{error, info, warn};
 
 use crate::{
-    error::BotError,
-    utils::{get_guild, get_guild_id, ChannelInfo, GuildInfo},
-    voice::{error::MusicCommandError, events::BotInactiveCounter},
     Context,
+    error::{BotError, GeneralSerenitySnafu},
+    utils::{ChannelInfo, GuildInfo, get_guild, get_guild_id},
+    voice::{error::MusicCommandError, events::BotInactiveCounter},
 };
 
 /// Returns true if already in a channel, false if newly joined
@@ -44,7 +45,10 @@ pub async fn join_inner(
                 let call = call.lock().await;
                 let chan: u64 = call.current_channel().expect("bruh").0.into();
                 let channel_id = serenity::ChannelId::from(chan);
-                (channel_id.name(ctx).await?, channel_id)
+                (
+                    channel_id.name(ctx).await.context(GeneralSerenitySnafu)?,
+                    channel_id,
+                )
             };
 
             warn!("Already in a channel {}, not joining", voice_channel_name);
@@ -56,7 +60,7 @@ pub async fn join_inner(
                     voice_channel_id.mention()
                 ))
                 .await
-                .map_err(BotError::GeneralSerenityError)?;
+                .context(GeneralSerenitySnafu)?;
             }
             Ok(true)
         }
@@ -86,7 +90,7 @@ pub async fn join_inner(
                 // TODO: centrailize
                 ctx.reply("Cache error. Please rejoin the channel")
                     .await
-                    .map_err(BotError::GeneralSerenityError)?;
+                    .context(GeneralSerenitySnafu)?;
 
                 return Err(BotError::GuildCacheStale);
             };
@@ -105,7 +109,8 @@ pub async fn join_inner(
                     if play_notify_flag {
                         // TODO: replace with embed
                         ctx.reply(format!("Joined {}", voice_channel_id.mention()))
-                            .await?;
+                            .await
+                            .context(GeneralSerenitySnafu)?;
                     }
 
                     // bot should be unmuted and deafened
@@ -148,7 +153,9 @@ pub async fn join_inner(
                         ChannelInfo::from_serenity_id(ctx, voice_channel_id, true).await?;
                     error!("Error joining channel: {}", e);
                     // TODO: centralize
-                    ctx.say("Unable to join voice channel").await?;
+                    ctx.say("Unable to join voice channel")
+                        .await
+                        .context(GeneralSerenitySnafu)?;
                     return Err(MusicCommandError::FailedJoinCall {
                         source: e,
                         guild_info,

@@ -1,8 +1,12 @@
 //! Module for trolling and meme commands
 use poise::serenity_prelude::{self as serenity, Mentionable};
 use rand::seq::SliceRandom;
+use snafu::ResultExt as _;
 
-use crate::{error::BotError, Context};
+use crate::{
+    Context,
+    error::{BotError, GeneralSerenitySnafu},
+};
 
 /// Unleash the gay memes on a user.
 ///
@@ -17,7 +21,9 @@ pub async fn gay(
     } else {
         ctx.author().clone()
     };
-    ctx.reply(random_gay(user)).await?;
+    ctx.reply(random_gay(user))
+        .await
+        .context(GeneralSerenitySnafu)?;
     Ok(())
 }
 

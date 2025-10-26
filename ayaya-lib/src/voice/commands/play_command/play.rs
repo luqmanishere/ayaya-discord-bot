@@ -4,21 +4,22 @@ use std::sync::Arc;
 
 use poise::serenity_prelude as serenity;
 use rand::seq::SliceRandom;
-use songbird::{input::Compose, tracks::Track, Event};
+use snafu::ResultExt;
+use songbird::{Event, input::Compose, tracks::Track};
 use tokio::sync::Mutex;
 use tracing::{error, info};
 
 use crate::{
+    Context,
     data::stats::StatsManager,
-    error::BotError,
-    utils::{get_guild_id, GuildInfo, OptionExt},
+    error::{BotError, DataManagerSnafu, GeneralSerenitySnafu},
+    utils::{GuildInfo, OptionExt, get_guild_id},
     voice::{
         commands::play_command::youtube,
         error::MusicCommandError,
         events::TrackPlayNotifier,
-        utils::{self, metadata_to_embed, playlist_to_embed, YoutubeMetadata},
+        utils::{self, YoutubeMetadata, metadata_to_embed, playlist_to_embed},
     },
-    Context,
 };
 
 use super::join_inner;
@@ -76,7 +77,8 @@ impl PlayParse {
                         self.to_string(),
                         "".to_string(),
                     )
-                    .await?;
+                    .await
+                    .context(DataManagerSnafu)?;
                 let source = youtube::YoutubeDl::new_search(
                     ctx.data().http.clone(),
                     search.clone(),
@@ -97,7 +99,8 @@ impl PlayParse {
                         self.to_string(),
                         "".to_string(),
                     )
-                    .await?;
+                    .await
+                    .context(DataManagerSnafu)?;
 
                 let source = youtube::YoutubeDl::new(
                     ctx.data().http.clone(),
@@ -126,7 +129,8 @@ impl PlayParse {
                             self.to_string(),
                             playlist_info.title.clone().unwrap_or_default(),
                         )
-                        .await?;
+                        .await
+                        .context(DataManagerSnafu)?;
 
                     // broadcast playlist info
                     let embed = playlist_to_embed(
@@ -139,7 +143,9 @@ impl PlayParse {
                         Some(ctx.author()),
                     );
 
-                    ctx.send(poise::CreateReply::default().embed(embed)).await?;
+                    ctx.send(poise::CreateReply::default().embed(embed))
+                        .await
+                        .context(GeneralSerenitySnafu)?;
                 } else {
                     tracing::error!("no playlist info");
                 }
@@ -220,7 +226,9 @@ async fn handle_sources(
                 &metadata,
                 None,
             );
-            ctx.send(poise::CreateReply::default().embed(embed)).await?;
+            ctx.send(poise::CreateReply::default().embed(embed))
+                .await
+                .context(GeneralSerenitySnafu)?;
         }
         _num if _num > 1 => {
             if next {
@@ -241,7 +249,9 @@ async fn handle_sources(
             }
         }
         _ => {
-            return Err(BotError::MusicCommandError(MusicCommandError::EmptySource));
+            return Err(BotError::MusicCommandError {
+                source: MusicCommandError::EmptySource,
+            });
         }
     };
 
@@ -293,7 +303,8 @@ async fn insert_source(
                     youtube.youtube_id.clone(),
                     Some(desc),
                 )
-                .await?;
+                .await
+                .context(DataManagerSnafu)?;
 
             let track = Track::new_with_data(source.into(), std::sync::Arc::new(youtube.clone()));
 
@@ -327,10 +338,10 @@ async fn insert_source(
 
                 if next {
                     handler.queue().modify_queue(|queue| {
-                        if queue.len() > 1 {
-                            if let Some(track) = queue.pop_back() {
-                                queue.insert(1, track);
-                            }
+                        if queue.len() > 1
+                            && let Some(track) = queue.pop_back()
+                        {
+                            queue.insert(1, track);
                         }
                     });
                 }
@@ -344,7 +355,7 @@ async fn insert_source(
         Err(e) => {
             let err = format!("Unable to get metadata from youtube {e}");
             error!(err);
-            return Err(MusicCommandError::TrackMetadataRetrieveFailed(e).into());
+            return Err(MusicCommandError::TrackMetadataRetrieveFailed { source: e }.into());
         }
     }
 }

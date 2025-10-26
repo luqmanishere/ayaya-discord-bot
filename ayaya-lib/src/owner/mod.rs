@@ -1,7 +1,14 @@
 //! Contains commands reserved for the bot's owner: ie me.
 use poise::serenity_prelude as serenity;
+use snafu::ResultExt;
 
-use crate::{error::BotError, CommandResult, Commands, Context};
+use crate::{
+    CommandResult, Commands, Context,
+    error::{
+        BotError, DataManagerSnafu, DownloadAttachmentSnafu, ExternalAsyncCommandSnafu,
+        GeneralSerenitySnafu,
+    },
+};
 
 pub fn owner_commands() -> Commands {
     vec![command_log_raw(), upload_cookies(), dep_versions()]
@@ -17,13 +24,18 @@ pub fn owner_commands() -> Commands {
     category = "Owner Commands"
 )]
 pub async fn command_log_raw(ctx: Context<'_>) -> Result<(), BotError> {
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
 
     let data_manager = ctx.data().data_manager.clone();
 
-    let logs = data_manager.find5_command_log().await?;
+    let logs = data_manager
+        .find5_command_log()
+        .await
+        .context(DataManagerSnafu)?;
 
-    ctx.reply(format!("```\n{logs:#?}\n```")).await?;
+    ctx.reply(format!("```\n{logs:#?}\n```"))
+        .await
+        .context(GeneralSerenitySnafu)?;
     Ok(())
 }
 
@@ -36,7 +48,7 @@ pub async fn command_log_raw(ctx: Context<'_>) -> Result<(), BotError> {
     category = "Owner Commands"
 )]
 pub async fn upload_cookies(ctx: Context<'_>, file: serenity::Attachment) -> CommandResult {
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
     let data_manager = ctx.data().data_manager.clone();
     let file = match file.download().await {
         Ok(down) => {
@@ -45,17 +57,17 @@ pub async fn upload_cookies(ctx: Context<'_>, file: serenity::Attachment) -> Com
         }
         Err(e) => {
             tracing::error!("error downloading file");
-            return Err(BotError::DownloadAttachmentError(e));
+            return Err(e).context(DownloadAttachmentSnafu);
         }
     };
 
     let add = data_manager.add_new_cookie(file).await;
     if let Err(e) = add {
-        ctx.reply("Error").await?;
+        ctx.reply("Error").await.context(GeneralSerenitySnafu)?;
         tracing::error!("{e}");
-        return Err(e.into());
+        return Err(e).context(DataManagerSnafu);
     } else {
-        ctx.reply("Uploaded").await?;
+        ctx.reply("Uploaded").await.context(GeneralSerenitySnafu)?;
     }
 
     Ok(())
@@ -70,7 +82,7 @@ pub async fn upload_cookies(ctx: Context<'_>, file: serenity::Attachment) -> Com
     category = "Owner Commands"
 )]
 pub async fn dep_versions(ctx: Context<'_>) -> CommandResult {
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
     let mut message = serenity::MessageBuilder::default();
 
     // yt-dlp version
@@ -78,7 +90,7 @@ pub async fn dep_versions(ctx: Context<'_>) -> CommandResult {
         .arg("--version")
         .output()
         .await
-        .map_err(BotError::ExternalAsyncCommandError)?;
+        .context(ExternalAsyncCommandSnafu)?;
     let yt_dlp_stdout = String::from_utf8(yt_dlp.stdout).unwrap_or_default();
     let yt_dlp_stderr = String::from_utf8(yt_dlp.stderr).unwrap_or_default();
     message.push_line("## yt-dlp");
@@ -93,6 +105,8 @@ pub async fn dep_versions(ctx: Context<'_>) -> CommandResult {
 
     // TODO: add other external programs version
 
-    ctx.reply(message.build()).await?;
+    ctx.reply(message.build())
+        .await
+        .context(GeneralSerenitySnafu)?;
     Ok(())
 }

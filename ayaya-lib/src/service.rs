@@ -3,10 +3,10 @@ use std::sync::Arc;
 use axum::{async_trait, http::StatusCode};
 use axum::{extract::FromRequestParts, http::request::Parts};
 use axum_auth::{AuthBasicCustom, Rejection};
-use miette::IntoDiagnostic;
 use poise::serenity_prelude as serenity;
+use snafu::{ResultExt, Snafu};
 
-use crate::{error::BotError, Data};
+use crate::{Data, error::BotError};
 
 pub struct AyayaDiscordBot {
     pub discord: Discord,
@@ -22,13 +22,13 @@ pub struct Discord {
 
 use anyhow::Result;
 impl AyayaDiscordBot {
-    pub async fn local_bind(self, addr: std::net::SocketAddr) -> miette::Result<()> {
+    pub async fn local_bind(self, addr: std::net::SocketAddr) -> Result<(), StartupError> {
         use std::future::IntoFuture;
 
         let serve = axum::serve(
             tokio::net::TcpListener::bind(addr)
                 .await
-                .into_diagnostic()?,
+                .context(TokioBindSnafu { address: addr })?,
             self.router,
         )
         .into_future();
@@ -37,7 +37,7 @@ impl AyayaDiscordBot {
             .voice_manager_arc(self.discord.voice_manager_arc)
             .framework(self.discord.framework)
             .await
-            .into_diagnostic()?;
+            .context(SerenityClientBuildSnafu)?;
 
         tokio::select! {
             _ = client.start_autosharded() => {},
@@ -100,4 +100,17 @@ where
     async fn from_request_parts(parts: &mut Parts, _: &B) -> Result<Self, Self::Rejection> {
         Self::decode_request_parts(parts)
     }
+}
+
+#[derive(Debug, Snafu)]
+pub enum StartupError {
+    #[snafu(display("Error binding to address {address} : {source}"))]
+    TokioBindError {
+        source: std::io::Error,
+        address: std::net::SocketAddr,
+    },
+
+    SerenityClientBuild {
+        source: serenity::Error,
+    },
 }

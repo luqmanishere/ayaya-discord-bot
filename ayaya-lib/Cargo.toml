@@ -14,21 +14,18 @@ bincode = { workspace = true }
 entity-sqlite = { path = "../entity-sqlite" }
 humantime = { version = "2" }
 lru-mem = { version = "0.3" }
-miette = { workspace = true }
 migration-sqlite = { path = "../migration-sqlite" }
 prometheus-client = { version = "0.22" }
 rand = "0.8"
-# color-eyre = "0.6"
 reqwest = { version = "0.12", features = ["json"] }
 sea-orm = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 sha1_smol = { version = "1" }
-# workspace deps
 shuttle-runtime = { workspace = true }
+snafu = { workspace = true }
 strum = { version = "0.26", features = ["derive"] }
 tempfile = { version = "3" }
-thiserror = { workspace = true }
 time = { version = "0.3", features = ["local-offset"] }
 tokio = { workspace = true }
 tracing = "0.1"

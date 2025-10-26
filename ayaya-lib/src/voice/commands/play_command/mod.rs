@@ -2,16 +2,17 @@
 
 use join::*;
 use play::*;
+use snafu::ResultExt;
 use tracing::error;
 
 use crate::{
-    error::BotError,
+    CommandResult, Context,
+    error::{BotError, GeneralSerenitySnafu},
     utils::get_guild_id,
     voice::{
         error::MusicCommandError,
         utils::{create_search_interaction, yt_search},
     },
-    CommandResult, Context,
 };
 
 pub mod join;
@@ -55,7 +56,9 @@ pub async fn play(
     // convert vec to a string
     let url = query.join(" ").trim().to_string();
 
-    ctx.defer_or_broadcast().await?;
+    ctx.defer_or_broadcast()
+        .await
+        .context(GeneralSerenitySnafu)?;
 
     play_inner(ctx, url, false, false).await?;
     Ok(())
@@ -82,7 +85,7 @@ pub async fn shuffle_play(
     // convert vec to a string
     let url = query.join(" ").trim().to_string();
 
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
 
     play_inner(ctx, url, true, false).await?;
     Ok(())
@@ -99,15 +102,18 @@ pub async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<(), Bo
     // reply or say in channel depending on command type
     match ctx {
         poise::Context::Application(ctx) => {
-            ctx.reply(format!("Searching youtube for: {term}")).await?;
+            ctx.reply(format!("Searching youtube for: {term}"))
+                .await
+                .context(GeneralSerenitySnafu)?;
         }
         poise::Context::Prefix(ctx) => {
             ctx.channel_id()
                 .say(ctx, format!("Searching youtube for: {term}"))
-                .await?;
+                .await
+                .context(GeneralSerenitySnafu)?;
         }
     }
-    ctx.defer().await?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
 
     // let songbird do the searching
     let search = yt_search(&term, Some(10)).await?;
@@ -117,7 +123,10 @@ pub async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<(), Bo
             play_inner(ctx, youtube_id, false, false).await?;
         }
         Err(e) => {
-            if let BotError::MusicCommandError(MusicCommandError::SearchTimeout) = e {
+            if let BotError::MusicCommandError {
+                source: MusicCommandError::SearchTimeout,
+            } = e
+            {
                 return Ok(());
             }
             error!("Error from interaction: {e}");
@@ -147,7 +156,9 @@ pub async fn play_next(
     // convert vec to a string
     let url = query.join(" ").trim().to_string();
 
-    ctx.defer_or_broadcast().await?;
+    ctx.defer_or_broadcast()
+        .await
+        .context(GeneralSerenitySnafu)?;
 
     play_inner(ctx, url, false, true).await?;
     Ok(())

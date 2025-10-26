@@ -5,10 +5,11 @@ use std::time::Duration;
 
 use ::serenity::all::Mentionable;
 use poise::serenity_prelude as serenity;
+use snafu::ResultExt;
 use songbird::constants::SAMPLE_RATE_RAW;
 use youtube_dl::{Playlist, SearchOptions, SingleVideo, YoutubeDlOutput};
 
-use crate::{utils::OptionExt, BotError, Context};
+use crate::{BotError, Context, error::GeneralSerenitySnafu, utils::OptionExt};
 
 use super::error::MusicCommandError;
 
@@ -351,7 +352,7 @@ pub async fn create_search_interaction(
         reply.components(vec![components])
     };
 
-    ctx.send(reply).await?;
+    ctx.send(reply).await.context(GeneralSerenitySnafu)?;
 
     // Loop through incoming interactions with the navigation buttons
     let mut current_page = 0;
@@ -410,7 +411,8 @@ pub async fn create_search_interaction(
                 ctx.serenity_context(),
                 serenity::CreateInteractionResponse::UpdateMessage(response),
             )
-            .await?;
+            .await
+            .context(GeneralSerenitySnafu)?;
     }
     Err(MusicCommandError::SearchTimeout.into())
 }

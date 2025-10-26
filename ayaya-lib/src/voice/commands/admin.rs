@@ -1,12 +1,13 @@
 //! This module contains commands that should only be available to select roles or admins
 
+use snafu::ResultExt;
 use tracing::error;
 
 use crate::{
-    error::BotError,
-    utils::{check_msg, get_guild_id, ChannelInfo, GuildInfo},
-    voice::error::MusicCommandError,
     Context,
+    error::{BotError, GeneralSerenitySnafu},
+    utils::{ChannelInfo, GuildInfo, check_msg, get_guild_id},
+    voice::error::MusicCommandError,
 };
 
 /// Undeafens the bot. Finally, Ayaya pulls out her earplugs.
@@ -31,7 +32,9 @@ pub async fn undeafen(ctx: Context<'_>) -> Result<(), BotError> {
                 voice_channel_info,
             })?;
 
-        ctx.reply("Undeafened").await?;
+        ctx.reply("Undeafened")
+            .await
+            .context(GeneralSerenitySnafu)?;
     } else {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }
@@ -67,7 +70,7 @@ pub async fn unmute(ctx: Context<'_>) -> Result<(), BotError> {
                 voice_channel_info,
             })?;
         // TODO: embed
-        ctx.reply("Unmuted").await?;
+        ctx.reply("Unmuted").await.context(GeneralSerenitySnafu)?;
     } else {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }
@@ -86,7 +89,9 @@ pub async fn mute(ctx: Context<'_>) -> Result<(), BotError> {
     let handler_lock = match manager.get(guild_id) {
         Some(handler) => handler,
         None => {
-            ctx.reply("Not in a voice channel").await?;
+            ctx.reply("Not in a voice channel")
+                .await
+                .context(GeneralSerenitySnafu)?;
 
             return Ok(());
         }
@@ -101,7 +106,7 @@ pub async fn mute(ctx: Context<'_>) -> Result<(), BotError> {
             check_msg(ctx.channel_id().say(ctx, format!("Failed: {e:?}")).await);
         }
 
-        ctx.say("Now muted").await?;
+        ctx.say("Now muted").await.context(GeneralSerenitySnafu)?;
     }
 
     Ok(())
@@ -118,7 +123,9 @@ pub async fn deafen(ctx: Context<'_>) -> Result<(), BotError> {
     let handler_lock = match manager.get(guild_id) {
         Some(handler) => handler,
         None => {
-            ctx.reply("Not in a voice channel").await?;
+            ctx.reply("Not in a voice channel")
+                .await
+                .context(GeneralSerenitySnafu)?;
 
             return Ok(());
         }
@@ -127,14 +134,18 @@ pub async fn deafen(ctx: Context<'_>) -> Result<(), BotError> {
     let mut handler = handler_lock.lock().await;
 
     if handler.is_deaf() {
-        ctx.reply("Already deafened.").await?;
+        ctx.reply("Already deafened.")
+            .await
+            .context(GeneralSerenitySnafu)?;
     } else {
         if let Err(e) = handler.deafen(true).await {
             error!("Failed to deafen: {e}");
-            ctx.say(format!("Failed to deafen: {e:?}")).await?;
+            ctx.say(format!("Failed to deafen: {e:?}"))
+                .await
+                .context(GeneralSerenitySnafu)?;
         }
 
-        ctx.say("Deafened").await?;
+        ctx.say("Deafened").await.context(GeneralSerenitySnafu)?;
     }
 
     Ok(())

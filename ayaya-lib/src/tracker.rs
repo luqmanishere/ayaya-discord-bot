@@ -1,8 +1,16 @@
 use poise::serenity_prelude as serenity;
 use serde::{Deserialize, Deserializer, Serialize};
+use snafu::ResultExt;
 use strum::VariantNames;
 
-use crate::{CommandResult, Context, error::BotError};
+use crate::{
+    CommandResult, Context,
+    error::{
+        BotError, DataManagerSnafu, GeneralSerenitySnafu, JsonSnafu, ReqwestSnafu, TrackerSnafu,
+        UrlParseSnafu,
+    },
+    tracker::error::{TrackerError, WuwaPlayerIdInvalidSnafu},
+};
 
 #[poise::command(slash_command, subcommands("pulls"), aliases("t"))]
 pub async fn tracker(_ctx: Context<'_>) -> Result<(), BotError> {
@@ -25,13 +33,13 @@ pub async fn import_pulls(
 ) -> CommandResult {
     // TODO: other games so we can know whether by game seperation is necessary
 
-    ctx.defer_ephemeral().await?;
+    ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
     const WUWA_REQ_URL: &str = "https://gmserver-api.aki-game2.net/gacha/record/query";
 
     match game {
         SupportedGames::WutheringWaves => {
             if let Some(link) = link {
-                let url = url::Url::parse(&link)?;
+                let url = url::Url::parse(&link).context(UrlParseSnafu)?;
                 let mut server_id: &str = Default::default();
                 let mut record_id: &str = Default::default();
                 let mut player_id: u64 = 0;
@@ -51,7 +59,10 @@ pub async fn import_pulls(
                             record_id = value;
                         }
                         "player_id" => {
-                            player_id = value.parse::<u64>().map_err(BotError::generic)?;
+                            player_id = value
+                                .parse::<u64>()
+                                .context(WuwaPlayerIdInvalidSnafu)
+                                .context(TrackerSnafu)?;
                         }
                         _ => {}
                     }
@@ -61,18 +72,21 @@ pub async fn import_pulls(
                 let pulls_manager = ctx.data().data_manager.wuwa_tracker();
 
                 // check for the player id owner
-                if let Some(user_id) = pulls_manager.get_user_id_from_wuwa_user(player_id).await? {
+                if let Some(user_id) = pulls_manager
+                    .get_user_id_from_wuwa_user(player_id)
+                    .await
+                    .context(DataManagerSnafu)?
+                {
                     if user_id != ctx.author().id.get() {
-                        return Err(BotError::StringError(
-                            "You are not the owner of this player id".to_string(),
-                        ));
+                        return Err(TrackerError::UserGameIdMismatch).context(TrackerSnafu);
                     }
                 } else {
                     // register the player id owner
                     // TODO: interface
                     pulls_manager
                         .insert_wuwa_user(ctx.author().id.get(), player_id)
-                        .await?;
+                        .await
+                        .context(DataManagerSnafu)?;
                 }
 
                 let requests = WuwaRequestBuilder::new()
@@ -80,19 +94,19 @@ pub async fn import_pulls(
                     .record_id(record_id)
                     .server_id(server_id)
                     .build()
-                    .map_err(BotError::string)?;
+                    .context(TrackerSnafu)?;
 
                 let client = reqwest::Client::new();
                 let mut pulls: Vec<ParsedWuwaPull> = vec![];
                 for req in requests {
-                    let json = req.to_json()?;
+                    let json = req.as_json()?;
                     let res = client
                         .post(WUWA_REQ_URL)
                         .header("Content-Type", "application/json")
                         .body(json)
                         .send()
                         .await
-                        .map_err(|e| BotError::StringError(e.to_string()))?;
+                        .context(ReqwestSnafu)?;
 
                     let wrapper = res
                         .json::<DeserializeWrapper>()
@@ -105,14 +119,20 @@ pub async fn import_pulls(
                 tracing::info!("length: {pulls_len}");
 
                 if pulls_len > 0 {
-                    let inserted = pulls_manager.insert_wuwa_pulls(player_id, pulls).await?;
+                    let inserted = pulls_manager
+                        .insert_wuwa_pulls(player_id, pulls)
+                        .await
+                        .context(DataManagerSnafu)?;
                     ctx.reply(format!(
                         "Records parsed: {}, {} new records inserted into database",
                         pulls_len, inserted,
                     ))
-                    .await?;
+                    .await
+                    .context(GeneralSerenitySnafu)?;
                 } else {
-                    ctx.reply("No records found.").await?;
+                    ctx.reply("No records found.")
+                        .await
+                        .context(GeneralSerenitySnafu)?;
                 }
             }
         }
@@ -137,16 +157,20 @@ async fn stats(
 
             let player_ids = wuwa_tracker
                 .get_wuwa_user_from_user_id(user_id.get())
-                .await?;
+                .await
+                .context(DataManagerSnafu)?;
 
             if player_ids.is_empty() {
-                ctx.reply("No Wuwa Account found for you.").await?;
+                ctx.reply("No Wuwa Account found for you.")
+                    .await
+                    .context(GeneralSerenitySnafu)?;
             } else {
                 // show embed
                 for wuwa_player_id in player_ids {
                     let pulls = wuwa_tracker
                         .get_pulls_from_wuwa_id(wuwa_player_id.wuwa_user_id as u64)
-                        .await?;
+                        .await
+                        .context(DataManagerSnafu)?;
                     // TODO: alg
                     let five_stars = pulls
                         .iter()
@@ -157,7 +181,7 @@ async fn stats(
                         .filter(|e| e.pull_type == CardPoolType::EventCharacterConvene as i32)
                         .count();
                     let msg = format!("Limited 5 star characters obtained: {limited_chars}");
-                    ctx.reply(msg).await?;
+                    ctx.reply(msg).await.context(GeneralSerenitySnafu)?;
                 }
             }
         }
@@ -197,7 +221,7 @@ impl<'a> WuwaRequestBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> Result<Vec<WuwaRequest>, String> {
+    pub fn build(self) -> Result<Vec<WuwaRequest>, TrackerError> {
         if let Some(player_id) = self.player_id
             && let Some(server_id) = self.server_id
             && let Some(record_id) = self.record_id
@@ -214,7 +238,7 @@ impl<'a> WuwaRequestBuilder<'a> {
                 .collect();
             Ok(it)
         } else {
-            Err("not enough arguments to build".to_string())
+            Err(TrackerError::WuwaRequestIncomplete)
         }
     }
 }
@@ -230,8 +254,8 @@ struct WuwaRequest {
 }
 
 impl WuwaRequest {
-    pub fn to_json(self) -> Result<String, BotError> {
-        Ok(serde_json::to_string(&self)?)
+    pub fn as_json(&self) -> Result<String, BotError> {
+        serde_json::to_string(self).context(JsonSnafu)
     }
 }
 
@@ -290,6 +314,7 @@ pub enum ResourceType {
 }
 
 #[derive(Debug, Deserialize, Copy, Clone)]
+#[expect(clippy::enum_variant_names)]
 pub enum CardPoolType {
     #[serde(rename = "Resonators Accurate Modulation")]
     EventCharacterConvene,
@@ -299,6 +324,36 @@ pub enum CardPoolType {
     StandardCharacterConvene,
     #[serde(rename = "Full-Range Modualtion")]
     StandardWeaponConvene,
+}
+
+pub mod error {
+    use std::num::ParseIntError;
+
+    use snafu::Snafu;
+
+    use crate::error::ErrorName;
+
+    #[derive(Debug, Snafu)]
+    #[snafu(visibility(pub))]
+    pub enum TrackerError {
+        #[snafu(display("not enough arguments to build"))]
+        WuwaRequestIncomplete,
+        #[snafu(display("You are not the owner of this player id."))]
+        UserGameIdMismatch,
+        #[snafu(display("The player id format is invalid"))]
+        WuwaPlayerIdInvalid { source: ParseIntError },
+    }
+
+    impl ErrorName for TrackerError {
+        fn name(&self) -> String {
+            let str = match self {
+                TrackerError::WuwaRequestIncomplete => "wuwa_request_incomplete",
+                TrackerError::UserGameIdMismatch => "user_game_id_mismatch",
+                TrackerError::WuwaPlayerIdInvalid { .. } => "wuwa_player_id_invalid",
+            };
+            format!("tracker::{str}")
+        }
+    }
 }
 
 #[cfg(test)]

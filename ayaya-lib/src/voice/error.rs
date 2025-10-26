@@ -1,137 +1,119 @@
-use miette::Diagnostic;
 use poise::serenity_prelude::{self as serenity};
-use thiserror::Error;
+use snafu::Snafu;
 
 use crate::{
-    error::ErrorName,
+    error::{ErrorName, UserFriendlyError},
     utils::{ChannelInfo, GuildInfo},
     voice::commands::soundboard::error::SoundboardError,
 };
 
-#[derive(Error, Diagnostic, Debug)]
+#[derive(Debug, Snafu)]
 pub enum MusicCommandError {
-    #[error("Ayaya has not joined any voice channels in the guild {} ({})", guild_info.guild_id, guild_info.guild_name)]
-    #[diagnostic(help("Try joining Ayaya to a voice channel with the join command."))]
+    #[snafu(display("Ayaya has not joined any voice channels in the guild {} ({})", guild_info.guild_id, guild_info.guild_name))]
     BotVoiceNotJoined { guild_info: GuildInfo },
 
-    #[error(
-        "Ayaya can't find user {} ({}) in any voice channel in the guild {} ({})",
-        user.name, user.id, guild_info.guild_name, guild_info.guild_id
-    )]
-    #[diagnostic(help("Try joining a voice channel before running the command."))]
+    #[snafu(display("Ayaya can't find user {} ({}) in any voice channel in the guild {} ({})", user.name, user.id, guild_info.guild_name, guild_info.guild_id))]
     UserVoiceNotJoined {
         user: serenity::User,
         guild_info: GuildInfo,
     },
 
-    #[error(
+    #[snafu(display(
         "Failed to join voice channel {} ({}) in guild {} ({}) with error {source}",
         voice_channel_info.channel_name,
         voice_channel_info.channel_id,
         guild_info.guild_name,
         guild_info.guild_id
-    )]
-    #[diagnostic(help("Contact @solemnattic for assistance"))]
+    ))]
     FailedJoinCall {
         source: songbird::error::JoinError,
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
     },
 
-    #[error(
+    #[snafu(display(
         "Failed to leave voice channel {} ({}) in guild {} ({}) with error: {source}",
         voice_channel_info.channel_name,
         voice_channel_info.channel_id,
         guild_info.guild_name,
         guild_info.guild_id
-    )]
-    #[diagnostic(help("Contact @solemnattic for assistance or just yeet her."))]
+    ))]
     FailedLeaveCall {
         source: songbird::error::JoinError,
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
     },
 
-    #[error("Failed to unmute voice channel {} ({}) in guild {} ({}) due to {source}", voice_channel_info.channel_name, voice_channel_info.channel_id, guild_info.guild_name, guild_info.guild_id)]
-    #[diagnostic(help("Contact @solemnattic for assistance"))]
+    #[snafu(display("Failed to unmute voice channel {} ({}) in guild {} ({}) due to {source}", voice_channel_info.channel_name, voice_channel_info.channel_id, guild_info.guild_name, guild_info.guild_id))]
     FailedUnmuteCall {
         source: songbird::error::JoinError,
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
     },
 
-    #[error(
+    #[snafu(display(
         "Failed to deafen Ayaya in voice channel {} ({}) in guild {} ({}) with error: {source}",
         voice_channel_info.channel_name,
         voice_channel_info.channel_id,
         guild_info.guild_name,
         guild_info.guild_id
-    )]
-    #[diagnostic(help("Contact @solemnattic for assistance"))]
+    ))]
     FailedDeafenCall {
         source: songbird::error::JoinError,
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
     },
 
-    #[error(
+    #[snafu(display(
         "Failed to undeafen Ayaya in voice channel {} ({}) in guild {} ({}) with error: {source}",
         voice_channel_info.channel_name,
         voice_channel_info.channel_id,
         guild_info.guild_name,
         guild_info.guild_id
-    )]
-    #[diagnostic(help("Contact @solemnattic for assistance"))]
+    ))]
     FailedUndeafenCall {
         source: songbird::error::JoinError,
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
     },
 
-    #[error("Ayaya can't find the bond between her and this guild. Time for a reboot perhaps?")]
-    #[diagnostic(help("Contact @solemnattic for assistance."))]
+    #[snafu(display(
+        "Ayaya can't find the bond between her and this guild. Time for a reboot perhaps?"
+    ))]
     CallDoesNotExist,
 
-    #[error("An error occured with youtube-dl while processing query \"{args}\" : {source}")]
-    #[diagnostic(help("Ayaya thinks youtube is being stupid tonight. Just try again"))]
+    #[snafu(display(
+        "An error occured with youtube-dl while processing query \"{args}\" : {source}"
+    ))]
     YoutubeDlError {
         source: youtube_dl::Error,
         args: String,
     },
 
-    #[error("Empty playlist returned from \"{args}\", Ayaya has nothing to play")]
-    #[diagnostic(help("Ayaya thinks youtube is being stupid tonight. Just try again."))]
+    #[snafu(display("Empty playlist returned from \"{args}\", Ayaya has nothing to play"))]
     YoutubeDlEmptyPlaylist { args: String },
 
-    #[error("Ayaya is unable to find the track metadata for uuid: {track_uuid}")]
-    #[diagnostic(help(
-        "Ayaya forgot something important, contact her owner @solemnattic to find out what."
-    ))]
+    #[snafu(display("Ayaya is unable to find the track metadata for uuid: {track_uuid}"))]
     TrackMetadataNotFound { track_uuid: uuid::Uuid },
 
-    #[error("Failed to retrieve metadata for the track: {0}")]
-    #[diagnostic(help(
-        "Ayaya thinks YouTube is being stupid tonight. Tell @solemnattic to check what's up"
-    ))]
-    TrackMetadataRetrieveFailed(#[from] songbird::input::AudioStreamError),
+    #[snafu(display("Failed to retrieve metadata for the track: {source}"))]
+    TrackMetadataRetrieveFailed {
+        source: songbird::input::AudioStreamError,
+    },
 
-    #[error("Ayaya is unable to find the track state for uuid: {track_uuid}")]
-    #[diagnostic(help(
-        "Ayaya forgot something important, contact her owner @solemnattic to help her."
-    ))]
+    #[snafu(display("Ayaya is unable to find the track state for uuid: {track_uuid}"))]
     TrackStateNotFound {
         source: songbird::error::ControlError,
         track_uuid: uuid::Uuid,
     },
 
-    #[error(
+    #[snafu(display(
         "Failed to skip the track with uuid {track_uuid} in voice channel {} ({}) in guild {} ({}): {source}",
         voice_channel_info.channel_name,
         voice_channel_info.channel_id,
         guild_info.guild_name,
         guild_info.guild_id
-    )]
-    #[diagnostic(help("Contact @solemnattic for assistance"))]
+    ))]
     FailedTrackSkip {
         source: songbird::error::ControlError,
         track_uuid: uuid::Uuid,
@@ -139,14 +121,13 @@ pub enum MusicCommandError {
         voice_channel_info: ChannelInfo,
     },
 
-    #[error(
+    #[snafu(display(
         "Failed to pause the track with uuid {track_uuid} in voice channel {} ({}) in guild {} ({}): {source}",
         voice_channel_info.channel_name,
         voice_channel_info.channel_id,
         guild_info.guild_name,
         guild_info.guild_id
-    )]
-    #[diagnostic(help("Contact @solemnattic for assistance"))]
+    ))]
     FailedTrackPause {
         source: songbird::error::ControlError,
         track_uuid: uuid::Uuid,
@@ -154,14 +135,13 @@ pub enum MusicCommandError {
         voice_channel_info: ChannelInfo,
     },
 
-    #[error(
+    #[snafu(display(
         "Failed to resume the track with uuid {track_uuid} in voice channel {} ({}) in guild {} ({}): {source}",
         voice_channel_info.channel_name,
         voice_channel_info.channel_id,
         guild_info.guild_name,
         guild_info.guild_id
-    )]
-    #[diagnostic(help("Contact @solemnattic for assistance"))]
+    ))]
     FailedTrackResume {
         source: songbird::error::ControlError,
         track_uuid: uuid::Uuid,
@@ -169,14 +149,13 @@ pub enum MusicCommandError {
         voice_channel_info: ChannelInfo,
     },
 
-    #[error(
+    #[snafu(display(
         "Failed to seek the track with uuid {track_uuid} in voice channel {} ({}) in guild {} ({}) to position {position}: {source}",
         voice_channel_info.channel_name,
         voice_channel_info.channel_id,
         guild_info.guild_name,
         guild_info.guild_id
-    )]
-    #[diagnostic(help("Contact @solemnattic for assistance"))]
+    ))]
     FailedTrackSeek {
         source: songbird::error::ControlError,
         track_uuid: uuid::Uuid,
@@ -185,8 +164,9 @@ pub enum MusicCommandError {
         position: u64,
     },
 
-    #[error("Backwards seeking is not supported, requested position {requested_position}, current position {current_position}")]
-    #[diagnostic(help("Just don't seek backwards? Look at the autocomplete lol."))]
+    #[snafu(display(
+        "Backwards seeking is not supported, requested position {requested_position}, current position {current_position}"
+    ))]
     NoSeekBackwards {
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
@@ -194,9 +174,8 @@ pub enum MusicCommandError {
         current_position: u64,
     },
 
-    #[error("Out of bounds, requested position {requested_position}, max_position {max_position}")]
-    #[diagnostic(help(
-        "You can seek up to -5 seconds before end. Refer to the autocomplete for max."
+    #[snafu(display(
+        "Out of bounds, requested position {requested_position}, max_position {max_position}"
     ))]
     SeekOutOfBounds {
         guild_info: GuildInfo,
@@ -205,23 +184,19 @@ pub enum MusicCommandError {
         max_position: u64,
     },
 
-    #[error("This track has no reported duration, hence seeking is unsafe.")]
-    #[diagnostic(help("Go complain to @solemnattic"))]
+    #[snafu(display("This track has no reported duration, hence seeking is unsafe."))]
     NoDurationNoSeek {
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
         track_uuid: uuid::Uuid,
     },
 
-    #[error(
+    #[snafu(display(
         "Error accessing the index {index} in the queue for voice channel {} ({}) in guild {} ({})",
         voice_channel_info.channel_name,
         voice_channel_info.channel_id,
         guild_info.guild_name,
         guild_info.guild_id
-    )]
-    #[diagnostic(help(
-        "Ayaya tried to access the non existent, so pick something that exists..."
     ))]
     QueueOutOfBounds {
         index: usize,
@@ -229,52 +204,49 @@ pub enum MusicCommandError {
         voice_channel_info: ChannelInfo,
     },
 
-    #[error(
+    #[snafu(display(
         "Ayaya tried to yeet whatever she's playing in the voice channel {} ({}) guild {} ({}).",
         voice_channel_info.channel_name,
         voice_channel_info.channel_id,
         guild_info.guild_name,
         guild_info.guild_id
-    )]
-    #[diagnostic(help("Sorry, Ayaya can't delete what she is playing. Maybe pick another?"))]
+    ))]
     QueueDeleteNowPlaying {
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
     },
 
-    #[error("Ayaya has no audio tracks to seek in channel {} ({}) in guild {} ({})", voice_channel_info.channel_name, voice_channel_info.channel_id, guild_info.guild_name, guild_info.guild_id)]
-    #[diagnostic(help("How about playing a song and then telling Ayaya to seek forward?"))]
+    #[snafu(display("Ayaya has no audio tracks to seek in channel {} ({}) in guild {} ({})", voice_channel_info.channel_name, voice_channel_info.channel_id, guild_info.guild_name, guild_info.guild_id))]
     NoTrackToSeek {
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
     },
 
-    #[error("Ayaya has been waiting too long for an input...")]
-    #[diagnostic(help("Ayaya waited too long for you... *baka*."))]
+    #[snafu(display("Ayaya has been waiting too long for an input..."))]
     SearchTimeout,
-    #[error("Somehow Ayaya was given an empty source....")]
-    #[diagnostic(help("Try adding the music again"))]
+
+    #[snafu(display("Somehow Ayaya was given an empty source...."))]
     EmptySource,
-    #[error("Ayaya is unable to loop the current track {} times in voice channel {} ({}) in guild {} ({})", count.unwrap_or(0), voice_channel_info.channel_name, voice_channel_info.channel_id, guild_info.guild_name,guild_info.guild_id)]
-    #[diagnostic(help("Error: {} ; contect the owners", source))]
+
+    #[snafu(display("Ayaya is unable to loop the current track {} times in voice channel {} ({}) in guild {} ({})", count.unwrap_or(0), voice_channel_info.channel_name, voice_channel_info.channel_id, guild_info.guild_name,guild_info.guild_id))]
     FailedTrackLoop {
         source: songbird::error::ControlError,
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
         count: Option<usize>,
     },
-    #[error("Cannot mutate position 1 in the queue.")]
-    #[diagnostic(help(
-        "To move to the next song position, use position 2. Or leave the target empty."
-    ))]
+
+    #[snafu(display("Cannot mutate position 1 in the queue."))]
     QueueMoveNoPos1 {
         guild_info: GuildInfo,
         voice_channel_info: ChannelInfo,
     },
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    SoundboardError(SoundboardError),
-    #[error("Failed to add queue event: {error}")]
+
+    #[snafu(transparent)]
+    // #[diagnostic(transparent)]
+    SoundboardError { source: SoundboardError },
+
+    #[snafu(display("Failed to add queue event: {error}"))]
     FailedAddEvent {
         error: songbird::error::ControlError,
     },
@@ -294,7 +266,9 @@ impl ErrorName for MusicCommandError {
             MusicCommandError::YoutubeDlError { .. } => "youtube_dl_error",
             MusicCommandError::YoutubeDlEmptyPlaylist { .. } => "youtube_dl_empty_playlist",
             MusicCommandError::TrackMetadataNotFound { .. } => "track_metadata_not_found",
-            MusicCommandError::TrackMetadataRetrieveFailed(_) => "track_metadata_retrieve_failed",
+            MusicCommandError::TrackMetadataRetrieveFailed { .. } => {
+                "track_metadata_retrieve_failed"
+            }
             MusicCommandError::TrackStateNotFound { .. } => "track_state_not_found",
             MusicCommandError::FailedTrackSkip { .. } => "failed_track_skip",
             MusicCommandError::FailedTrackPause { .. } => "failed_track_pause",
@@ -310,9 +284,64 @@ impl ErrorName for MusicCommandError {
             MusicCommandError::EmptySource => "empty_source",
             MusicCommandError::FailedTrackLoop { .. } => "failed_track_loop",
             MusicCommandError::QueueMoveNoPos1 { .. } => "queue_move_no_pos1",
-            MusicCommandError::SoundboardError(error) => &ErrorName::name(error),
+            MusicCommandError::SoundboardError { source } => &ErrorName::name(source),
             MusicCommandError::FailedAddEvent { .. } => "failed_add_event",
         };
         format!("music::{name}")
+    }
+}
+
+impl UserFriendlyError for MusicCommandError {
+    fn help_text(&self) -> &str {
+        const DEFAULT: &str = "Contact @solemnattic for assistance";
+        match self {
+            Self::BotVoiceNotJoined { .. } => {
+                "Try joining Ayaya to a voice channel with the join command."
+            }
+            Self::UserVoiceNotJoined { .. } => {
+                "Try joining a voice channel before running the command."
+            }
+            Self::YoutubeDlError { .. } | Self::YoutubeDlEmptyPlaylist { .. } => {
+                "Ayaya thinks youtube is being stupid tonight. Just try again"
+            }
+            Self::TrackMetadataNotFound { .. } | Self::TrackStateNotFound { .. } => {
+                "Ayaya forgot something important, contact her owner @solemnattic to find out what."
+            }
+            Self::NoSeekBackwards { .. } => {
+                "Just don't seek backwards? Look at the autocomplete lol."
+            }
+            Self::SeekOutOfBounds { .. } => {
+                "You can seek up to -5 seconds before end. Refer to the autocomplete for max."
+            }
+            Self::NoDurationNoSeek { .. } => "Go complain to @solemnattic",
+            Self::QueueOutOfBounds { .. } => {
+                "Ayaya tried to access the non existent, so pick something that exists..."
+            }
+            Self::QueueDeleteNowPlaying { .. } => {
+                "Sorry, Ayaya can't delete what she is playing. Maybe pick another?"
+            }
+            Self::NoTrackToSeek { .. } => {
+                "How about playing a song and then telling Ayaya to seek forward?"
+            }
+            Self::SearchTimeout => "Ayaya waited too long for you... *baka*.",
+            Self::EmptySource => "Try adding the music again",
+            Self::FailedTrackLoop { .. } => "Failed to loop the track",
+            Self::QueueMoveNoPos1 { .. } => {
+                "To move to the next song position, use position 2. Or leave the target empty."
+            }
+            Self::SoundboardError { source } => source.help_text(),
+            _ => DEFAULT,
+        }
+    }
+
+    fn category(&self) -> crate::error::ErrorCategory {
+        match self {
+            MusicCommandError::BotVoiceNotJoined { .. } => crate::error::ErrorCategory::UserMistake,
+            MusicCommandError::UserVoiceNotJoined { .. } => {
+                crate::error::ErrorCategory::UserMistake
+            }
+            MusicCommandError::QueueMoveNoPos1 { .. } => crate::error::ErrorCategory::UserMistake,
+            _ => crate::error::ErrorCategory::BotIssue,
+        }
     }
 }

@@ -2,14 +2,22 @@ use std::sync::Arc;
 
 use lru_mem::{HeapSize, LruCache};
 use poise::serenity_prelude as serenity;
-use sea_orm::{prelude::*, DatabaseConnection};
+use sea_orm::{DatabaseConnection, prelude::*};
 use serenity::futures::TryFutureExt;
+use snafu::ResultExt;
 use tokio::sync::Mutex;
 
-use crate::metrics::{DataOperationType, Metrics};
+use crate::{
+    data::error::{
+        FindAllAllowedUserDatabaseSnafu, FindCategoryRolesAllowedDatabaseSnafu,
+        NewCategoryRoleRestrictionDatabaseSnafu, NewCommandAllowedUserDatabaseSnafu,
+        NewCommandRoleRestrictionDatabaseSnafu,
+    },
+    metrics::{DataOperationType, Metrics},
+};
 use entity_sqlite::prelude::*;
 
-use super::{error::DataError, utils::DataTiming, DataResult};
+use super::{DataResult, error::DataError, utils::DataTiming};
 
 pub type PermissionCache = Arc<Mutex<LruCache<PermissionCacheKey, Vec<u8>>>>;
 
@@ -215,8 +223,8 @@ impl Permissions {
                     .filter(require_category_role::Column::ServerId.eq(guild_id))
                     .filter(require_category_role::Column::Category.eq(command_category))
                     .all(&self.db)
-                    .map_err(DataError::FindCategoryRolesAllowedDatabaseError)
-                    .await?;
+                    .await
+                    .context(FindCategoryRolesAllowedDatabaseSnafu)?;
                 if let Ok(encoded) = bincode::encode_to_vec(&model, bincode::config::standard()) {
                     self.permission_cache_insert(cache_key, encoded).await;
                 };
@@ -267,7 +275,8 @@ impl Permissions {
             }
             .insert(&self.db)
             .await
-            .map_err(DataError::NewCommandRoleRestrictionDatabaseError)?;
+            .context(NewCommandRoleRestrictionDatabaseSnafu)?;
+
             // invalidate the cache
             self.permission_cache_invalidate(PermissionCacheKey {
                 user_id: None,
@@ -321,7 +330,7 @@ impl Permissions {
             }
             .insert(&self.db)
             .await
-            .map_err(DataError::NewCategoryRoleRestrictionDatabaseError)?;
+            .context(NewCategoryRoleRestrictionDatabaseSnafu)?;
             // cache invalidation
             self.permission_cache_invalidate(PermissionCacheKey {
                 user_id: None,
@@ -363,7 +372,7 @@ impl Permissions {
             }
             .insert(&self.db)
             .await
-            .map_err(DataError::NewCommandAllowedUserDatabaseError)?;
+            .context(NewCommandAllowedUserDatabaseSnafu)?;
             // cache invalidation
             self.permission_cache_invalidate(PermissionCacheKey {
                 user_id: Some(user_id),
@@ -403,7 +412,7 @@ impl Permissions {
             .filter(command_allow_user::Column::Command.eq(command))
             .all(&self.db)
             .await
-            .map_err(DataError::FindAllAllowedUserDatabaseError)
+            .context(FindAllAllowedUserDatabaseSnafu)
     }
 }
 

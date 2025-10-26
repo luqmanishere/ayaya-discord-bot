@@ -1,6 +1,6 @@
 use entity_sqlite::prelude::*;
 use poise::serenity_prelude as serenity;
-use sea_orm::{prelude::*, ActiveValue, DatabaseConnection, IntoActiveModel};
+use sea_orm::{ActiveValue, DatabaseConnection, IntoActiveModel, prelude::*};
 
 use crate::data::error::DataError;
 use crate::data::utils::DataTiming;
@@ -136,7 +136,9 @@ impl SoundsManager {
                 })?;
             Ok(())
         } else {
-            Err(DataError::NotFound(sound_id.to_string()))
+            Err(DataError::NotFound {
+                err: sound_id.to_string(),
+            })
         }
     }
 

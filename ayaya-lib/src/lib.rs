@@ -5,9 +5,9 @@
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Read},
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
 };
 
 use admin::admin_commands;
@@ -15,39 +15,45 @@ use anyhow::Result;
 use axum::{
     body::Body,
     extract::State,
-    http::{header::CONTENT_TYPE, StatusCode},
+    http::{StatusCode, header::CONTENT_TYPE},
     response::{IntoResponse, Response},
 };
 use base64::Engine as _;
 use data::DataManager;
-use error::{error_handler, BotError};
+use error::{BotError, error_handler};
 use memes::gay;
 use metrics::Metrics;
-use miette::IntoDiagnostic;
 use owner::owner_commands;
 use poise::{
-    serenity_prelude::{self as serenity},
     FrameworkError,
+    serenity_prelude::{self as serenity},
 };
 use prometheus_client::{encoding::text::encode, registry::Registry};
 use reqwest::Client as HttpClient;
 use service::{AyayaDiscordBot, Discord, MetricsBasicAuth};
+use snafu::ResultExt;
 use stats::stats_commands;
-use time::{format_description, UtcOffset};
+use time::{UtcOffset, format_description};
 use tokio::sync::{Mutex as TokioMutex, RwLock};
 use tracing::{debug, error, info, level_filters::LevelFilter, subscriber::set_global_default};
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{fmt::time::OffsetTime, layer::SubscriberExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt::time::OffsetTime, layer::SubscriberExt};
 use tracker::tracker;
 use utils::GuildInfo;
 use voice::voice_commands;
 
-use crate::voice::commands::music;
+use crate::{
+    error::{
+        DataManagerSnafu, GeneralSerenitySnafu, LokiBuilderSnafu, SetGlobalDefaultSnafu,
+        TracingFilterParseSnafu, UrlParseSnafu,
+    },
+    voice::commands::music,
+};
 
 pub(crate) mod admin;
 pub(crate) mod constants;
 pub(crate) mod data;
-pub(crate) mod error;
+pub mod error;
 pub(crate) mod memes;
 pub(crate) mod metrics;
 pub(crate) mod owner;
@@ -87,7 +93,7 @@ pub async fn ayayabot(
     ytdlp_config_path: PathBuf,
     secret_key: String,
     data_dir: PathBuf,
-) -> miette::Result<AyayaDiscordBot> {
+) -> Result<AyayaDiscordBot, BotError> {
     // color_eyre::install()?;
 
     setup_logging(loki).await?;
@@ -101,7 +107,7 @@ pub async fn ayayabot(
     let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
     let data_manager = DataManager::new(&db_url, metrics.clone())
         .await
-        .map_err(|e| miette::miette!("database error: {}", e))?;
+        .context(DataManagerSnafu)?;
 
     #[cfg(debug_assertions)]
     let prefix = "~";
@@ -144,7 +150,9 @@ pub async fn ayayabot(
         .setup(move |ctx, _ready, framework| {
             Box::pin(async move {
                 info!("Setup...");
-                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                poise::builtins::register_globally(ctx, &framework.options().commands)
+                    .await
+                    .context(GeneralSerenitySnafu)?;
                 let command_names = framework
                     .options()
                     .commands
@@ -228,7 +236,10 @@ async fn pre_command(ctx: poise::Context<'_, Data, BotError>) {
     let author = ctx.author().clone();
     let channel_id = ctx.channel_id();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
-    info!("Command \"{command_name}\" called from channel {channel_id} in guild {guild_id:?} by {} ({})", author.name, author);
+    info!(
+        "Command \"{command_name}\" called from channel {channel_id} in guild {guild_id:?} by {} ({})",
+        author.name, author
+    );
 
     // log to database asynchronously, we don't need to wait for this to finish at all.
     let mut data_manager = ctx.data().data_manager.clone();
@@ -246,7 +257,7 @@ async fn pre_command(ctx: poise::Context<'_, Data, BotError>) {
     });
 }
 
-async fn setup_logging(loki: Option<LokiOpts>) -> miette::Result<()> {
+async fn setup_logging(loki: Option<LokiOpts>) -> Result<(), BotError> {
     // Init tracing with malaysian offset cause thats where i live and read timestamps
     let offset = UtcOffset::current_local_offset()
         .unwrap_or(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
@@ -254,23 +265,28 @@ async fn setup_logging(loki: Option<LokiOpts>) -> miette::Result<()> {
     // TODO: revamp. this is way too confusing
     match loki {
         Some(loki) => {
-            let url = url::Url::parse("https://logs-prod-020.grafana.net").into_diagnostic()?;
+            let url =
+                url::Url::parse("https://logs-prod-020.grafana.net").context(UrlParseSnafu)?;
 
             let builder = tracing_loki::builder()
                 .label("application", loki.application_log_label.clone())
-                .into_diagnostic()?
+                .context(LokiBuilderSnafu)?
                 .extra_field("pid", format!("{}", std::process::id()))
-                .into_diagnostic()?
+                .context(LokiBuilderSnafu)?
                 .http_header("Authorization", format!("Basic {}", loki.get_basic_auth()))
-                .into_diagnostic()?;
+                .context(LokiBuilderSnafu)?;
 
-            let (layer, task) = builder.build_url(url).into_diagnostic()?;
+            let (layer, task) = builder.build_url(url).context(LokiBuilderSnafu)?;
             let registry = tracing_subscriber::registry()
                 .with(
                     EnvFilter::builder()
                         .with_default_directive(LevelFilter::INFO.into())
                         .from_env_lossy()
-                        .add_directive("ayaya_discord_bot=debug".parse().into_diagnostic()?),
+                        .add_directive(
+                            "ayaya_discord_bot=debug"
+                                .parse()
+                                .context(TracingFilterParseSnafu)?,
+                        ),
                 )
                 .with(
                     tracing_subscriber::fmt::layer()
@@ -282,7 +298,7 @@ async fn setup_logging(loki: Option<LokiOpts>) -> miette::Result<()> {
                 )
                 .with(ErrorLayer::default())
                 .with(layer);
-            set_global_default(registry).into_diagnostic()?;
+            set_global_default(registry).context(SetGlobalDefaultSnafu)?;
             tokio::spawn(task);
         }
         None => {
@@ -292,7 +308,11 @@ async fn setup_logging(loki: Option<LokiOpts>) -> miette::Result<()> {
                     EnvFilter::builder()
                         .with_default_directive(LevelFilter::INFO.into())
                         .from_env_lossy()
-                        .add_directive("ayaya_discord_bot=debug".parse().into_diagnostic()?),
+                        .add_directive(
+                            "ayaya_discord_bot=debug"
+                                .parse()
+                                .context(TracingFilterParseSnafu)?,
+                        ),
                 )
                 .with(
                     tracing_subscriber::fmt::layer()
@@ -303,7 +323,7 @@ async fn setup_logging(loki: Option<LokiOpts>) -> miette::Result<()> {
                         .with_thread_ids(true),
                 )
                 .with(ErrorLayer::default());
-            set_global_default(registry).into_diagnostic()?;
+            set_global_default(registry).context(SetGlobalDefaultSnafu)?;
         }
     };
 
@@ -332,31 +352,12 @@ async fn event_handler(
                 *user_id_lock = bot_user_id;
             }
 
-            if std::env::var("SHUTTLE")
-                .unwrap_or_default()
-                .contains("true")
-                || !std::env::var("container").unwrap_or_default().is_empty()
-            {
-                info!("shuttle detected!");
-                let data_manager = _data.data_manager.clone();
-                let path = _data.ytdlp_config_path.join("cookies.txt");
-                let key = age::x25519::Identity::from_str(&_data.secret_key).expect("key success");
-                let cookies = data_manager.get_latest_cookies().await.expect("no errors");
-                if let Some(cookies) = cookies {
-                    let file = cookies.cookies;
-                    let decryptor = age::Decryptor::new(file.as_slice()).expect("works");
-                    let mut decrypted = vec![];
-
-                    let mut reader = decryptor
-                        .decrypt(std::iter::once(&key as &dyn age::Identity))
-                        .expect("decrypt success");
-                    reader.read_to_end(&mut decrypted).expect("success");
-                    std::fs::write(path, decrypted).expect("write success");
-                    info!("wrote cookies to path");
-                } else {
-                    error!("no cookies found");
-                }
-            }
+            setup_cookies(
+                &_data.data_manager,
+                &_data.ytdlp_config_path,
+                &_data.secret_key,
+            )
+            .await;
 
             // test yt-dlp
             #[expect(clippy::zombie_processes)]
@@ -392,11 +393,41 @@ async fn event_handler(
     Ok(())
 }
 
+async fn setup_cookies(data_manager: &DataManager, ytdlp_config_path: &Path, secret_key: &str) {
+    // only setup cookies in a shuttle env or a container env
+    if std::env::var("SHUTTLE")
+        .unwrap_or_default()
+        .contains("true")
+        || !std::env::var("container").unwrap_or_default().is_empty()
+    {
+        info!("shuttle detected!");
+        let path = ytdlp_config_path.join("cookies.txt");
+        let key = age::x25519::Identity::from_str(secret_key).expect("key success");
+        let cookies = data_manager.get_latest_cookies().await.expect("no errors");
+        if let Some(cookies) = cookies {
+            let file = cookies.cookies;
+            let decryptor = age::Decryptor::new(file.as_slice()).expect("works");
+            let mut decrypted = vec![];
+
+            let mut reader = decryptor
+                .decrypt(std::iter::once(&key as &dyn age::Identity))
+                .expect("decrypt success");
+            reader.read_to_end(&mut decrypted).expect("success");
+            std::fs::write(path, decrypted).expect("write success");
+            info!("wrote cookies to path");
+        } else {
+            error!("no cookies found");
+        }
+    }
+}
+
 /// Pong!
 #[poise::command(prefix_command, slash_command)]
 async fn ping(ctx: Context<'_>) -> Result<(), BotError> {
     let ping = ctx.ping().await;
-    ctx.reply(format!("Pong! {}ms", ping.as_millis())).await?;
+    ctx.reply(format!("Pong! {}ms", ping.as_millis()))
+        .await
+        .context(GeneralSerenitySnafu)?;
 
     Ok(())
 }
@@ -446,7 +477,7 @@ Consider leaving a star on the Github page!
 
     let about = poise::CreateReply::default().embed(embed).reply(true);
 
-    ctx.send(about).await?;
+    ctx.send(about).await.context(GeneralSerenitySnafu)?;
     Ok(())
 }
 
@@ -462,7 +493,9 @@ pub async fn help(
         ephemeral: true,
         ..Default::default()
     };
-    poise::builtins::pretty_help(ctx, command.as_deref(), configuration).await?;
+    poise::builtins::pretty_help(ctx, command.as_deref(), configuration)
+        .await
+        .context(GeneralSerenitySnafu)?;
     Ok(())
 }
 
