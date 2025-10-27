@@ -3,7 +3,26 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to [Calendar Versioning](https://calver.org/).
+
+## [2025.10.27-0] - 2025-10-27
+
+### Changed
+
+- Change versioning to calver
+- Error instead of panic during cookies decryption
+- Migrate from miette and thiserror to snafu
+- Update flake.lock 20251025
+
+### Fixed
+
+- Log the type of url used
+- Use serenity with all codecs
+- Update runner to trixie
+
+### Removed
+
+- Remove some expects
 
 ## [0.15.0] - 2025-10-20
 
@@ -358,6 +377,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Delete from queue
 - Remove unused workflow
 
+[2025.10.27-0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.15.0..v2025.10.27-0
 [0.15.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.14.0..v0.15.0
 [0.14.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.13.1..v0.14.0
 [0.13.1]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.13.0..v0.13.1

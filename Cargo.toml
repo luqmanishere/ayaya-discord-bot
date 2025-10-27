@@ -10,7 +10,7 @@ members = [
 default-members = ["ayaya-lib", "ayaya-runner-local"]
 
 [workspace.package]
-version = "2025.10.26-0"
+version = "2025.10.27-0"
 edition = "2018"
 rust-version = "1.88.0"
 
