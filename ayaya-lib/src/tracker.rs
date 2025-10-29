@@ -356,7 +356,7 @@ pub mod error {
                 TrackerError::WuwaRequestIncomplete => "wuwa_request_incomplete",
                 TrackerError::UserGameIdMismatch => "user_game_id_mismatch",
                 TrackerError::WuwaPlayerIdInvalid { .. } => "wuwa_player_id_invalid",
-                TrackerError::InvalidUrl { .. } => "invalid_url",
+                TrackerError::InvalidUrl => "invalid_url",
             };
             format!("tracker::{str}")
         }

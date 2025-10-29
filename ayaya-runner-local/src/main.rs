@@ -56,6 +56,7 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
+#[expect(clippy::result_large_err)]
 fn file_or_env_var(env_name: &str) -> Result<String, Error> {
     let filename_var = format!("{env_name}_FILE");
     if let Ok(token_file) = env::var(&filename_var) {
@@ -75,6 +76,7 @@ fn file_or_env_var(env_name: &str) -> Result<String, Error> {
 }
 
 #[derive(Snafu, Debug)]
+#[expect(clippy::enum_variant_names)]
 enum Error {
     #[snafu(display("Error occured during bot initialization: {source}"))]
     BotError { source: BotError },

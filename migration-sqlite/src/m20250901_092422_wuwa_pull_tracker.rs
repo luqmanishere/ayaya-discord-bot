@@ -98,6 +98,7 @@ enum WuwaResource {
 }
 
 #[derive(DeriveIden)]
+#[expect(clippy::enum_variant_names)]
 enum WuwaUser {
     Table,
     UserId,
