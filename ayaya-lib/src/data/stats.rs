@@ -3,10 +3,10 @@
 
 use entity_sqlite::prelude::*;
 use poise::serenity_prelude as serenity;
-use sea_orm::prelude::*;
 use sea_orm::ActiveValue;
 use sea_orm::DatabaseConnection;
 use sea_orm::IntoActiveModel;
+use sea_orm::prelude::*;
 use time::UtcOffset;
 
 use crate::data::error::DataError;
