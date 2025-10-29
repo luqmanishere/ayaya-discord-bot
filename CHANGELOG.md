@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [2025.10.30-0] - 2025-10-29
+
+### Changed
+
+- Styling: run rustfmt
+
+### Fixed
+
+- Fix some clippy warnings
+- Fix(ci): versioning does not use regex
+
 ## [2025.10.27-0] - 2025-10-27
 
 ### Changed
@@ -377,6 +388,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 - Delete from queue
 - Remove unused workflow
 
+[2025.10.30-0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v2025.10.27-0..v2025.10.30-0
 [2025.10.27-0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.15.0..v2025.10.27-0
 [0.15.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.14.0..v0.15.0
 [0.14.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.13.1..v0.14.0
