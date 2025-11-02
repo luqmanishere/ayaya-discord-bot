@@ -369,30 +369,36 @@ mod tests {
 
     #[test]
     fn test_deserialize_type_1() {
-        let DeserializeWrapper { data: pulls } = serde_json::from_str(
-            &std::fs::read_to_string("../dev/wuwa_model_type_1.json").unwrap(),
-        )
-        .unwrap();
+        let model_path = format!(
+            "{}/../dev/wuwa_model_type_1.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let DeserializeWrapper { data: pulls } =
+            serde_json::from_str(&std::fs::read_to_string(model_path).unwrap()).unwrap();
 
         assert!(pulls.iter().find(|e| e.name == "Carlotta").is_some());
     }
 
     #[test]
     fn test_deserialize_type_2() {
-        let DeserializeWrapper { data: pulls } = serde_json::from_str(
-            &std::fs::read_to_string("../dev/wuwa_model_type_2.json").unwrap(),
-        )
-        .unwrap();
+        let model_path = format!(
+            "{}/../dev/wuwa_model_type_2.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let DeserializeWrapper { data: pulls } =
+            serde_json::from_str(&std::fs::read_to_string(model_path).unwrap()).unwrap();
 
         assert!(pulls.iter().find(|e| e.name == "The Last Dance").is_some());
     }
 
     #[test]
     fn test_deserialize_type_3() {
-        let DeserializeWrapper { data: pulls } = serde_json::from_str(
-            &std::fs::read_to_string("../dev/wuwa_model_type_2.json").unwrap(),
-        )
-        .unwrap();
+        let model_path = format!(
+            "{}/../dev/wuwa_model_type_3.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let DeserializeWrapper { data: pulls } =
+            serde_json::from_str(&std::fs::read_to_string(model_path).unwrap()).unwrap();
 
         assert!(
             pulls
@@ -404,10 +410,12 @@ mod tests {
 
     #[test]
     fn test_deserialize_type_4() {
-        let DeserializeWrapper { data: pulls } = serde_json::from_str(
-            &std::fs::read_to_string("../dev/wuwa_model_type_4.json").unwrap(),
-        )
-        .unwrap();
+        let model_path = format!(
+            "{}/../dev/wuwa_model_type_4.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let DeserializeWrapper { data: pulls } =
+            serde_json::from_str(&std::fs::read_to_string(model_path).unwrap()).unwrap();
 
         assert!(pulls.iter().find(|e| e.name == "Cosmic Ripples").is_some());
     }
