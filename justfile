@@ -44,6 +44,16 @@ bump:
     git cliff --bump auto -o CHANGELOG.md --tag "v${VERSION}"
     cargo set-version "${VERSION}"
 
+release:
+    #!/usr/bin/env bash
+    set -e
+    just bump
+    VERSION=$(grep '^version = ' Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
+    git add Cargo.toml Cargo.lock CHANGELOG.md
+    git commit -m "chore(release): release ${VERSION}" -m "changelog: ignore"
+    git tag "v${VERSION}"
+    echo "Tagged version ${VERSION}"
+
 test:
     cargo nextest run
 
