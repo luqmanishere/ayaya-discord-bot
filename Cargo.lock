@@ -538,7 +538,7 @@ dependencies = [
 
 [[package]]
 name = "ayaya-lib"
-version = "2025.11.3-2"
+version = "2025.11.3-5"
 dependencies = [
  "age",
  "anyhow",
@@ -579,7 +579,7 @@ dependencies = [
 
 [[package]]
 name = "ayaya-runner-local"
-version = "2025.11.3-2"
+version = "2025.11.3-5"
 dependencies = [
  "ayaya-lib",
  "dotenvy",
@@ -589,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "ayaya-runner-shuttle"
-version = "2025.11.3-2"
+version = "2025.11.3-5"
 dependencies = [
  "anyhow",
  "ayaya-lib",
@@ -1504,7 +1504,7 @@ dependencies = [
 
 [[package]]
 name = "entity-sqlite"
-version = "2025.11.3-2"
+version = "2025.11.3-5"
 dependencies = [
  "bincode",
  "sea-orm",
@@ -3801,7 +3801,7 @@ dependencies = [
 
 [[package]]
 name = "migration-sqlite"
-version = "2025.11.3-2"
+version = "2025.11.3-5"
 dependencies = [
  "async-std",
  "sea-orm-migration",
