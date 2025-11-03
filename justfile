@@ -54,6 +54,35 @@ release:
     git tag "v${VERSION}"
     echo "Tagged version ${VERSION}"
 
+jj-bump:
+    #!/usr/bin/env bash
+    DATE=$(date +%Y.%-m.%-d)
+    # Find the highest pre-release number for today's date
+    LATEST_TAG=$(git tag -l "v${DATE}-*" | sort -V | tail -n 1)
+    if [ -z "$LATEST_TAG" ]; then
+        PRERELEASE=0
+    else
+        PRERELEASE=$(echo "$LATEST_TAG" | sed "s/v${DATE}-//")
+        PRERELEASE=$((PRERELEASE + 1))
+    fi
+    VERSION="${DATE}-${PRERELEASE}"
+    # Ensure we're on the main branch for git-cliff
+    git checkout main
+    git cliff --bump auto -o CHANGELOG.md --tag "v${VERSION}"
+    cargo set-version "${VERSION}"
+
+jj-release:
+    #!/usr/bin/env bash
+    set -e
+    just jj-bump
+    VERSION=$(grep '^version = ' Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
+    # Jujutsu automatically tracks changes, no need for 'add'
+    jj commit -m "chore(release): release ${VERSION}" -m "changelog: ignore"
+    # Create git tag for compatibility with GitHub, CI, and git-cliff
+    git tag "v${VERSION}"
+    echo "Tagged version ${VERSION}"
+    echo "To push, run: jj git push --branch main && git push origin v${VERSION}"
+
 test:
     cargo nextest run
 
