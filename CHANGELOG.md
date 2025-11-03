@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [2025.11.3-0] - 2025-11-03
+
+### Added
+
+- Add release recipe to automate version releases
+
+### Fixed
+
+- Fix date tags again
+- Filter out m3u8 streams and update ytdlp for nsig
+- Use CARGO_MANIFEST_DIR for test fixture paths in tracker
+- More workflow matching fixes
+
 ## [2025.10.30-0] - 2025-10-29
 
 ### Changed
@@ -388,6 +401,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 - Delete from queue
 - Remove unused workflow
 
+[2025.11.3-0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v2025.10.30-0..v2025.11.3-0
 [2025.10.30-0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v2025.10.27-0..v2025.10.30-0
 [2025.10.27-0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.15.0..v2025.10.27-0
 [0.15.0]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v0.14.0..v0.15.0
