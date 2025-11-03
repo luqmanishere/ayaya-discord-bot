@@ -114,7 +114,7 @@ impl AsYoutubeMetadata for SingleVideo {
             title: value.title,
             thumbnail,
             youtube_id: value.id,
-            format_id: value.format_id.expect("format_id exists"),
+            format_id: value.format_id.unwrap_or_default(),
             filesize: value.filesize.map(|e| e as u64),
             http_headers: value.http_headers,
             release_date: value.release_date,
