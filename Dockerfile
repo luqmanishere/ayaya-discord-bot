@@ -22,8 +22,8 @@ RUN cargo build --release
 
 FROM debian:trixie-slim AS runner
 # install runtime dependencies
-RUN apt-get update && apt-get install -y ffmpeg python3 pipx openssl libssl3 && rm -rf /var/lib/apt/lists/*
-RUN pipx install yt-dlp
+RUN apt-get update && apt-get install -y ffmpeg python3 pipx openssl libssl3 nodejs && rm -rf /var/lib/apt/lists/*
+RUN pipx install --pip-args "\\--pre" "yt-dlp[default]"
 ENV PATH="${PATH}:/root/.local/bin"
 # copy from builder
 COPY --from=builder /usr/src/ayayadc/target/release/ayaya-runner-local /usr/local/bin/ayaya-runner-local

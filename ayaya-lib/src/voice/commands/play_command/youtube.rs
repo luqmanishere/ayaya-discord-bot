@@ -24,6 +24,7 @@ use crate::{
 };
 
 const YOUTUBE_DL_COMMAND: &str = "yt-dlp";
+const YT_DLP_FORMAT_ARGS: &str = "ba[abr>0][vcodec=none][protocol!*=m3u8][protocol!*=m3u8_native]";
 
 #[derive(Clone, Debug)]
 enum QueryType {
@@ -143,7 +144,7 @@ impl YoutubeDl {
         let youtube_playlist = youtube_dl::YoutubeDl::new(url.clone())
             .flat_playlist(true)
             .extra_arg("-f")
-            .extra_arg("ba[abr>0][vcodec=none]/best")
+            .extra_arg(YT_DLP_FORMAT_ARGS)
             .run_async()
             .await
             .map_err(|e| MusicCommandError::YoutubeDlError {
@@ -151,7 +152,6 @@ impl YoutubeDl {
                 args: url.clone(),
             })?;
 
-        // TODO: cleanup
         let videos = match youtube_playlist {
             YoutubeDlOutput::Playlist(ref playlist) => playlist
                 .entries
@@ -198,7 +198,7 @@ impl YoutubeDl {
             .youtube_dl_path(self.program)
             .extra_arg("--no-playlist")
             .extra_arg("-f")
-            .extra_arg("ba[abr>0][vcodec=none][protocol!=m3u8][protocol!=m3u8_native]")
+            .extra_arg(YT_DLP_FORMAT_ARGS)
             // .extra_arg("-4")
             // commentd out to try fix dropped args
             // .extra_arg("--extractor-args")
@@ -273,17 +273,26 @@ impl Compose for YoutubeDl {
             }));
         }
 
+        // TODO: measure the format id hits
         #[expect(clippy::single_match_else)]
         match result.protocol {
             Some(Protocol::M3U8Native) => {
-                tracing::debug!("Using HLS, url: {}", result.url);
+                tracing::debug!(
+                    "Using HLS, url: {}, format_id: {}",
+                    result.url,
+                    result.format_id
+                );
                 let mut req =
                     HlsRequest::new_with_headers(self.client.clone(), result.url, headers);
 
                 req.create_async().await
             }
             _ => {
-                tracing::debug!("Using HTTP, url: {}", result.url);
+                tracing::debug!(
+                    "Using HTTP, url: {}, format_id: {}",
+                    result.url,
+                    result.format_id
+                );
                 let mut req = HttpRequest {
                     client: self.client.clone(),
                     request: result.url,

@@ -20,7 +20,11 @@ async fn main() -> Result<(), Error> {
         // use cookies at the same path  as config if in a container
         if !std::env::var("container").unwrap_or_default().is_empty() {
             let cookies_path = yt_dlp_config_dir.join("cookies.txt");
-            let yt_dlp_config = format!("--cookies {}", cookies_path.to_str().unwrap_or(""));
+            // TODO: this config should be handled by the lib
+            let yt_dlp_config = format!(
+                "--cookies {}\n--no-js-runtime\n--js-runtime node",
+                cookies_path.to_str().unwrap_or("")
+            );
             let config_path = yt_dlp_config_dir.join("config");
             std::fs::write(&config_path, yt_dlp_config)
                 .context(CreateYtConfigSnafu { config_path })?;
