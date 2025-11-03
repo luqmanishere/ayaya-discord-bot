@@ -71,4 +71,4 @@ features = ["all"]
 [build-dependencies]
 anyhow = { version = "1" }
 # All features enabled
-vergen-gix = { version = "1.0.0", features = ["build", "cargo", "rustc"] }
+vergen-gix = { version = "2.1.0-beta.7", features = ["build", "cargo", "rustc"] }
