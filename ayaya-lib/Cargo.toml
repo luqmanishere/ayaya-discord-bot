@@ -7,6 +7,7 @@ rust-version = { workspace = true }
 [dependencies]
 age = { version = "0.11" }
 anyhow = "1"
+argon2 = "0.5"
 axum = { version = "0.7" }
 axum-auth = { version = "0.7" }
 base64 = "0.22.1"
@@ -14,7 +15,9 @@ bincode = { workspace = true }
 entity-sqlite = { path = "../entity-sqlite" }
 humantime = { version = "2" }
 lru-mem = { version = "0.3" }
+mime_guess = "2"
 migration-sqlite = { path = "../migration-sqlite" }
+rust-embed = { version = "8" }
 prometheus-client = { version = "0.22" }
 rand = "0.8"
 reqwest = { version = "0.12", features = ["json"] }
@@ -28,6 +31,8 @@ strum = { version = "0.26", features = ["derive"] }
 tempfile = { version = "3" }
 time = { version = "0.3", features = ["local-offset"] }
 tokio = { workspace = true }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors"] }
 tracing = "0.1"
 tracing-error = { version = "0.2", features = ["traced-error"] }
 tracing-loki = "0.2.5"

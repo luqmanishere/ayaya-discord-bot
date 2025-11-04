@@ -1,8 +1,9 @@
 use entity_sqlite::prelude::*;
 use poise::serenity_prelude as serenity;
 use sea_orm::{ActiveValue, DatabaseConnection, IntoActiveModel, prelude::*};
+use snafu::ResultExt;
 
-use crate::data::error::DataError;
+use crate::data::error::{DataError, DatabaseSnafu};
 use crate::data::utils::DataTiming;
 use crate::metrics::DataOperationType;
 use crate::metrics::Metrics;
@@ -49,9 +50,8 @@ impl SoundsManager {
             .filter(sounds::Column::SoundId.eq(sound_id))
             .one(&self.sounds_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
+            .context(DatabaseSnafu {
                 operation: OP.to_string(),
-                error,
             })?;
 
         if let Some(sound) = sound {
@@ -69,9 +69,8 @@ impl SoundsManager {
             }
             .insert(&self.sounds_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
+            .context(DatabaseSnafu {
                 operation: OP.to_string(),
-                error,
             })?;
         }
         Ok(())
@@ -119,21 +118,16 @@ impl SoundsManager {
             .filter(sounds::Column::SoundId.eq(sound_id))
             .one(&self.sounds_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
+            .context(DatabaseSnafu {
                 operation: OP.to_string(),
-                error,
             })?;
 
         if let Some(model) = model {
             let mut active = model.into_active_model();
             active.sound_name = ActiveValue::Set(new_name);
-            active
-                .save(&self.sounds_db)
-                .await
-                .map_err(|error| DataError::DatabaseError {
-                    operation: OP.to_string(),
-                    error,
-                })?;
+            active.save(&self.sounds_db).await.context(DatabaseSnafu {
+                operation: OP.to_string(),
+            })?;
             Ok(())
         } else {
             Err(DataError::NotFound {
@@ -165,10 +159,7 @@ impl SoundsManager {
             )
             .all(&self.sounds_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
 
         Ok(sounds)
     }
@@ -192,10 +183,7 @@ impl SoundsManager {
             .filter(sounds::Column::UserId.eq(user_id.get()))
             .all(&self.sounds_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
 
         Ok(sounds)
     }
@@ -220,10 +208,7 @@ impl SoundsManager {
             .filter(upload_noticed::Column::UserId.eq(user_id.get()))
             .one(&self.sounds_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
 
         if let Some(model) = model {
             let mut active = model.into_active_model();
@@ -232,10 +217,7 @@ impl SoundsManager {
             active
                 .save(&self.sounds_db)
                 .await
-                .map_err(|error| DataError::DatabaseError {
-                    operation: OP.to_string(),
-                    error,
-                })?;
+                .context(DatabaseSnafu { operation: OP })?;
         } else {
             upload_noticed::ActiveModel {
                 user_id: ActiveValue::Set(user_id.get() as i64),
@@ -243,10 +225,7 @@ impl SoundsManager {
             }
             .insert(&self.sounds_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
         }
 
         Ok(())
@@ -272,10 +251,7 @@ impl SoundsManager {
             .filter(upload_noticed::Column::UserId.eq(user_id.get()))
             .one(&self.sounds_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
         let res = match model {
             Some(model) => model.agreed,
             _ => false,

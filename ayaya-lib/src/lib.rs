@@ -45,7 +45,10 @@ use voice::voice_commands;
 use crate::{error::*, voice::commands::music};
 
 pub(crate) mod admin;
+pub(crate) mod api;
+pub(crate) mod auth;
 pub(crate) mod constants;
+pub(crate) mod dashboard;
 pub(crate) mod data;
 pub mod error;
 pub(crate) mod memes;
@@ -120,6 +123,7 @@ pub async fn ayayabot(
 
     let manager_clone = manager.clone();
     let metrics_registry_poise = metrics_registry.clone();
+    let data_manager_axum = data_manager.clone();
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands,
@@ -200,10 +204,22 @@ pub async fn ayayabot(
         voice_manager_arc: manager,
     };
 
-    let axum_state = Arc::new(TokioMutex::new(AxumState { metrics_registry }));
+    let axum_state = Arc::new(TokioMutex::new(AxumState {
+        metrics_registry,
+        data_manager: data_manager_axum,
+    }));
+
+    let api_routes = axum::Router::new()
+        .route("/auth/me", axum::routing::get(api::auth_me_handler))
+        .layer(axum::middleware::from_fn_with_state(
+            axum_state.clone(),
+            auth::middleware::AuthMiddleware::require_auth,
+        ));
+
     let router = axum::Router::new()
-        .route("/", axum::routing::get(hello_world))
+        .nest("/api", api_routes)
         .route("/metrics", axum::routing::get(metrics_handler))
+        .fallback(dashboard::dashboard_handler)
         .with_state(axum_state);
 
     Ok(AyayaDiscordBot { discord, router })
@@ -518,11 +534,8 @@ impl LokiOpts {
 }
 
 pub struct AxumState {
-    metrics_registry: Arc<TokioMutex<Registry>>,
-}
-
-async fn hello_world() -> &'static str {
-    "Hello, world!"
+    pub(crate) metrics_registry: Arc<TokioMutex<Registry>>,
+    pub(crate) data_manager: DataManager,
 }
 
 async fn metrics_handler(

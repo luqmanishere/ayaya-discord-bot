@@ -1,5 +1,6 @@
 //! Manage database connection and caching
 //!
+pub mod dashboard;
 pub mod permissions;
 pub mod sounds;
 pub mod stats;
@@ -405,8 +406,8 @@ pub mod error {
         #[snafu(display("Database error while getting user command stats: {source}"))]
         FindSingleUsersSingleCommandCallError { source: DbErr },
 
-        #[snafu(display("Database error in operation {operation}: {error}"))]
-        DatabaseError { operation: String, error: DbErr },
+        #[snafu(display("Database error in operation {operation}: {source}"))]
+        DatabaseError { operation: String, source: DbErr },
 
         #[snafu(display("Duplicate item {object} found."))]
         DuplicateEntry { object: String },
@@ -427,6 +428,12 @@ pub mod error {
 
         #[snafu(transparent)]
         BincodeEncodeError { source: bincode::error::EncodeError },
+
+        #[snafu(display("User {user_id} is not in the dashboard allowlist"))]
+        NotAllowlisted { user_id: i64 },
+
+        #[snafu(display("Failed to hash token: {message}"))]
+        TokenHashError { message: String },
     }
 
     impl ErrorName for DataError {
@@ -481,6 +488,8 @@ pub mod error {
                 DataError::NotFound { .. } => "not_found",
                 DataError::BincodeDecodeError { .. } => "bincode_decode_error",
                 DataError::BincodeEncodeError { .. } => "bincode_encode_error",
+                DataError::NotAllowlisted { .. } => "not_allowlisted",
+                DataError::TokenHashError { .. } => "token_hash_error",
             };
             format!("data::{name}")
         }

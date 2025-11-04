@@ -7,9 +7,10 @@ use sea_orm::ActiveValue;
 use sea_orm::DatabaseConnection;
 use sea_orm::IntoActiveModel;
 use sea_orm::prelude::*;
+use snafu::ResultExt;
 use time::UtcOffset;
 
-use crate::data::error::DataError;
+use crate::data::error::*;
 use crate::data::utils::DataTiming;
 use crate::metrics::Metrics;
 
@@ -54,10 +55,7 @@ impl StatsManager {
             .filter(song_queues::Column::YoutubeId.eq(&song_id))
             .one(&self.stats_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
 
         let now_odt = time::OffsetDateTime::now_utc()
             .to_offset(UtcOffset::from_hms(8, 0, 0).unwrap_or(UtcOffset::UTC));
@@ -72,10 +70,7 @@ impl StatsManager {
             model
                 .save(&self.stats_db)
                 .await
-                .map_err(|error| DataError::DatabaseError {
-                    operation: OP.to_string(),
-                    error,
-                })?;
+                .context(DatabaseSnafu { operation: OP })?;
         } else {
             song_queues::ActiveModel {
                 server_id: ActiveValue::set(guild_id as i64),
@@ -87,10 +82,7 @@ impl StatsManager {
             }
             .insert(&self.stats_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
         }
 
         Ok(())
@@ -124,10 +116,7 @@ impl StatsManager {
             .filter(user_play_queries::Column::Query.eq(&query))
             .one(&self.stats_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
 
         if let Some(model) = maybe_model {
             let new_count = model.count + 1;
@@ -136,10 +125,7 @@ impl StatsManager {
             active
                 .save(&self.stats_db)
                 .await
-                .map_err(|error| DataError::DatabaseError {
-                    operation: OP.to_string(),
-                    error,
-                })?;
+                .context(DatabaseSnafu { operation: OP })?;
         } else {
             user_play_queries::ActiveModel {
                 server_id: ActiveValue::Set(guild_id as i64),
@@ -151,10 +137,7 @@ impl StatsManager {
             }
             .insert(&self.stats_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
         }
         Ok(())
     }
@@ -179,10 +162,7 @@ impl StatsManager {
             .filter(user_play_queries::Column::Query.eq(&query))
             .all(&self.stats_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
 
         for model in maybe_model {
             let mut active = model.into_active_model();
@@ -190,10 +170,7 @@ impl StatsManager {
             active
                 .update(&self.stats_db)
                 .await
-                .map_err(|error| DataError::DatabaseError {
-                    operation: OP.to_string(),
-                    error,
-                })?;
+                .context(DatabaseSnafu { operation: OP })?;
         }
         Ok(())
     }
@@ -224,10 +201,7 @@ impl StatsManager {
             .filter(user_play_queries::Column::UserId.eq(user.id.get()))
             .all(&self.stats_db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
         Ok(models)
     }
 }

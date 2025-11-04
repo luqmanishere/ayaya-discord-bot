@@ -2,9 +2,13 @@
 
 use entity_sqlite::prelude::*;
 use sea_orm::{ActiveValue, QuerySelect, prelude::*};
+use snafu::ResultExt;
 
 use crate::{
-    data::{error::DataError, utils::DataTiming},
+    data::{
+        error::{DataError, DatabaseSnafu},
+        utils::DataTiming,
+    },
     metrics::{DataOperationType, Metrics},
 };
 
@@ -43,10 +47,7 @@ impl WuwaPullsManager {
             .filter(wuwa_user::Column::WuwaUserId.eq(wuwa_user_id))
             .one(&self.db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
 
         if let Some(_user) = user {
             return Err(DataError::DuplicateEntry {
@@ -59,10 +60,7 @@ impl WuwaPullsManager {
             }
             .insert(&self.db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
         }
 
         Ok(())
@@ -87,10 +85,7 @@ impl WuwaPullsManager {
             .filter(wuwa_user::Column::UserId.eq(user_id))
             .all(&self.db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
         Ok(user)
     }
 
@@ -111,10 +106,7 @@ impl WuwaPullsManager {
             .filter(wuwa_user::Column::WuwaUserId.eq(wuwa_user_id))
             .one(&self.db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
         Ok(user.map(|user| user.user_id as u64))
     }
 
@@ -151,10 +143,7 @@ impl WuwaPullsManager {
             .into_tuple::<(TimeDateTimeWithTimeZone,)>()
             .all(&self.db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?
+            .context(DatabaseSnafu { operation: OP })?
             .into_iter()
             .map(|(timestamp,)| timestamp)
             .collect();
@@ -201,10 +190,7 @@ impl WuwaPullsManager {
         WuwaPull::insert_many(pull_models)
             .exec(&self.db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
 
         Ok(new_pulls_len)
     }
@@ -228,10 +214,7 @@ impl WuwaPullsManager {
             .filter(wuwa_pull::Column::WuwaUserId.eq(wuwa_user_id))
             .all(&self.db)
             .await
-            .map_err(|e| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error: e,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
         Ok(pulls)
     }
 
@@ -259,10 +242,7 @@ impl WuwaPullsManager {
             .filter(wuwa_resource::Column::ResourceId.eq(resource_id))
             .one(&self.db)
             .await
-            .map_err(|error| DataError::DatabaseError {
-                operation: OP.to_string(),
-                error,
-            })?;
+            .context(DatabaseSnafu { operation: OP })?;
 
         if existing_resource.is_some() {
             return Err(DataError::DuplicateEntry {
@@ -279,10 +259,7 @@ impl WuwaPullsManager {
         }
         .insert(&self.db)
         .await
-        .map_err(|error| DataError::DatabaseError {
-            operation: OP.to_string(),
-            error,
-        })?;
+        .context(DatabaseSnafu { operation: OP })?;
 
         Ok(())
     }

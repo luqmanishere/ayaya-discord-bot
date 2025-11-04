@@ -1,4 +1,6 @@
 //! Contains commands reserved for the bot's owner: ie me.
+mod dashboard;
+
 use poise::serenity_prelude as serenity;
 use snafu::ResultExt;
 
@@ -11,7 +13,12 @@ use crate::{
 };
 
 pub fn owner_commands() -> Commands {
-    vec![command_log_raw(), upload_cookies(), dep_versions()]
+    vec![
+        command_log_raw(),
+        upload_cookies(),
+        dep_versions(),
+        dashboard::dashboard(),
+    ]
 }
 
 /// Prints command logs raw. Owner only.

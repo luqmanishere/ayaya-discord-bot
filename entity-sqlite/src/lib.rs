@@ -7,6 +7,8 @@ pub mod ban_shit_music;
 pub mod ban_user_command_use;
 pub mod command_allow_user;
 pub mod command_call_log;
+pub mod dashboard_allowlist;
+pub mod dashboard_tokens;
 pub mod require_category_role;
 pub mod require_command_role;
 pub mod song_queues;

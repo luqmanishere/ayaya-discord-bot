@@ -57,6 +57,7 @@
             sqlite
             cargo-llvm-cov
             cargo-nextest
+            bun
           ];
           buildInputs = with pkgs; [iconv.dev libopus.dev cargo-shuttle openssl];
         };
