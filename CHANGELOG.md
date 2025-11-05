@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [2025.11.5-1] - 2025-11-05
+
+### Changed
+
+- Initial dashboard impl with auth
+
 ## [2025.11.3-6] - 2025-11-03
 
 ### Fixed
@@ -425,6 +431,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 - Delete from queue
 - Remove unused workflow
 
+[2025.11.5-1]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v2025.11.3-6..v2025.11.5-1
 [2025.11.3-6]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v2025.11.3-5..v2025.11.3-6
 [2025.11.3-5]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v2025.11.3-2..v2025.11.3-5
 [2025.11.3-2]: https://github.com/luqmanishere/ayaya-discord-bot/compare/v2025.11.3-1..v2025.11.3-2
