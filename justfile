@@ -91,3 +91,9 @@ podman-build:
 
 podman-run:
     podman run -v ./secrets:/secrets -v ./dev/local_share:/root/.local/share/ayayadc -e DISCORD_TOKEN_FILE=/secrets/dev-discordtoken -e AGE_SECRET_KEY_FILE=/secrets/dev-age -it localhost/luqmanishere/ayayadc-dev:latest
+
+build-frontend:
+    cd dashboard && bun install && bun run build
+
+run: build-frontend
+    cargo r
