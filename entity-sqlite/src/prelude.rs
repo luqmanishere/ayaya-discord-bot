@@ -13,5 +13,6 @@ pub use super::user_command_all_time_statistics::Entity as UserCommandAllTimeSta
 pub use super::user_play_queries::Entity as UserPlayQueries;
 pub use super::wuwa_pull::Entity as WuwaPull;
 pub use super::wuwa_resource::Entity as WuwaResource;
+pub use super::wuwa_import_state::Entity as WuwaImportState;
 pub use super::wuwa_user::Entity as WuwaUser;
 pub use super::youtube_cookies::Entity as YoutubeCookies;

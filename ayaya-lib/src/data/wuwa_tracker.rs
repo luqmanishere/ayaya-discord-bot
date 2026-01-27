@@ -1,7 +1,7 @@
 //! Track WuWa pulls
 
 use entity_sqlite::prelude::*;
-use sea_orm::{ActiveValue, QuerySelect, prelude::*};
+use sea_orm::{ActiveValue, DbErr, prelude::*};
 use snafu::ResultExt;
 
 use crate::{
@@ -10,6 +10,8 @@ use crate::{
         utils::DataTiming,
     },
     metrics::{DataOperationType, Metrics},
+    tracker_adapter::ImportBoundary,
+    tracker::{CardPoolType},
 };
 
 use super::DataResult;
@@ -110,12 +112,12 @@ impl WuwaPullsManager {
         Ok(user.map(|user| user.user_id as u64))
     }
 
-    pub async fn insert_wuwa_pulls(
+    pub async fn insert_wuwa_pull_records(
         &self,
         wuwa_user_id: u64,
-        pulls: Vec<crate::tracker::ParsedWuwaPull>,
+        pulls: Vec<crate::tracker_adapter::PullRecord>,
     ) -> DataResult<usize> {
-        const OP: &str = "insert_wuwa_pull";
+        const OP: &str = "insert_wuwa_pull_records";
         self.metrics_handler
             .data_access(OP, DataOperationType::Write)
             .await;
@@ -126,51 +128,34 @@ impl WuwaPullsManager {
         );
 
         use entity_sqlite::wuwa_pull;
-        use std::collections::HashSet;
 
-        // Collect all unique timestamps from incoming pulls
-        let incoming_timestamps: HashSet<_> = pulls
-            .iter()
-            .map(|pull| pull.time.assume_offset(time::UtcOffset::UTC))
-            .collect();
-
-        // Check which timestamps already exist in the database for this user
-        let existing_timestamps: HashSet<_> = WuwaPull::find()
-            .filter(wuwa_pull::Column::WuwaUserId.eq(wuwa_user_id as i32))
-            .filter(wuwa_pull::Column::Time.is_in(incoming_timestamps.clone()))
-            .select_only()
-            .column(wuwa_pull::Column::Time)
-            .into_tuple::<(TimeDateTimeWithTimeZone,)>()
-            .all(&self.db)
-            .await
-            .context(DatabaseSnafu { operation: OP })?
-            .into_iter()
-            .map(|(timestamp,)| timestamp)
-            .collect();
-
-        // Filter out pulls with timestamps that already exist
-        let new_pulls: Vec<_> = pulls
-            .into_iter()
-            .filter(|pull| {
-                let timestamp = pull.time.assume_offset(time::UtcOffset::UTC);
-                !existing_timestamps.contains(&timestamp)
-            })
-            .collect();
-
-        let new_pulls_len = new_pulls.len();
-        if new_pulls.is_empty() {
+        if pulls.is_empty() {
             return Ok(0);
         }
 
-        // Process new pulls and handle resource insertion
         let mut pull_models = Vec::new();
-        for pull in new_pulls {
-            // Try to insert resource if it doesn't exist (ignore duplicate errors)
+        for pull in pulls {
+            let resource_id = pull.resource_id.ok_or_else(|| DataError::DatabaseError {
+                operation: OP.to_string(),
+                source: DbErr::Custom("missing resource_id".to_string()),
+            })?;
+            let resource_id = i32::try_from(resource_id).map_err(|_| DataError::DatabaseError {
+                operation: OP.to_string(),
+                source: DbErr::Custom("resource_id out of range".to_string()),
+            })?;
+
+            let pull_type = wuwa_pool_type_to_i32(&pull.pool_id).ok_or_else(|| {
+                DataError::DatabaseError {
+                    operation: OP.to_string(),
+                    source: DbErr::Custom("unknown pool_id".to_string()),
+                }
+            })?;
+
             let _ = self
                 .insert_resource(
-                    pull.resource_id as i32,
-                    pull.name.clone(),
-                    pull.resource_type.to_string(),
+                    resource_id,
+                    pull.resource_name.clone(),
+                    pull.resource_type.clone(),
                     "".to_string(), // TODO: Add actual portrait path when available
                 )
                 .await;
@@ -178,21 +163,22 @@ impl WuwaPullsManager {
             let pull_model = wuwa_pull::ActiveModel {
                 id: ActiveValue::Set(uuid::Uuid::new_v4()),
                 wuwa_user_id: ActiveValue::Set(wuwa_user_id as i32),
-                pull_type: ActiveValue::Set(pull.card_pool_type as i32),
-                resource_id: ActiveValue::Set(pull.resource_id as i32),
-                quality_level: ActiveValue::Set(pull.quality_level as i32),
+                pull_type: ActiveValue::Set(pull_type),
+                resource_id: ActiveValue::Set(resource_id),
+                quality_level: ActiveValue::Set(pull.quality as i32),
                 count: ActiveValue::Set(pull.count as i32),
-                time: ActiveValue::Set(pull.time.assume_offset(time::UtcOffset::UTC)),
+                time: ActiveValue::Set(pull.time),
             };
             pull_models.push(pull_model);
         }
 
+        let pull_models_len = pull_models.len();
         WuwaPull::insert_many(pull_models)
             .exec(&self.db)
             .await
             .context(DatabaseSnafu { operation: OP })?;
 
-        Ok(new_pulls_len)
+        Ok(pull_models_len)
     }
 
     pub async fn get_pulls_from_wuwa_id(
@@ -216,6 +202,83 @@ impl WuwaPullsManager {
             .await
             .context(DatabaseSnafu { operation: OP })?;
         Ok(pulls)
+    }
+
+    pub async fn get_wuwa_import_state(
+        &self,
+        wuwa_user_id: u64,
+        pool_id: &str,
+    ) -> DataResult<Option<ImportBoundary>> {
+        const OP: &str = "get_wuwa_import_state";
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Read)
+            .await;
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Read,
+            Some(self.metrics_handler.clone()),
+        );
+
+        use entity_sqlite::wuwa_import_state;
+
+        let state = WuwaImportState::find()
+            .filter(wuwa_import_state::Column::WuwaUserId.eq(wuwa_user_id as i32))
+            .filter(wuwa_import_state::Column::PoolId.eq(pool_id))
+            .one(&self.db)
+            .await
+            .context(DatabaseSnafu { operation: OP })?;
+
+        Ok(state.map(|state| ImportBoundary {
+            time: state.last_time,
+            count_at_time: state.count_at_time as usize,
+        }))
+    }
+
+    pub async fn upsert_wuwa_import_state(
+        &self,
+        wuwa_user_id: u64,
+        pool_id: &str,
+        boundary: ImportBoundary,
+    ) -> DataResult<()> {
+        const OP: &str = "upsert_wuwa_import_state";
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Write)
+            .await;
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Write,
+            Some(self.metrics_handler.clone()),
+        );
+
+        use entity_sqlite::wuwa_import_state;
+
+        let existing = WuwaImportState::find()
+            .filter(wuwa_import_state::Column::WuwaUserId.eq(wuwa_user_id as i32))
+            .filter(wuwa_import_state::Column::PoolId.eq(pool_id))
+            .one(&self.db)
+            .await
+            .context(DatabaseSnafu { operation: OP })?;
+
+        if let Some(existing) = existing {
+            let mut model: wuwa_import_state::ActiveModel = existing.into();
+            model.last_time = ActiveValue::Set(boundary.time);
+            model.count_at_time = ActiveValue::Set(boundary.count_at_time as i32);
+            model.update(&self.db)
+                .await
+                .context(DatabaseSnafu { operation: OP })?;
+        } else {
+            wuwa_import_state::ActiveModel {
+                wuwa_user_id: ActiveValue::Set(wuwa_user_id as i32),
+                pool_id: ActiveValue::Set(pool_id.to_string()),
+                last_time: ActiveValue::Set(boundary.time),
+                count_at_time: ActiveValue::Set(boundary.count_at_time as i32),
+            }
+            .insert(&self.db)
+            .await
+            .context(DatabaseSnafu { operation: OP })?;
+        }
+
+        Ok(())
     }
 
     pub async fn insert_resource(
@@ -265,6 +328,16 @@ impl WuwaPullsManager {
     }
 }
 
+fn wuwa_pool_type_to_i32(pool_id: &str) -> Option<i32> {
+    match pool_id {
+        "Resonators Accurate Modulation" => Some(CardPoolType::EventCharacterConvene as i32),
+        "Resonators Accurate Modulation - 2" => Some(CardPoolType::EventWeaponConvene as i32),
+        "Weapons Accurate Modulation" => Some(CardPoolType::StandardCharacterConvene as i32),
+        "Full-Range Modualtion" => Some(CardPoolType::StandardWeaponConvene as i32),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,20 +367,22 @@ mod tests {
         db
     }
 
-    fn create_test_pull(resource_id: u64, name: &str) -> crate::tracker::ParsedWuwaPull {
+    fn create_test_pull(resource_id: u64, name: &str) -> crate::tracker_adapter::PullRecord {
         let test_time = time::PrimitiveDateTime::new(
             time::Date::from_calendar_date(2024, time::Month::January, 15).unwrap(),
             time::Time::from_hms(12, 30, 45).unwrap(),
         );
 
-        crate::tracker::ParsedWuwaPull {
-            card_pool_type: crate::tracker::CardPoolType::EventCharacterConvene,
-            resource_id,
-            quality_level: 5,
-            resource_type: crate::tracker::ResourceType::Resonator,
-            name: name.to_string(),
+        crate::tracker_adapter::PullRecord {
+            game_id: crate::tracker_adapter::GameId::WutheringWaves,
+            user_game_id: "67890".to_string(),
+            pool_id: "Resonators Accurate Modulation".to_string(),
+            resource_id: Some(resource_id as i64),
+            resource_name: name.to_string(),
+            resource_type: "Resonator".to_string(),
+            quality: 5,
             count: 1,
-            time: test_time,
+            time: test_time.assume_offset(time::UtcOffset::UTC),
         }
     }
 
@@ -373,24 +448,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_pull_insertion_and_deduplication() {
+    async fn test_pull_insertion() {
         let (manager, _user_id, wuwa_user_id) = setup_user_and_manager().await;
 
         let pull = create_test_pull(1001, "Test Resonator");
 
         // Test first insertion
         let result1 = manager
-            .insert_wuwa_pulls(wuwa_user_id, vec![pull.clone()])
+            .insert_wuwa_pull_records(wuwa_user_id, vec![pull.clone()])
             .await
             .unwrap();
         assert_eq!(result1, 1); // One new record
 
-        // Test duplicate insertion (should be filtered out by timestamp)
+        // Test duplicate insertion (still inserts since dedup is not handled here)
         let result2 = manager
-            .insert_wuwa_pulls(wuwa_user_id, vec![pull])
+            .insert_wuwa_pull_records(wuwa_user_id, vec![pull])
             .await
             .unwrap();
-        assert_eq!(result2, 0); // No new records due to timestamp filtering
+        assert_eq!(result2, 1);
     }
 
     #[tokio::test]
@@ -400,7 +475,7 @@ mod tests {
         // Test automatic resource creation via pull insertion
         let pull = create_test_pull(1001, "Test Resonator");
         let inserted_count = manager
-            .insert_wuwa_pulls(wuwa_user_id, vec![pull])
+            .insert_wuwa_pull_records(wuwa_user_id, vec![pull])
             .await
             .unwrap();
         assert_eq!(inserted_count, 1);
@@ -452,8 +527,25 @@ mod tests {
 
         assert!(pulls.iter().find(|e| e.name == "Carlotta").is_some());
 
+        let records = pulls
+            .into_iter()
+            .map(|pull| {
+                crate::tracker_adapter::PullRecord {
+                    game_id: crate::tracker_adapter::GameId::WutheringWaves,
+                    user_game_id: wuwa_user_id.to_string(),
+                    pool_id: pull.card_pool_type.to_string(),
+                    resource_id: Some(pull.resource_id as i64),
+                    resource_name: pull.name,
+                    resource_type: pull.resource_type.to_string(),
+                    quality: pull.quality_level as i32,
+                    count: pull.count as i32,
+                    time: pull.time.assume_offset(time::UtcOffset::UTC),
+                }
+            })
+            .collect();
+
         let inserted_count = manager
-            .insert_wuwa_pulls(wuwa_user_id, pulls)
+            .insert_wuwa_pull_records(wuwa_user_id, records)
             .await
             .unwrap();
         assert!(inserted_count > 0);

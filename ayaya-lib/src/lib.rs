@@ -55,6 +55,7 @@ pub(crate) mod memes;
 pub(crate) mod metrics;
 pub(crate) mod owner;
 pub(crate) mod stats;
+pub(crate) mod tracker_adapter;
 pub(crate) mod tracker;
 pub(crate) mod utils;
 pub(crate) mod voice;

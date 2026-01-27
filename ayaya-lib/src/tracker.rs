@@ -1,15 +1,16 @@
 use poise::serenity_prelude as serenity;
-use serde::{Deserialize, Deserializer, Serialize};
-use snafu::{OptionExt, ResultExt};
+use serde::{Deserialize, Deserializer};
+use std::collections::HashMap;
+use snafu::ResultExt;
 use strum::VariantNames;
 
 use crate::{
     CommandResult, Context,
     error::{
-        BotError, DataManagerSnafu, GeneralSerenitySnafu, JsonSnafu, ReqwestSnafu, TrackerSnafu,
-        UrlParseSnafu,
+        BotError, DataManagerSnafu, GeneralSerenitySnafu, TrackerSnafu,
     },
-    tracker::error::{InvalidUrlSnafu, TrackerError, WuwaPlayerIdInvalidSnafu},
+    tracker::error::TrackerError,
+    tracker_adapter::{AdapterKind, GameAdapter, GameId, adapter_for, apply_import_boundary},
 };
 
 #[poise::command(slash_command, subcommands("pulls"), aliases("t"))]
@@ -34,110 +35,115 @@ pub async fn import_pulls(
     // TODO: other games so we can know whether by game seperation is necessary
 
     ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
-    const WUWA_REQ_URL: &str = "https://gmserver-api.aki-game2.net/gacha/record/query";
-
-    match game {
-        SupportedGames::WutheringWaves => {
-            if let Some(link) = link {
-                let url = url::Url::parse(&link).context(UrlParseSnafu)?;
-                let mut server_id: &str = Default::default();
-                let mut record_id: &str = Default::default();
-                let mut player_id: u64 = 0;
-                let not_url = url
-                    .fragment()
-                    .context(InvalidUrlSnafu)
-                    .context(TrackerSnafu)?;
-
-                // parse the remaining info
-                // why is this code so messy
-                let new = not_url.strip_prefix("/record?").unwrap_or_default();
-                for c in new.split("&") {
-                    let (key, value) = c.split_once("=").expect("able to split");
-
-                    match key {
-                        "svr_id" => {
-                            server_id = value;
-                        }
-                        "record_id" => {
-                            record_id = value;
-                        }
-                        "player_id" => {
-                            player_id = value
-                                .parse::<u64>()
-                                .context(WuwaPlayerIdInvalidSnafu)
-                                .context(TrackerSnafu)?;
-                        }
-                        _ => {}
-                    }
-                }
-                tracing::info!("player id: {player_id}");
-
-                let pulls_manager = ctx.data().data_manager.wuwa_tracker();
-
-                // check for the player id owner
-                if let Some(user_id) = pulls_manager
-                    .get_user_id_from_wuwa_user(player_id)
-                    .await
-                    .context(DataManagerSnafu)?
-                {
-                    if user_id != ctx.author().id.get() {
-                        return Err(TrackerError::UserGameIdMismatch).context(TrackerSnafu);
-                    }
-                } else {
-                    // register the player id owner
-                    // TODO: interface
-                    pulls_manager
-                        .insert_wuwa_user(ctx.author().id.get(), player_id)
-                        .await
-                        .context(DataManagerSnafu)?;
-                }
-
-                let requests = WuwaRequestBuilder::new()
-                    .player_id(player_id)
-                    .record_id(record_id)
-                    .server_id(server_id)
-                    .build()
-                    .context(TrackerSnafu)?;
-
-                let client = reqwest::Client::new();
-                let mut pulls: Vec<ParsedWuwaPull> = vec![];
-                for req in requests {
-                    let json = req.as_json()?;
-                    let res = client
-                        .post(WUWA_REQ_URL)
-                        .header("Content-Type", "application/json")
-                        .body(json)
-                        .send()
-                        .await
-                        .context(ReqwestSnafu)?;
-
-                    let wrapper = res
-                        .json::<DeserializeWrapper>()
-                        .await
-                        .expect("deserialized properly");
-                    pulls.extend(wrapper.data);
-                }
-
-                let pulls_len = pulls.len();
-                tracing::info!("length: {pulls_len}");
-
-                if pulls_len > 0 {
-                    let inserted = pulls_manager
-                        .insert_wuwa_pulls(player_id, pulls)
-                        .await
-                        .context(DataManagerSnafu)?;
-                    ctx.reply(format!(
-                        "Records parsed: {}, {} new records inserted into database",
-                        pulls_len, inserted,
-                    ))
+    match adapter_for(game.game_id()) {
+        AdapterKind::Wuwa(adapter) => {
+            let Some(link) = link else {
+                ctx.reply("Please provide the import link from the game.")
                     .await
                     .context(GeneralSerenitySnafu)?;
-                } else {
-                    ctx.reply("No records found.")
-                        .await
-                        .context(GeneralSerenitySnafu)?;
+                return Ok(());
+            };
+
+            let session = adapter.parse_link(&link).context(TrackerSnafu)?;
+            let player_id = session.player_id;
+            tracing::info!("player id: {player_id}");
+
+            let pulls_manager = ctx.data().data_manager.wuwa_tracker();
+
+            // check for the player id owner
+            if let Some(user_id) = pulls_manager
+                .get_user_id_from_wuwa_user(player_id)
+                .await
+                .context(DataManagerSnafu)?
+            {
+                if user_id != ctx.author().id.get() {
+                    return Err(TrackerError::UserGameIdMismatch).context(TrackerSnafu);
+                }
+            } else {
+                // register the player id owner
+                // TODO: interface
+                pulls_manager
+                    .insert_wuwa_user(ctx.author().id.get(), player_id)
+                    .await
+                    .context(DataManagerSnafu)?;
+            }
+
+            let pulls = adapter
+                .fetch_pulls(&session, &ctx.data().http)
+                .await
+                .context(TrackerSnafu)?;
+
+            let pulls_len = pulls.len();
+            tracing::info!("length: {pulls_len}");
+
+            if pulls_len == 0 {
+                ctx.reply("No records found.")
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+                return Ok(());
+            }
+
+            let mut pulls_by_pool: HashMap<String, Vec<_>> = HashMap::new();
+            for pull in pulls {
+                let pool_id = adapter.pool_id(&pull).to_string();
+                pulls_by_pool.entry(pool_id).or_default().push(pull);
+            }
+
+            let mut new_pulls = Vec::new();
+            let mut updated_boundaries = Vec::new();
+
+            for (pool_id, mut pool_pulls) in pulls_by_pool {
+                pool_pulls.sort_by_key(|p| {
+                    std::cmp::Reverse(p.time.assume_offset(time::UtcOffset::UTC))
+                });
+
+                let boundary = pulls_manager
+                    .get_wuwa_import_state(player_id, &pool_id)
+                    .await
+                    .context(DataManagerSnafu)?;
+
+                let filtered = apply_import_boundary(&pool_pulls, boundary, |p| {
+                    p.time.assume_offset(time::UtcOffset::UTC)
+                });
+
+                new_pulls.extend(filtered.new_items.into_iter().cloned());
+
+                if let Some(next_boundary) = filtered.next_boundary {
+                    updated_boundaries.push((pool_id, next_boundary));
                 }
             }
+
+            if new_pulls.is_empty() {
+                ctx.reply("No new records found.")
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+                return Ok(());
+            }
+
+            let user_game_id = player_id.to_string();
+            let records = new_pulls
+                .into_iter()
+                .map(|pull| adapter.normalize_pull(pull, &user_game_id))
+                .collect();
+
+            let inserted = pulls_manager
+                .insert_wuwa_pull_records(player_id, records)
+                .await
+                .context(DataManagerSnafu)?;
+
+            for (pool_id, boundary) in updated_boundaries {
+                pulls_manager
+                    .upsert_wuwa_import_state(player_id, &pool_id, boundary)
+                    .await
+                    .context(DataManagerSnafu)?;
+            }
+
+            ctx.reply(format!(
+                "Records parsed: {}, {} new records inserted into database",
+                pulls_len, inserted,
+            ))
+            .await
+            .context(GeneralSerenitySnafu)?;
         }
     }
 
@@ -197,68 +203,11 @@ enum SupportedGames {
     WutheringWaves,
 }
 
-#[derive(Default)]
-struct WuwaRequestBuilder<'a> {
-    server_id: Option<&'a str>,
-    record_id: Option<&'a str>,
-    player_id: Option<u64>,
-}
-
-impl<'a> WuwaRequestBuilder<'a> {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn server_id(mut self, server_id: &'a str) -> Self {
-        self.server_id = Some(server_id);
-        self
-    }
-
-    pub fn record_id(mut self, record_id: &'a str) -> Self {
-        self.record_id = Some(record_id);
-        self
-    }
-
-    pub fn player_id(mut self, player_id: u64) -> Self {
-        self.player_id = Some(player_id);
-        self
-    }
-
-    pub fn build(self) -> Result<Vec<WuwaRequest>, TrackerError> {
-        if let Some(player_id) = self.player_id
-            && let Some(server_id) = self.server_id
-            && let Some(record_id) = self.record_id
-        {
-            let it = [1, 2, 3, 4]
-                .iter()
-                .map(|e| WuwaRequest {
-                    player_id,
-                    card_pool_type: *e,
-                    language_code: "en".to_string(),
-                    server_id: server_id.to_string(),
-                    record_id: record_id.to_string(),
-                })
-                .collect();
-            Ok(it)
-        } else {
-            Err(TrackerError::WuwaRequestIncomplete)
+impl SupportedGames {
+    fn game_id(self) -> GameId {
+        match self {
+            SupportedGames::WutheringWaves => GameId::WutheringWaves,
         }
-    }
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct WuwaRequest {
-    player_id: u64,
-    card_pool_type: u8,
-    server_id: String,
-    record_id: String,
-    language_code: String,
-}
-
-impl WuwaRequest {
-    pub fn as_json(&self) -> Result<String, BotError> {
-        serde_json::to_string(self).context(JsonSnafu)
     }
 }
 
@@ -314,9 +263,10 @@ where
 pub enum ResourceType {
     Weapon,
     Resonator,
+    Item,
 }
 
-#[derive(Debug, Deserialize, Copy, Clone)]
+#[derive(Debug, Deserialize, Copy, Clone, Eq, Hash, PartialEq)]
 #[expect(clippy::enum_variant_names)]
 pub enum CardPoolType {
     #[serde(rename = "Resonators Accurate Modulation")]
@@ -348,6 +298,14 @@ pub mod error {
 
         #[snafu(display("The provided url is invalid."))]
         InvalidUrl,
+        #[snafu(display("Failed to send request to Wuwa API."))]
+        WuwaRequestFailed { source: reqwest::Error },
+        #[snafu(display("Failed to read Wuwa API response."))]
+        WuwaResponseRead { source: reqwest::Error },
+        #[snafu(display("Failed to decode Wuwa API response."))]
+        WuwaResponseDecode { source: serde_json::Error },
+        #[snafu(display("Failed to encode Wuwa API request."))]
+        WuwaRequestEncode { source: serde_json::Error },
     }
 
     impl ErrorName for TrackerError {
@@ -357,6 +315,10 @@ pub mod error {
                 TrackerError::UserGameIdMismatch => "user_game_id_mismatch",
                 TrackerError::WuwaPlayerIdInvalid { .. } => "wuwa_player_id_invalid",
                 TrackerError::InvalidUrl => "invalid_url",
+                TrackerError::WuwaRequestFailed { .. } => "wuwa_request_failed",
+                TrackerError::WuwaResponseRead { .. } => "wuwa_response_read",
+                TrackerError::WuwaResponseDecode { .. } => "wuwa_response_decode",
+                TrackerError::WuwaRequestEncode { .. } => "wuwa_request_encode",
             };
             format!("tracker::{str}")
         }
