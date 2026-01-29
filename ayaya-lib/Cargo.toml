@@ -1,39 +1,44 @@
 [package]
 name = "ayaya-lib"
 version = { workspace = true }
-edition = "2024"
+edition.workspace = true
 rust-version = { workspace = true }
 
 [dependencies]
 age = { version = "0.11" }
-anyhow = "1"
-argon2 = "0.5"
+anyhow = { workspace = true }
+argon2 = { workspace = true }
+async-trait = { workspace = true }
 axum = { version = "0.7" }
 axum-auth = { version = "0.7" }
-base64 = "0.22.1"
+ayaya-core = { path = "../crates/ayaya-core" }
+ayaya-db = { path = "../crates/ayaya-db" }
+ayaya-tracker = { path = "../crates/ayaya-tracker" }
+base64 = { workspace = true }
 bincode = { workspace = true }
-entity-sqlite = { path = "../entity-sqlite" }
 humantime = { version = "2" }
-lru-mem = { version = "0.3" }
+lru-mem = { workspace = true }
 mime_guess = "2"
-migration-sqlite = { path = "../migration-sqlite" }
-rust-embed = { version = "8" }
+poise.workspace = true
 prometheus-client = { version = "0.22" }
-rand = "0.8"
-reqwest = { version = "0.12", features = ["json"] }
+rand = { workspace = true }
+reqwest = { workspace = true }
+rust-embed = { version = "8" }
 sea-orm = { workspace = true }
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serenity.workspace = true
 sha1_smol = { version = "1" }
 shuttle-runtime = { workspace = true }
 snafu = { workspace = true }
+songbird.workspace = true
 strum = { version = "0.26", features = ["derive"] }
 tempfile = { version = "3" }
-time = { version = "0.3", features = ["local-offset"] }
+time = { workspace = true }
 tokio = { workspace = true }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
-tracing = "0.1"
+tracing = { workspace = true }
 tracing-error = { version = "0.2", features = ["traced-error"] }
 tracing-loki = "0.2.5"
 tracing-subscriber = { version = "0.3", features = [
@@ -42,38 +47,15 @@ tracing-subscriber = { version = "0.3", features = [
   "std",
   "time",
 ] }
-url = "2.5.2"
-uuid = { version = "*", features = ["v5", "v7"] }
+url = { workspace = true }
+uuid = { workspace = true }
 youtube_dl = { version = "0.10", features = ["tokio"] }
-
-[dependencies.poise]
-git = "https://github.com/serenity-rs/poise.git"
-rev = "bbc837a1dd170d6ebb5c9208d7a9fd8b3dc27a27"
-
-[dependencies.serenity]
-version = "0.12"
-# git = "https://github.com/serenity-rs/serenity.git"
-# # branch = "next"
-# rev = "c3d4a3386ea0710a81618f07771c83912c5f6196"
-features = [
-  "cache",
-  "collector",
-  "framework",
-  "gateway",
-  "http",
-  "rustls_backend",
-  "voice",
-]
-
-[dependencies.songbird]
-version = "0.5.0"
-features = ["builtin-queue", "driver", "serenity"]
 
 [dependencies.symphonia]
 version = "0.5"
 features = ["all"]
 
 [build-dependencies]
-anyhow = { version = "1" }
+anyhow = { workspace = true }
 # All features enabled
 vergen-gix = { version = "2.1.0-beta.7", features = ["build", "cargo", "rustc"] }

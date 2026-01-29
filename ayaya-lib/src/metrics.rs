@@ -1,6 +1,7 @@
 //! Module containing all metrics related items
 use std::sync::Arc;
 
+use ayaya_core::metrics::{DataOperationType as CoreDataOperationType, MetricsSink};
 use prometheus_client::{
     encoding::{EncodeLabelSet, EncodeLabelValue},
     metrics::{counter::Counter, family::Family, gauge::Gauge, histogram::Histogram, info::Info},
@@ -166,6 +167,15 @@ pub enum DataOperationType {
     Write,
 }
 
+impl From<CoreDataOperationType> for DataOperationType {
+    fn from(value: CoreDataOperationType) -> Self {
+        match value {
+            CoreDataOperationType::Read => DataOperationType::Read,
+            CoreDataOperationType::Write => DataOperationType::Write,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct CacheLabel {
     pub cache_name: String,
@@ -180,6 +190,21 @@ pub struct ErrorLabel {
 #[derive(Debug, Clone, Hash, PartialEq, Eq, EncodeLabelValue)]
 pub enum ErrorType {
     Command,
+}
+
+#[async_trait::async_trait]
+impl MetricsSink for Metrics {
+    async fn data_access(&self, name: &str, op: CoreDataOperationType) {
+        self.data_access(name, op.into()).await;
+    }
+
+    async fn data_time(&self, name: &str, op: CoreDataOperationType, time: f64) {
+        self.data_time(name, op.into(), time).await;
+    }
+
+    async fn cache_len(&self, name: &str, len: usize) {
+        self.cache_len(name, len).await;
+    }
 }
 
 /// Build data from git

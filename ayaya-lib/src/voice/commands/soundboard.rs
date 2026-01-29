@@ -366,7 +366,7 @@ pub async fn create_public_upload_notice(ctx: Context<'_>) -> Result<Option<bool
 pub async fn create_sound_repeat(
     ctx: Context<'_>,
     user_id: &serenity::UserId,
-    sound: entity_sqlite::sounds::Model,
+    sound: ayaya_db::entity::sounds::Model,
     call: Arc<Mutex<songbird::Call>>,
 ) -> Result<(), BotError> {
     // Define some unique identifiers for the navigation buttons

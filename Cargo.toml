@@ -4,18 +4,27 @@ members = [
   "ayaya-lib",
   "ayaya-runner-local",
   "ayaya-runner-shuttle",
-  "entity-sqlite",
-  "migration-sqlite",
+  "crates/ayaya-core",
+  "crates/ayaya-db",
+  "crates/ayaya-db/migration",
+  "crates/ayaya-tracker"
 ]
 default-members = ["ayaya-lib", "ayaya-runner-local"]
 
 [workspace.package]
 version = "2025.11.5-2"
-edition = "2018"
+edition = "2024"
 rust-version = "1.88.0"
 
 [workspace.dependencies]
+anyhow = { version = "1" }
+argon2 = { version = "0.5" }
+async-trait = { version = "0.1" }
+base64 = { version = "0.22" }
 bincode = { version = "2.0.0-rc.3", features = ["serde"] }
+lru-mem = { version = "0.3" }
+rand = { version = "0.8" }
+reqwest = { version = "0.12", features = ["json"] }
 sea-orm = { version = "1", default-features = false, features = [
   "macros",
   "runtime-tokio-rustls",
@@ -25,6 +34,32 @@ sea-orm = { version = "1", default-features = false, features = [
   "with-time",
   "with-uuid",
 ] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
 shuttle-runtime = { version = "0.51", default-features = false }
 snafu = { version = "0.8" }
+time = { version = "0.3", features = ["formatting", "local-offset", "macros", "parsing"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "tracing"] }
+tracing = { version = "0.1" }
+url = { version = "2.5.2" }
+uuid = { version = "*", features = ["v4", "v5", "v7"] }
+
+[workspace.dependencies.poise]
+git = "https://github.com/serenity-rs/poise.git"
+rev = "bbc837a1dd170d6ebb5c9208d7a9fd8b3dc27a27"
+
+[workspace.dependencies.serenity]
+version = "0.12"
+features = [
+  "cache",
+  "collector",
+  "framework",
+  "gateway",
+  "http",
+  "rustls_backend",
+  "voice",
+]
+
+[workspace.dependencies.songbird]
+version = "0.5.0"
+features = ["builtin-queue", "driver", "serenity"]

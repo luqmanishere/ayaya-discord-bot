@@ -4,6 +4,8 @@ use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::Mentionable;
 use snafu::ResultExt;
 
+use ayaya_core::auth::token::{generate_token, hash_token};
+
 use crate::{
     CommandResult, Context,
     error::{BotError, DataManagerSnafu, GeneralSerenitySnafu},
@@ -270,13 +272,24 @@ pub async fn create_token(
 
     let user_id = ctx.author().id.get() as i64;
 
+    let token = generate_token();
+    let token_hash = match hash_token(&token) {
+        Ok(hash) => hash,
+        Err(e) => {
+            ctx.reply(format!("Error hashing token: {}", e))
+                .await
+                .context(GeneralSerenitySnafu)?;
+            return Ok(());
+        }
+    };
+
     match ctx
         .data()
         .data_manager
-        .create_dashboard_token(user_id, description.clone())
+        .create_dashboard_token_hash(user_id, token_hash, description.clone())
         .await
     {
-        Ok(token) => {
+        Ok(_token_id) => {
             ctx.reply(format!(
                 "**Dashboard Token Created**\n\n🔑 Token: `{}`\n\n⚠️ **Save this token immediately!** It will not be shown again.\n\nDescription: {}\n\nUse this token in the dashboard's login page.",
                 token, description

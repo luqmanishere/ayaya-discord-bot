@@ -46,16 +46,15 @@ use crate::{error::*, voice::commands::music};
 
 pub(crate) mod admin;
 pub(crate) mod api;
-pub(crate) mod auth;
+pub(crate) mod auth_http;
 pub(crate) mod constants;
 pub(crate) mod dashboard;
-pub(crate) mod data;
+pub use ayaya_db::data as data;
 pub mod error;
 pub(crate) mod memes;
 pub(crate) mod metrics;
 pub(crate) mod owner;
 pub(crate) mod stats;
-pub(crate) mod tracker_adapter;
 pub(crate) mod tracker;
 pub(crate) mod utils;
 pub(crate) mod voice;
@@ -67,7 +66,6 @@ pub type Commands = Vec<poise::Command<Data, BotError>>;
 pub type CommandResult = Result<(), BotError>;
 
 // User data, which is stored and accessible in all command invocations
-#[derive(Debug)]
 pub struct Data {
     http: HttpClient,
     songbird: Arc<songbird::Songbird>,
@@ -103,7 +101,7 @@ pub async fn ayayabot(
     // merged everything into one database
     let db_path = data_dir.join("stats.sqlite");
     let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
-    let data_manager = DataManager::new(&db_url, metrics.clone())
+    let data_manager = DataManager::new(&db_url, Arc::new(metrics.clone()))
         .await
         .context(DataManagerSnafu)?;
 
@@ -214,7 +212,7 @@ pub async fn ayayabot(
         .route("/auth/me", axum::routing::get(api::auth_me_handler))
         .layer(axum::middleware::from_fn_with_state(
             axum_state.clone(),
-            auth::middleware::AuthMiddleware::require_auth,
+            auth_http::middleware::AuthMiddleware::require_auth,
         ));
 
     let router = axum::Router::new()

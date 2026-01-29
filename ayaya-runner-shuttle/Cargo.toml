@@ -7,5 +7,5 @@ edition = "2021"
 # workspace deps
 shuttle-runtime = { workspace = true }
 
-anyhow = { version = "1" }
+anyhow = { workspace = true }
 ayaya-lib = { path = "../ayaya-lib" }

@@ -50,7 +50,7 @@ impl std::fmt::Display for QueryType {
 /// Opus frame passthrough).
 ///
 /// [`HttpRequest`]: super::HttpRequest
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct YoutubeDl {
     program: &'static str,
     client: Client,

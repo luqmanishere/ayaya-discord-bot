@@ -56,6 +56,36 @@ pub trait ErrorName {
     fn name(&self) -> String;
 }
 
+impl ErrorName for ayaya_tracker::gacha_tracker::TrackerError {
+    fn name(&self) -> String {
+        let label = match self {
+            ayaya_tracker::gacha_tracker::TrackerError::WuwaRequestIncomplete => {
+                "wuwa_request_incomplete"
+            }
+            ayaya_tracker::gacha_tracker::TrackerError::UserGameIdMismatch => {
+                "user_game_id_mismatch"
+            }
+            ayaya_tracker::gacha_tracker::TrackerError::WuwaPlayerIdInvalid { .. } => {
+                "wuwa_player_id_invalid"
+            }
+            ayaya_tracker::gacha_tracker::TrackerError::InvalidUrl => "invalid_url",
+            ayaya_tracker::gacha_tracker::TrackerError::WuwaRequestFailed { .. } => {
+                "wuwa_request_failed"
+            }
+            ayaya_tracker::gacha_tracker::TrackerError::WuwaResponseRead { .. } => {
+                "wuwa_response_read"
+            }
+            ayaya_tracker::gacha_tracker::TrackerError::WuwaResponseDecode { .. } => {
+                "wuwa_response_decode"
+            }
+            ayaya_tracker::gacha_tracker::TrackerError::WuwaRequestEncode { .. } => {
+                "wuwa_request_encode"
+            }
+        };
+        format!("tracker::{label}")
+    }
+}
+
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum BotError {
@@ -86,12 +116,12 @@ pub enum BotError {
 
     #[snafu(display("An error occured within the data manager: {source}"))]
     DataManagerError {
-        source: crate::data::error::DataError,
+        source: ayaya_db::error::DataError,
     },
 
     #[snafu(display("An error occured with the tracker: {source}"))]
     TrackerError {
-        source: crate::tracker::error::TrackerError,
+        source: ayaya_tracker::gacha_tracker::TrackerError,
     },
 
     #[snafu(display("Error downloading attachment: {source}"))]
@@ -190,7 +220,9 @@ impl ErrorName for BotError {
             BotError::GuildMismatch => "guild_mismatch",
             BotError::GeneralSerenityError { .. } => "serenity_error",
             BotError::DatabaseOperationError { .. } => "database_error",
-            BotError::DataManagerError { source } => &source.name(),
+            BotError::DataManagerError { source } => {
+                &ayaya_db::error::ErrorName::name(source)
+            }
             BotError::TrackerError { source } => &source.name(),
             BotError::DownloadAttachmentError { .. } => "download_attachment_error",
             BotError::ExternalAsyncCommandError { .. } => "external_async_commaand_error",

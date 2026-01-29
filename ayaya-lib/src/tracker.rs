@@ -1,5 +1,4 @@
 use poise::serenity_prelude as serenity;
-use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use snafu::ResultExt;
 use strum::VariantNames;
@@ -9,8 +8,11 @@ use crate::{
     error::{
         BotError, DataManagerSnafu, GeneralSerenitySnafu, TrackerSnafu,
     },
-    tracker::error::TrackerError,
-    tracker_adapter::{AdapterKind, GameAdapter, GameId, adapter_for, apply_import_boundary},
+};
+
+use ayaya_tracker::gacha_tracker::{
+    AdapterKind, CardPoolType, GameAdapter, GameId, TrackerError, adapter_for,
+    apply_import_boundary,
 };
 
 #[poise::command(slash_command, subcommands("pulls"), aliases("t"))]
@@ -226,159 +228,4 @@ async fn autocomplete_game(
             None
         }
     })
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DeserializeWrapper {
-    pub data: Vec<ParsedWuwaPull>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ParsedWuwaPull {
-    pub card_pool_type: CardPoolType,
-    pub resource_id: u64,
-    pub quality_level: u64,
-    pub resource_type: ResourceType,
-    pub name: String,
-    pub count: u64,
-    #[serde(deserialize_with = "deserialize_time")]
-    pub time: time::PrimitiveDateTime,
-}
-
-fn deserialize_time<'de, D>(deserializer: D) -> Result<time::PrimitiveDateTime, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    static FORMAT: &[time::format_description::BorrowedFormatItem] = time::macros::format_description!(
-        "[year]-[month repr:numerical]-[day] [hour repr:24]:[minute]:[second]"
-    );
-
-    let s: &str = Deserialize::deserialize(deserializer)?;
-    let ti = time::PrimitiveDateTime::parse(s, FORMAT).expect("format proper");
-    Ok(ti)
-}
-
-#[derive(Debug, Deserialize, Clone, Copy, strum::Display)]
-pub enum ResourceType {
-    Weapon,
-    Resonator,
-    Item,
-}
-
-#[derive(Debug, Deserialize, Copy, Clone, Eq, Hash, PartialEq)]
-#[expect(clippy::enum_variant_names)]
-pub enum CardPoolType {
-    #[serde(rename = "Resonators Accurate Modulation")]
-    EventCharacterConvene,
-    #[serde(rename = "Resonators Accurate Modulation - 2")]
-    EventWeaponConvene,
-    #[serde(rename = "Weapons Accurate Modulation")]
-    StandardCharacterConvene,
-    #[serde(rename = "Full-Range Modualtion")]
-    StandardWeaponConvene,
-}
-
-pub mod error {
-    use std::num::ParseIntError;
-
-    use snafu::Snafu;
-
-    use crate::error::ErrorName;
-
-    #[derive(Debug, Snafu)]
-    #[snafu(visibility(pub))]
-    pub enum TrackerError {
-        #[snafu(display("not enough arguments to build"))]
-        WuwaRequestIncomplete,
-        #[snafu(display("You are not the owner of this player id."))]
-        UserGameIdMismatch,
-        #[snafu(display("The player id format is invalid"))]
-        WuwaPlayerIdInvalid { source: ParseIntError },
-
-        #[snafu(display("The provided url is invalid."))]
-        InvalidUrl,
-        #[snafu(display("Failed to send request to Wuwa API."))]
-        WuwaRequestFailed { source: reqwest::Error },
-        #[snafu(display("Failed to read Wuwa API response."))]
-        WuwaResponseRead { source: reqwest::Error },
-        #[snafu(display("Failed to decode Wuwa API response."))]
-        WuwaResponseDecode { source: serde_json::Error },
-        #[snafu(display("Failed to encode Wuwa API request."))]
-        WuwaRequestEncode { source: serde_json::Error },
-    }
-
-    impl ErrorName for TrackerError {
-        fn name(&self) -> String {
-            let str = match self {
-                TrackerError::WuwaRequestIncomplete => "wuwa_request_incomplete",
-                TrackerError::UserGameIdMismatch => "user_game_id_mismatch",
-                TrackerError::WuwaPlayerIdInvalid { .. } => "wuwa_player_id_invalid",
-                TrackerError::InvalidUrl => "invalid_url",
-                TrackerError::WuwaRequestFailed { .. } => "wuwa_request_failed",
-                TrackerError::WuwaResponseRead { .. } => "wuwa_response_read",
-                TrackerError::WuwaResponseDecode { .. } => "wuwa_response_decode",
-                TrackerError::WuwaRequestEncode { .. } => "wuwa_request_encode",
-            };
-            format!("tracker::{str}")
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_deserialize_type_1() {
-        let model_path = format!(
-            "{}/../dev/wuwa_model_type_1.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let DeserializeWrapper { data: pulls } =
-            serde_json::from_str(&std::fs::read_to_string(model_path).unwrap()).unwrap();
-
-        assert!(pulls.iter().find(|e| e.name == "Carlotta").is_some());
-    }
-
-    #[test]
-    fn test_deserialize_type_2() {
-        let model_path = format!(
-            "{}/../dev/wuwa_model_type_2.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let DeserializeWrapper { data: pulls } =
-            serde_json::from_str(&std::fs::read_to_string(model_path).unwrap()).unwrap();
-
-        assert!(pulls.iter().find(|e| e.name == "The Last Dance").is_some());
-    }
-
-    #[test]
-    fn test_deserialize_type_3() {
-        let model_path = format!(
-            "{}/../dev/wuwa_model_type_3.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let DeserializeWrapper { data: pulls } =
-            serde_json::from_str(&std::fs::read_to_string(model_path).unwrap()).unwrap();
-
-        assert!(
-            pulls
-                .iter()
-                .find(|e| e.name == "Originite: Type IV")
-                .is_some()
-        );
-    }
-
-    #[test]
-    fn test_deserialize_type_4() {
-        let model_path = format!(
-            "{}/../dev/wuwa_model_type_4.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let DeserializeWrapper { data: pulls } =
-            serde_json::from_str(&std::fs::read_to_string(model_path).unwrap()).unwrap();
-
-        assert!(pulls.iter().find(|e| e.name == "Cosmic Ripples").is_some());
-    }
 }

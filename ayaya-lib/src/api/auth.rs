@@ -1,7 +1,7 @@
 use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
 use serde::Serialize;
 
-use crate::auth::middleware::AuthUser;
+use crate::auth_http::middleware::AuthUser;
 
 #[derive(Serialize)]
 pub struct AuthMeResponse {
