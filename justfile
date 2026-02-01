@@ -56,6 +56,11 @@ release:
 
 jj-bump:
     #!/usr/bin/env bash
+    # Refuse to run if the working copy has changes.
+    if jj diff --summary -r @ | grep -q .; then
+        echo -e "\033[1m\033[38;5;9mWorking copy is dirty; commit or move changes aside before running jj-bump.\033[0m"
+        exit 1
+    fi
     DATE=$(date +%Y.%-m.%-d)
     # Find the highest pre-release number for today's date
     LATEST_TAG=$(git tag -l "v${DATE}-*" | sort -V | tail -n 1)
@@ -66,8 +71,8 @@ jj-bump:
         PRERELEASE=$((PRERELEASE + 1))
     fi
     VERSION="${DATE}-${PRERELEASE}"
-    # Ensure we're on the main branch for git-cliff
-    git checkout main
+    # Keep git view in sync with jj so git-cliff sees the latest history.
+    jj git export
     git cliff --bump auto -o CHANGELOG.md --tag "v${VERSION}"
     cargo set-version "${VERSION}"
 
@@ -77,7 +82,8 @@ jj-release:
     just jj-bump
     VERSION=$(grep '^version = ' Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
     # Jujutsu automatically tracks changes, no need for 'add'
-    jj commit -m "chore(release): release ${VERSION}" -m "changelog: ignore"
+    # Commit only the release artifacts so dirty working copies don't leak into the release.
+    jj commit -m "chore(release): release ${VERSION}" -m "changelog: ignore" Cargo.toml Cargo.lock CHANGELOG.md
     # Create git tag for compatibility with GitHub, CI, and git-cliff
     git tag "v${VERSION}"
     echo "Tagged version ${VERSION}"
