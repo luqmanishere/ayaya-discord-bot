@@ -67,7 +67,10 @@ impl AuthMiddleware {
 
         // Update last used timestamp
         if let Some(token_id) = authed_token_id {
-            let _ = state.data_manager.update_token_last_used_by_id(token_id).await;
+            let _ = state
+                .data_manager
+                .update_token_last_used_by_id(token_id)
+                .await;
         }
 
         // Add user to request extensions

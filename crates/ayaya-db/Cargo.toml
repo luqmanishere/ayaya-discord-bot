@@ -1,0 +1,25 @@
+[package]
+name = "ayaya-db"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ayaya-core.path = "../ayaya-core"
+bincode.workspace = true
+lru-mem = { workspace = true }
+migration.path = "migration"
+sea-orm.workspace = true
+serde = { workspace = true }
+snafu.workspace = true
+time = { workspace = true }
+tokio.workspace = true
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[dependencies.poise]
+git = "https://github.com/serenity-rs/poise.git"
+rev = "bbc837a1dd170d6ebb5c9208d7a9fd8b3dc27a27"
+
+[dev-dependencies]
+serde_json = { workspace = true }

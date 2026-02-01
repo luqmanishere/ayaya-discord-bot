@@ -1,13 +1,11 @@
 use poise::serenity_prelude as serenity;
-use std::collections::HashMap;
 use snafu::ResultExt;
+use std::collections::HashMap;
 use strum::VariantNames;
 
 use crate::{
     CommandResult, Context,
-    error::{
-        BotError, DataManagerSnafu, GeneralSerenitySnafu, TrackerSnafu,
-    },
+    error::{BotError, DataManagerSnafu, GeneralSerenitySnafu, TrackerSnafu},
 };
 
 use ayaya_tracker::gacha_tracker::{
@@ -95,9 +93,8 @@ pub async fn import_pulls(
             let mut updated_boundaries = Vec::new();
 
             for (pool_id, mut pool_pulls) in pulls_by_pool {
-                pool_pulls.sort_by_key(|p| {
-                    std::cmp::Reverse(p.time.assume_offset(time::UtcOffset::UTC))
-                });
+                pool_pulls
+                    .sort_by_key(|p| std::cmp::Reverse(p.time.assume_offset(time::UtcOffset::UTC)));
 
                 let boundary = pulls_manager
                     .get_wuwa_import_state(player_id, &pool_id)

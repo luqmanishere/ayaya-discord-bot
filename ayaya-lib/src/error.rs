@@ -115,9 +115,7 @@ pub enum BotError {
     DatabaseOperationError { source: sea_orm::DbErr },
 
     #[snafu(display("An error occured within the data manager: {source}"))]
-    DataManagerError {
-        source: ayaya_db::error::DataError,
-    },
+    DataManagerError { source: ayaya_db::error::DataError },
 
     #[snafu(display("An error occured with the tracker: {source}"))]
     TrackerError {
@@ -220,9 +218,7 @@ impl ErrorName for BotError {
             BotError::GuildMismatch => "guild_mismatch",
             BotError::GeneralSerenityError { .. } => "serenity_error",
             BotError::DatabaseOperationError { .. } => "database_error",
-            BotError::DataManagerError { source } => {
-                &ayaya_db::error::ErrorName::name(source)
-            }
+            BotError::DataManagerError { source } => &ayaya_db::error::ErrorName::name(source),
             BotError::TrackerError { source } => &source.name(),
             BotError::DownloadAttachmentError { .. } => "download_attachment_error",
             BotError::ExternalAsyncCommandError { .. } => "external_async_commaand_error",

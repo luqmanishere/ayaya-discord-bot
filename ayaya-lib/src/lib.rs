@@ -49,7 +49,7 @@ pub(crate) mod api;
 pub(crate) mod auth_http;
 pub(crate) mod constants;
 pub(crate) mod dashboard;
-pub use ayaya_db::data as data;
+pub use ayaya_db::data;
 pub mod error;
 pub(crate) mod memes;
 pub(crate) mod metrics;

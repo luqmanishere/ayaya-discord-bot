@@ -1,10 +1,10 @@
 use reqwest::Client;
 use time::OffsetDateTime;
 
-pub use ayaya_core::tracker::{ImportBoundary, PullRecord};
 pub use self::error::TrackerError;
 pub use self::types::{CardPoolType, DeserializeWrapper, ParsedWuwaPull, ResourceType};
 use self::wuwa::WuwaAdapter;
+pub use ayaya_core::tracker::{ImportBoundary, PullRecord};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GameId {
@@ -92,9 +92,9 @@ pub fn apply_import_boundary<'a, T>(
     }
 }
 
-pub mod wuwa;
 pub mod error;
 pub mod types;
+pub mod wuwa;
 
 #[derive(Debug, Clone)]
 pub enum AdapterKind {
