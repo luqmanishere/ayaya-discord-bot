@@ -43,10 +43,16 @@ pub async fn join_inner(
         Some(call) => {
             let (voice_channel_name, voice_channel_id) = {
                 let call = call.lock().await;
-                let chan: u64 = call.current_channel().expect("bruh").0.into();
+                let chan: u64 = call.current_channel().expect("bruh").get();
                 let channel_id = serenity::ChannelId::from(chan);
                 (
-                    channel_id.name(ctx).await.context(GeneralSerenitySnafu)?,
+                    channel_id
+                        .to_guild_channel(ctx.http(), Some(guild_id))
+                        .await
+                        .context(GeneralSerenitySnafu)?
+                        .base
+                        .name
+                        .to_string(),
                     channel_id,
                 )
             };
@@ -150,7 +156,7 @@ pub async fn join_inner(
                 }
                 Err(e) => {
                     let voice_channel_info =
-                        ChannelInfo::from_serenity_id(ctx, voice_channel_id, true).await?;
+                        ChannelInfo::from_serenity_id(ctx, voice_channel_id.into(), true).await?;
                     error!("Error joining channel: {}", e);
                     // TODO: centralize
                     ctx.say("Unable to join voice channel")

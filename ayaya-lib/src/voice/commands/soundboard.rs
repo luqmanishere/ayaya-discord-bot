@@ -180,8 +180,9 @@ pub async fn play_sound(
     ctx: Context<'_>,
     #[autocomplete = "autocomplete_play_sound"]
     #[description = "The sound identifier. Refer to the autocomplete"]
-    sound_id: uuid::Uuid,
+    sound_id: String,
 ) -> Result<(), BotError> {
+    let sound_id = uuid::Uuid::parse_str(&sound_id).expect("proper error hanlding in ocming");
     ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
 
     let guild_id = crate::utils::get_guild_id(ctx)?;
@@ -230,9 +231,11 @@ pub async fn rename_sound(
     ctx: Context<'_>,
     #[autocomplete = "autocomplete_rename_sound"]
     #[description = "The sound identifier. Refer to the autocomplete"]
-    sound_id: uuid::Uuid,
+    sound_id: String,
     new_description: String,
 ) -> Result<(), BotError> {
+    // TODO: error out on invalid
+    let sound_id = uuid::Uuid::parse_str(&sound_id).expect("proper error hanlding in ocming");
     ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
 
     let old_sound = ctx
@@ -261,10 +264,10 @@ pub async fn rename_sound(
     Ok(())
 }
 
-async fn autocomplete_play_sound(
+async fn autocomplete_play_sound<'a>(
     ctx: Context<'_>,
     partial: &str,
-) -> Vec<serenity::AutocompleteChoice> {
+) -> serenity::CreateAutocompleteResponse<'a> {
     let user = ctx.author();
     let sound_manager = ctx.data().data_manager.sounds();
     let partial = partial.to_lowercase();
@@ -274,17 +277,19 @@ async fn autocomplete_play_sound(
         .await
         .unwrap_or_default();
 
-    sounds
+    let filtered = sounds
         .iter()
         .filter(|e| e.sound_name.to_lowercase().contains(&partial))
         .map(|e| serenity::AutocompleteChoice::new(e.sound_name.clone(), e.sound_id.to_string()))
-        .collect()
+        .collect::<Vec<_>>();
+
+    serenity::CreateAutocompleteResponse::new().set_choices(filtered)
 }
 
-async fn autocomplete_rename_sound(
+async fn autocomplete_rename_sound<'a>(
     ctx: Context<'_>,
     partial: &str,
-) -> Vec<serenity::AutocompleteChoice> {
+) -> serenity::CreateAutocompleteResponse<'a> {
     let user = ctx.author();
     let sound_manager = ctx.data().data_manager.sounds();
     let partial = partial.to_lowercase();
@@ -294,15 +299,18 @@ async fn autocomplete_rename_sound(
         .await
         .unwrap_or_default();
 
-    sounds
+    let filtered = sounds
         .iter()
         .filter(|e| e.sound_name.to_lowercase().contains(&partial))
         .map(|e| serenity::AutocompleteChoice::new(e.sound_name.clone(), e.sound_id.to_string()))
-        .collect()
+        .collect::<Vec<_>>();
+
+    serenity::CreateAutocompleteResponse::new().set_choices(filtered)
 }
 
 /// Create an interaction for the search command. Returns the selected video id if any
 pub async fn create_public_upload_notice(ctx: Context<'_>) -> Result<Option<bool>, BotError> {
+    // TODO: migrate to componentv2
     // Define some unique identifiers for the navigation buttons
     let ctx_id = ctx.id();
     let yes_id = format!("{ctx_id}_yes");
@@ -330,25 +338,29 @@ pub async fn create_public_upload_notice(ctx: Context<'_>) -> Result<Option<bool
             .build();
 
         let embed = serenity::CreateEmbed::default().description(description.to_string());
-        let reply = poise::CreateReply::default().embed(embed);
+        let reply = poise::CreateReply::default()
+            .embed(embed)
+            .flags(serenity::MessageFlags::IS_COMPONENTS_V2);
 
-        let components = serenity::CreateActionRow::Buttons(buttons);
+        let components = serenity::CreateActionRow::Buttons(buttons.into());
+        let components = serenity::CreateComponent::ActionRow(components);
         reply.components(vec![components])
     };
 
     ctx.send(reply).await.context(GeneralSerenitySnafu)?;
 
     // Loop through incoming interactions with the navigation buttons
-    while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
-        // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
-        // button was pressed
-        .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-        // Timeout when no navigation button has been pressed for 1 minute
-        .timeout(std::time::Duration::from_secs(60))
-        .await
+    while let Some(press) =
+        serenity::collector::ComponentInteractionCollector::new(ctx.serenity_context())
+            // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
+            // button was pressed
+            .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+            // Timeout when no navigation button has been pressed for 1 minute
+            .timeout(std::time::Duration::from_secs(60))
+            .await
     {
         press
-            .create_response(ctx, serenity::CreateInteractionResponse::Acknowledge)
+            .create_response(ctx.http(), serenity::CreateInteractionResponse::Acknowledge)
             .await
             .context(GeneralSerenitySnafu)?;
 
@@ -369,6 +381,7 @@ pub async fn create_sound_repeat(
     sound: ayaya_db::entity::sounds::Model,
     call: Arc<Mutex<songbird::Call>>,
 ) -> Result<(), BotError> {
+    // TODO: use component v2
     // Define some unique identifiers for the navigation buttons
     let ctx_id = ctx.id();
     let user_id = user_id.get();
@@ -383,13 +396,14 @@ pub async fn create_sound_repeat(
     ];
     let embed = |count: i32| {
         let description = serenity::MessageBuilder::default()
-            .push_line(format!("# {}", sound.sound_name))
-            .push_line(format!("Played {count} time(s). Play again?"))
+            .push_line(format!("# {}", sound.sound_name).as_str())
+            .push_line(format!("Played {count} time(s). Play again?").as_str())
             .build();
 
-        embed_template(&EmbedOperation::SoundPlayed).description(description.to_string())
+        embed_template(EmbedOperation::SoundPlayed).description(description.to_string())
     };
-    let components = serenity::CreateActionRow::Buttons(buttons);
+    let components = serenity::CreateActionRow::Buttons(buttons.into());
+    let components = serenity::CreateComponent::ActionRow(components);
     let reply = poise::CreateReply::default()
         .embed(embed(count))
         .components(vec![components]);
@@ -397,13 +411,14 @@ pub async fn create_sound_repeat(
     ctx.send(reply).await.context(GeneralSerenitySnafu)?;
 
     // Loop through incoming interactions with the navigation buttons
-    while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
-        // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
-        // button was pressed
-        .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-        // Timeout when no navigation button has been pressed for 1 minute
-        .timeout(std::time::Duration::from_secs(300))
-        .await
+    while let Some(press) =
+        serenity::collector::ComponentInteractionCollector::new(ctx.serenity_context())
+            // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
+            // button was pressed
+            .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+            // Timeout when no navigation button has been pressed for 1 minute
+            .timeout(std::time::Duration::from_secs(300))
+            .await
     {
         if press.data.custom_id == repeat_id {
             let path = ctx
@@ -421,7 +436,7 @@ pub async fn create_sound_repeat(
             count += 1;
             press
                 .create_response(
-                    ctx,
+                    ctx.http(),
                     serenity::CreateInteractionResponse::UpdateMessage(
                         serenity::CreateInteractionResponseMessage::new().embed(embed(count)),
                     ),

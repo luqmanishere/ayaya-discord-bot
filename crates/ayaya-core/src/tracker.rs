@@ -6,13 +6,36 @@ pub struct ImportBoundary {
     pub count_at_time: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct PullRecord {
-    pub pool_id: String,
-    pub resource_id: Option<i64>,
-    pub resource_name: String,
-    pub resource_type: String,
-    pub quality: i32,
-    pub count: i32,
-    pub time: OffsetDateTime,
+pub mod wuwa {
+    use time::OffsetDateTime;
+
+    #[derive(Debug, Clone)]
+    pub struct WuwaPullDto {
+        pub pool_id: String,
+        pub resource_id: i64,
+        pub resource_name: String,
+        pub resource_type: String,
+        pub quality: i32,
+        pub count: i32,
+        pub time: OffsetDateTime,
+    }
+}
+
+pub mod akend {
+    use time::OffsetDateTime;
+
+    #[derive(Debug, Clone)]
+    pub struct AkEndPullDto {
+        pub user_game_id: String,
+        pub pool_type: String,
+        pub pool_id: String,
+        pub pool_name: String,
+        pub char_id: String,
+        pub char_name: String,
+        pub rarity: i32,
+        pub is_free: bool,
+        pub is_new: bool,
+        pub time: OffsetDateTime,
+        pub seq_id: String,
+    }
 }

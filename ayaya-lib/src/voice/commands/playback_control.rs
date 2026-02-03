@@ -47,14 +47,14 @@ pub async fn pause(ctx: Context<'_>, _args: String) -> Result<(), BotError> {
         // TODO: replace these messages with embeds
         check_msg(
             ctx.channel_id()
-                .say(ctx, format!("{song_name} - paused"))
+                .say(ctx.http(), format!("{song_name} - paused"))
                 .await,
         );
     } else {
         // TODO: replace these messages with embeds
         check_msg(
             ctx.channel_id()
-                .say(ctx, "Not in a voice channel to play in")
+                .say(ctx.http(), "Not in a voice channel to play in")
                 .await,
         );
     }
@@ -97,7 +97,7 @@ pub async fn resume(ctx: Context<'_>) -> Result<(), BotError> {
         // TODO: embed
         check_msg(
             ctx.channel_id()
-                .say(ctx, format!("{song_name} - resumed"))
+                .say(ctx.http(), format!("{song_name} - resumed"))
                 .await,
         );
     } else {
@@ -120,7 +120,7 @@ pub async fn stop(ctx: Context<'_>) -> Result<(), BotError> {
         let queue = handler.queue();
         queue.stop();
 
-        check_msg(ctx.channel_id().say(ctx, "queue cleared.").await);
+        check_msg(ctx.channel_id().say(ctx.http(), "queue cleared.").await);
     } else {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }
@@ -272,11 +272,11 @@ pub async fn seek(
     Ok(())
 }
 
-async fn autocomplete_seek(
+async fn autocomplete_seek<'a>(
     ctx: Context<'_>,
     partial: &str,
-) -> impl Iterator<Item = serenity::AutocompleteChoice> {
-    fn template(partial: u64) -> Vec<serenity::AutocompleteChoice> {
+) -> serenity::CreateAutocompleteResponse<'a> {
+    fn template<'a>(partial: u64) -> Vec<serenity::AutocompleteChoice<'a>> {
         vec![serenity::AutocompleteChoice::new(
             format!("Selection: {partial}s"),
             partial,
@@ -287,22 +287,22 @@ async fn autocomplete_seek(
 
     let manager = ctx.data().songbird.clone();
     let Ok(guild_info) = GuildInfo::from_ctx(ctx) else {
-        return template(partial).into_iter();
+        return serenity::CreateAutocompleteResponse::new().set_choices(template(partial));
     };
     let current = manager.get(guild_info.guild_id);
-    if let Some(handler) = current {
+    let comps = if let Some(handler) = current {
         let queue = handler.lock().await.queue().clone();
         drop(handler);
         let Some(current) = queue.current() else {
-            return template(partial).into_iter();
+            return serenity::CreateAutocompleteResponse::new().set_choices(template(partial));
         };
 
         let Some(duration) = current.data::<YoutubeMetadata>().duration() else {
-            return vec![].into_iter();
+            return serenity::CreateAutocompleteResponse::new();
         };
         let current_duration = {
             let Ok(track_state) = current.get_info().await else {
-                return template(partial).into_iter();
+                return serenity::CreateAutocompleteResponse::new().set_choices(template(partial));
             };
 
             track_state.position.as_secs()
@@ -331,10 +331,12 @@ async fn autocomplete_seek(
             ));
         }
 
-        complete.into_iter()
+        complete
     } else {
-        template(partial).into_iter()
-    }
+        template(partial)
+    };
+
+    serenity::CreateAutocompleteResponse::new().set_choices(comps)
 }
 
 /// Loops the current track. Leave empty for an indefinite loop.
@@ -348,7 +350,7 @@ async fn autocomplete_seek(
     guild_only,
     category = "Music"
 )]
-pub async fn loop_track(ctx: Context<'_>, count: Option<usize>) -> Result<(), BotError> {
+pub async fn loop_track(ctx: Context<'_>, count: Option<u64>) -> Result<(), BotError> {
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
     let manager = &ctx.data().songbird;
@@ -364,6 +366,7 @@ pub async fn loop_track(ctx: Context<'_>, count: Option<usize>) -> Result<(), Bo
 
                 match count {
                     Some(count) => {
+                        let count = count as usize;
                         track
                             .loop_for(count)
                             .map_err(|e| MusicCommandError::FailedTrackLoop {
@@ -507,7 +510,7 @@ pub async fn leave(ctx: Context<'_>) -> Result<(), BotError> {
         }
 
         // TODO: replace with embeds
-        check_msg(ctx.channel_id().say(ctx, "Left voice channel").await);
+        check_msg(ctx.channel_id().say(ctx.http(), "Left voice channel").await);
     } else {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }

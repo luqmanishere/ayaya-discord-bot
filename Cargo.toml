@@ -38,7 +38,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 shuttle-runtime = { version = "0.51", default-features = false }
 snafu = { version = "0.8" }
-time = { version = "0.3", features = ["formatting", "local-offset", "macros", "parsing"] }
+strum = { version = "0.26", features = ["derive"] }
+time = { version = "0.3", features = [
+  "formatting",
+  "local-offset",
+  "macros",
+  "parsing"
+] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "tracing"] }
 tracing = { version = "0.1" }
 url = { version = "2.5.2" }
@@ -46,10 +52,14 @@ uuid = { version = "*", features = ["v4", "v5", "v7"] }
 
 [workspace.dependencies.poise]
 git = "https://github.com/serenity-rs/poise.git"
-rev = "bbc837a1dd170d6ebb5c9208d7a9fd8b3dc27a27"
+branch = "serenity-next"
+# rev = "84ef2d1654610b403d1e66225e67435cb7e2a88b"
 
 [workspace.dependencies.serenity]
-version = "0.12"
+# version = "0.12"
+git = "https://github.com/serenity-rs/serenity.git"
+branch = "next"
+# rev = "e8525349654200bd5f4318e05bb3c5b314d89917"
 features = [
   "cache",
   "collector",
@@ -61,5 +71,7 @@ features = [
 ]
 
 [workspace.dependencies.songbird]
-version = "0.5.0"
+# version = "0.5.0"
+git = "https://github.com/serenity-rs/songbird.git"
+branch = "serenity-next"
 features = ["builtin-queue", "driver", "serenity"]

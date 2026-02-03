@@ -1,14 +1,22 @@
+pub mod akend;
+pub mod error;
+pub mod types;
+pub mod wuwa;
+
 use reqwest::Client;
 use time::OffsetDateTime;
+
+use crate::gacha_tracker::akend::AkEndAdapter;
 
 pub use self::error::TrackerError;
 pub use self::types::{CardPoolType, DeserializeWrapper, ParsedWuwaPull, ResourceType};
 use self::wuwa::WuwaAdapter;
-pub use ayaya_core::tracker::{ImportBoundary, PullRecord};
+pub use ayaya_core::tracker::{akend::AkEndPullDto, wuwa::WuwaPullDto, ImportBoundary};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GameId {
     WutheringWaves,
+    ArknightsEndfield,
 }
 
 #[derive(Debug)]
@@ -19,21 +27,33 @@ pub struct BoundaryResult<'a, T> {
 
 #[allow(async_fn_in_trait)]
 pub trait GameAdapter {
+    /// Session data to be stored and used
     type Session: Send + Sync;
+    /// Parsed pull type
     type Pull: Send + Sync;
+    /// Gacha banner types for the game
     type PoolId: Send + Sync + Clone + Eq + std::hash::Hash + std::fmt::Display;
+    /// Normalized DTO type for storage
+    type Dto: Send + Sync;
+    /// Error type
     type Error;
 
+    /// Returns the GameId
     fn game_id(&self) -> GameId;
+    /// The actual name of the game
     fn display_name(&self) -> &'static str;
+    /// Parse initial link into session info
     fn parse_link(&self, link: &str) -> Result<Self::Session, Self::Error>;
+    /// Fetch pulls using the session info
     async fn fetch_pulls(
         &self,
         session: &Self::Session,
         client: &Client,
     ) -> Result<Vec<Self::Pull>, Self::Error>;
+    /// Returns the associated pull type of a pull
     fn pool_id(&self, pull: &Self::Pull) -> Self::PoolId;
-    fn normalize_pull(&self, pull: Self::Pull, user_game_id: &str) -> PullRecord;
+    /// Normalize a game's gacha pull into the database DTO
+    fn normalize_pull(&self, pull: Self::Pull, user_game_id: &str) -> Self::Dto;
 }
 
 /// Apply a boundary to an already-sorted pull list (descending by time).
@@ -92,18 +112,16 @@ pub fn apply_import_boundary<'a, T>(
     }
 }
 
-pub mod error;
-pub mod types;
-pub mod wuwa;
-
 #[derive(Debug, Clone)]
 pub enum AdapterKind {
     Wuwa(WuwaAdapter),
+    AkEnd(AkEndAdapter),
 }
 
 pub fn adapter_for(game_id: GameId) -> AdapterKind {
     match game_id {
         GameId::WutheringWaves => AdapterKind::Wuwa(WuwaAdapter),
+        GameId::ArknightsEndfield => AdapterKind::AkEnd(AkEndAdapter),
     }
 }
 

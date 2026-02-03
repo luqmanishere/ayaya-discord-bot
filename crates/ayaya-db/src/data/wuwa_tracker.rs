@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::data::utils::DataTiming;
 use crate::error::{DataError, DatabaseSnafu};
 use ayaya_core::metrics::{DataOperationType, MetricsSink};
-use ayaya_core::tracker::{ImportBoundary, PullRecord};
+use ayaya_core::tracker::{wuwa::WuwaPullDto, ImportBoundary};
 
 use super::DataResult;
 
@@ -112,7 +112,7 @@ impl WuwaPullsManager {
     pub async fn insert_wuwa_pull_records(
         &self,
         wuwa_user_id: u64,
-        pulls: Vec<PullRecord>,
+        pulls: Vec<WuwaPullDto>,
     ) -> DataResult<usize> {
         const OP: &str = "insert_wuwa_pull_records";
         self.metrics_handler
@@ -132,13 +132,11 @@ impl WuwaPullsManager {
 
         let mut pull_models = Vec::new();
         for pull in pulls {
-            let resource_id = pull.resource_id.ok_or_else(|| DataError::DatabaseError {
-                operation: OP.to_string(),
-                source: DbErr::Custom("missing resource_id".to_string()),
-            })?;
-            let resource_id = i32::try_from(resource_id).map_err(|_| DataError::DatabaseError {
+            let resource_id = i32::try_from(pull.resource_id).map_err(|_| {
+                DataError::DatabaseError {
                 operation: OP.to_string(),
                 source: DbErr::Custom("resource_id out of range".to_string()),
+                }
             })?;
 
             let pull_type =
@@ -365,15 +363,15 @@ mod tests {
         db
     }
 
-    fn create_test_pull(resource_id: u64, name: &str) -> PullRecord {
+    fn create_test_pull(resource_id: u64, name: &str) -> WuwaPullDto {
         let test_time = time::PrimitiveDateTime::new(
             time::Date::from_calendar_date(2024, time::Month::January, 15).unwrap(),
             time::Time::from_hms(12, 30, 45).unwrap(),
         );
 
-        PullRecord {
+        WuwaPullDto {
             pool_id: "Resonators Accurate Modulation".to_string(),
-            resource_id: Some(resource_id as i64),
+            resource_id: resource_id as i64,
             resource_name: name.to_string(),
             resource_type: "Resonator".to_string(),
             quality: 5,
@@ -523,9 +521,9 @@ mod tests {
 
         let records = pulls
             .into_iter()
-            .map(|pull| PullRecord {
+            .map(|pull| WuwaPullDto {
                 pool_id: pull.card_pool_type,
-                resource_id: Some(pull.resource_id as i64),
+                resource_id: pull.resource_id as i64,
                 resource_name: pull.name,
                 resource_type: pull.resource_type,
                 quality: pull.quality_level as i32,

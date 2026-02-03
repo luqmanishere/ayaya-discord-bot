@@ -1,0 +1,64 @@
+{
+  "code": 0,
+  "data": {
+    "list": [
+      {
+        "poolId": "special_1_0_1",
+        "poolName": "Scars of the Forge",
+        "charId": "chr_0016_laevat",
+        "charName": "Laevatain",
+        "rarity": 6,
+        "isFree": false,
+        "isNew": true,
+        "gachaTs": "1769901288898",
+        "seqId": "250"
+      },
+      {
+        "poolId": "special_1_0_1",
+        "poolName": "Scars of the Forge",
+        "charId": "chr_0020_meurs",
+        "charName": "Catcher",
+        "rarity": 4,
+        "isFree": false,
+        "isNew": false,
+        "gachaTs": "1769901288898",
+        "seqId": "249"
+      },
+      {
+        "poolId": "special_1_0_1",
+        "poolName": "Scars of the Forge",
+        "charId": "chr_0021_whiten",
+        "charName": "Estella",
+        "rarity": 4,
+        "isFree": false,
+        "isNew": false,
+        "gachaTs": "1769901288898",
+        "seqId": "248"
+      },
+      {
+        "poolId": "special_1_0_1",
+        "poolName": "Scars of the Forge",
+        "charId": "chr_0020_meurs",
+        "charName": "Catcher",
+        "rarity": 4,
+        "isFree": false,
+        "isNew": false,
+        "gachaTs": "1769901288898",
+        "seqId": "247"
+      },
+      {
+        "poolId": "special_1_0_1",
+        "poolName": "Scars of the Forge",
+        "charId": "chr_0019_karin",
+        "charName": "Akekuri",
+        "rarity": 4,
+        "isFree": false,
+        "isNew": false,
+        "gachaTs": "1769901288898",
+        "seqId": "246"
+      }
+    ],
+    "hasMore": true
+  },
+  "msg": ""
+}

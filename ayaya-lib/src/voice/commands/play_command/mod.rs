@@ -108,7 +108,7 @@ pub async fn search(ctx: Context<'_>, search_term: Vec<String>) -> Result<(), Bo
         }
         poise::Context::Prefix(ctx) => {
             ctx.channel_id()
-                .say(ctx, format!("Searching youtube for: {term}"))
+                .say(ctx.http(), format!("Searching youtube for: {term}"))
                 .await
                 .context(GeneralSerenitySnafu)?;
         }

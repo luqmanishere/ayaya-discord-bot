@@ -1,11 +1,15 @@
 use anyhow::Result;
-use vergen_gix::{Build, Cargo, Emitter, Gix, Rustc};
+use vergen_gix::{BuildBuilder, CargoBuilder, Emitter, GixBuilder, RustcBuilder};
 
 fn main() -> Result<()> {
-    let build = Build::all_build();
-    let cargo = Cargo::all_cargo();
-    let gix = Gix::all().describe(true, false, None).build();
-    let rustc = Rustc::all_rustc();
+    let build = BuildBuilder::all_build().unwrap();
+    let cargo = CargoBuilder::all_cargo().unwrap();
+    let gix = GixBuilder::default()
+        .all()
+        .describe(true, false, None)
+        .build()
+        .unwrap();
+    let rustc = RustcBuilder::all_rustc().unwrap();
 
     Emitter::default()
         .fail_on_error()

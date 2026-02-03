@@ -1,6 +1,7 @@
+use ::serenity::all::CollectComponentInteractions;
 use poise::serenity_prelude as serenity;
 use snafu::ResultExt;
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 use strum::VariantNames;
 
 use crate::{
@@ -24,26 +25,24 @@ pub async fn pulls(_ctx: Context<'_>) -> CommandResult {
 }
 
 /// Import pulls from a game's links
-#[poise::command(slash_command, rename = "import", aliases("i"), ephemeral)]
+#[poise::command(slash_command, rename = "import", aliases("i"))]
 pub async fn import_pulls(
     ctx: Context<'_>,
-    #[autocomplete = "autocomplete_game"]
-    #[description = "A supported game"]
-    game: SupportedGames,
+    // #[autocomplete = "autocomplete_game"]
+    #[description = "A supported game"] game: SupportedGames,
     #[description = "Link from the game for parsing"] link: Option<String>,
 ) -> CommandResult {
     // TODO: other games so we can know whether by game seperation is necessary
+    let Some(link) = link else {
+        ctx.reply("Please provide the import link from the game.")
+            .await
+            .context(GeneralSerenitySnafu)?;
+        return Ok(());
+    };
 
-    ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
     match adapter_for(game.game_id()) {
         AdapterKind::Wuwa(adapter) => {
-            let Some(link) = link else {
-                ctx.reply("Please provide the import link from the game.")
-                    .await
-                    .context(GeneralSerenitySnafu)?;
-                return Ok(());
-            };
-
             let session = adapter.parse_link(&link).context(TrackerSnafu)?;
             let player_id = session.player_id;
             tracing::info!("player id: {player_id}");
@@ -144,19 +143,100 @@ pub async fn import_pulls(
             .await
             .context(GeneralSerenitySnafu)?;
         }
+        AdapterKind::AkEnd(akend_adapter) => {
+            todo!()
+        }
+        #[expect(unused)]
+        _ => {
+            tracing::warn!("Unimplemented!");
+        }
     }
 
     Ok(())
 }
 
 /// Shows pull stats for a game
-#[poise::command(slash_command, aliases("s"), ephemeral)]
-async fn stats(
-    ctx: Context<'_>,
-    #[autocomplete = "autocomplete_game"]
-    #[description = "A supported game"]
-    game: SupportedGames,
-) -> CommandResult {
+#[poise::command(slash_command, aliases("s"))]
+async fn stats(ctx: Context<'_>) -> CommandResult {
+    // ctx.defer().await.context(GeneralSerenitySnafu)?;
+    let game = {
+        let user_id = ctx.author().id.get();
+        let select_id = format!("{}_game_select", user_id);
+        let options = SupportedGames::VARIANTS
+            .iter()
+            .map(|e| serenity::CreateSelectMenuOption::new(e.to_string(), e.to_string()))
+            .collect::<Vec<_>>();
+        let game_select = serenity::CreateSelectMenu::new(
+            select_id,
+            serenity::CreateSelectMenuKind::String {
+                options: options.into(),
+            },
+        );
+        let action_row = serenity::CreateActionRow::SelectMenu(game_select);
+        let text_display = serenity::CreateTextDisplay::new("Select a game to view pull stats:");
+
+        let top_container = serenity::CreateContainer::new(vec![
+            serenity::CreateContainerComponent::TextDisplay(text_display),
+            serenity::CreateContainerComponent::ActionRow(action_row),
+        ])
+        .accent_color(serenity::Color::MEIBE_PINK);
+
+        let components = vec![serenity::CreateComponent::Container(top_container)];
+
+        let reply = ctx
+            .reply_builder(poise::CreateReply::default())
+            .flags(serenity::MessageFlags::IS_COMPONENTS_V2)
+            .ephemeral(true)
+            .components(components);
+        let h = ctx.send(reply).await.context(GeneralSerenitySnafu)?;
+
+        let interaction = match h
+            .message()
+            .await
+            .context(GeneralSerenitySnafu)?
+            .id
+            .collect_component_interactions(ctx.serenity_context())
+            .timeout(std::time::Duration::from_mins(3))
+            .await
+        {
+            Some(i) => {
+                i.create_response(ctx.http(), serenity::CreateInteractionResponse::Acknowledge)
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+                i
+            }
+            None => {
+                ctx.reply("Timed out waiting for game selection. You need to select a game")
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+                return Ok(());
+            }
+        };
+
+        let game = match interaction.data.kind {
+            serenity::ComponentInteractionDataKind::StringSelect { values } => {
+                let selected_game = &values[0];
+                match SupportedGames::from_str(selected_game) {
+                    Ok(g) => g,
+                    Err(_) => {
+                        ctx.reply("Invalid game selected.")
+                            .await
+                            .context(GeneralSerenitySnafu)?;
+                        return Ok(());
+                    }
+                }
+            }
+            _ => {
+                ctx.reply("Invalid interaction data.")
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+                return Ok(());
+            }
+        };
+
+        game
+    };
+
     match game {
         SupportedGames::WutheringWaves => {
             // show current amount of pulls, 5 star pity count, 4 star pity count, and list of 5 star chars
@@ -193,36 +273,26 @@ async fn stats(
                 }
             }
         }
+        SupportedGames::AkEnd => {
+            // TODO: implement
+        }
     }
     Ok(())
 }
 
-#[derive(strum::EnumString, strum::Display, strum::VariantNames)]
+#[derive(poise::ChoiceParameter, strum::EnumString, strum::Display, strum::VariantNames)]
 enum SupportedGames {
+    #[name = "Wuthering Waves"]
     WutheringWaves,
+    #[name = "Arknights Endfield"]
+    AkEnd,
 }
 
 impl SupportedGames {
     fn game_id(self) -> GameId {
         match self {
             SupportedGames::WutheringWaves => GameId::WutheringWaves,
+            SupportedGames::AkEnd => GameId::ArknightsEndfield,
         }
     }
-}
-
-async fn autocomplete_game(
-    _ctx: Context<'_>,
-    partial: &str,
-) -> impl Iterator<Item = serenity::AutocompleteChoice> {
-    let partial = partial.to_lowercase();
-    SupportedGames::VARIANTS.iter().filter_map(move |e| {
-        if e.to_lowercase().contains(&partial) {
-            Some(serenity::AutocompleteChoice::new(
-                e.to_string(),
-                e.to_string(),
-            ))
-        } else {
-            None
-        }
-    })
 }

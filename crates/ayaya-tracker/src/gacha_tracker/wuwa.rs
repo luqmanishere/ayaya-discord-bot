@@ -2,7 +2,8 @@ use reqwest::Client;
 use serde::Serialize;
 
 use super::{
-    CardPoolType, DeserializeWrapper, GameAdapter, GameId, ParsedWuwaPull, PullRecord, TrackerError,
+    CardPoolType, DeserializeWrapper, GameAdapter, GameId, ParsedWuwaPull, TrackerError,
+    WuwaPullDto,
 };
 
 const WUWA_REQ_URL: &str = "https://gmserver-api.aki-game2.net/gacha/record/query";
@@ -21,6 +22,7 @@ impl GameAdapter for WuwaAdapter {
     type Session = WuwaSession;
     type Pull = ParsedWuwaPull;
     type PoolId = CardPoolType;
+    type Dto = WuwaPullDto;
     type Error = TrackerError;
 
     fn game_id(&self) -> GameId {
@@ -110,10 +112,10 @@ impl GameAdapter for WuwaAdapter {
         pull.card_pool_type
     }
 
-    fn normalize_pull(&self, pull: Self::Pull, _user_game_id: &str) -> PullRecord {
-        PullRecord {
+    fn normalize_pull(&self, pull: Self::Pull, _user_game_id: &str) -> WuwaPullDto {
+        WuwaPullDto {
             pool_id: pull.card_pool_type.to_string(),
-            resource_id: Some(pull.resource_id as i64),
+            resource_id: pull.resource_id as i64,
             resource_name: pull.name,
             resource_type: pull.resource_type.to_string(),
             quality: pull.quality_level as i32,

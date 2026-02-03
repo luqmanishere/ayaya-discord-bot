@@ -32,7 +32,7 @@ sha1_smol = { version = "1" }
 shuttle-runtime = { workspace = true }
 snafu = { workspace = true }
 songbird.workspace = true
-strum = { version = "0.26", features = ["derive"] }
+strum.workspace = true
 tempfile = { version = "3" }
 time = { workspace = true }
 tokio = { workspace = true }
@@ -58,4 +58,4 @@ features = ["all"]
 [build-dependencies]
 anyhow = { workspace = true }
 # All features enabled
-vergen-gix = { version = "2.1.0-beta.7", features = ["build", "cargo", "rustc"] }
+vergen-gix = { version = "9.1", features = ["build", "cargo", "rustc"] }

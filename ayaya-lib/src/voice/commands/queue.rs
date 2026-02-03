@@ -84,7 +84,8 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
     aliases("d"),
     category = "Music"
 )]
-pub async fn delete(ctx: Context<'_>, queue_position: usize) -> Result<(), BotError> {
+pub async fn delete(ctx: Context<'_>, queue_position: u64) -> Result<(), BotError> {
+    let queue_position = queue_position as usize;
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
     let manager = ctx.data().songbird.clone();
@@ -237,6 +238,7 @@ async fn queue_pagination_interaction(
     ctx: Context<'_>,
     queued_metadata: Vec<String>,
 ) -> Result<(), BotError> {
+    // TODO: use componentv2
     // define unique identifiers
     let ctx_id = ctx.id();
     let prev_button_id = format!("{ctx_id}prev");
@@ -250,7 +252,8 @@ async fn queue_pagination_interaction(
     // create the first reply
     let reply = {
         let mut buttons = vec![serenity::CreateButton::new(&prev_button_id).emoji('◀')];
-        let mut reply = poise::CreateReply::default();
+        let mut reply =
+            poise::CreateReply::default().flags(serenity::MessageFlags::IS_COMPONENTS_V2);
         let mut message = serenity::MessageBuilder::default();
         let mut embed = serenity::CreateEmbed::new()
             .author(serenity::CreateEmbedAuthor::new(format!("Queue | Page: {}", current_page  +1)).icon_url(
@@ -260,7 +263,7 @@ async fn queue_pagination_interaction(
             .footer(serenity::CreateEmbedFooter::new("Ayaya Discord Bot"));
 
         for rendered in queued_metadata_chunks[0].iter() {
-            message.push_line(rendered);
+            message = message.push_line(rendered.as_str());
         }
 
         // set the description
@@ -268,19 +271,21 @@ async fn queue_pagination_interaction(
         reply = reply.embed(embed.to_owned());
         buttons.push(serenity::CreateButton::new(&next_button_id).emoji('▶'));
 
-        let components = serenity::CreateActionRow::Buttons(buttons);
+        let components = serenity::CreateActionRow::Buttons(buttons.into());
+        let components = serenity::CreateComponent::ActionRow(components);
         reply.components(vec![components])
     };
     ctx.send(reply).await.context(GeneralSerenitySnafu)?;
 
     // Loop through incoming interactions with the navigation buttons
-    while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
-        // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
-        // button was pressed
-        .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-        // Timeout when no navigation button has been pressed for 1 minute
-        .timeout(std::time::Duration::from_secs(60))
-        .await
+    while let Some(press) =
+        serenity::collector::ComponentInteractionCollector::new(ctx.serenity_context())
+            // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
+            // button was pressed
+            .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+            // Timeout when no navigation button has been pressed for 1 minute
+            .timeout(std::time::Duration::from_secs(60))
+            .await
     {
         // Depending on which button was pressed, go to next or previous page
         if press.data.custom_id == next_button_id {
@@ -299,7 +304,8 @@ async fn queue_pagination_interaction(
 
         let response = {
             let mut buttons = vec![serenity::CreateButton::new(&prev_button_id).emoji('◀')];
-            let mut response = serenity::CreateInteractionResponseMessage::new();
+            let mut response = serenity::CreateInteractionResponseMessage::new()
+                .flags(serenity::MessageFlags::IS_COMPONENTS_V2);
             let mut message = serenity::MessageBuilder::default();
             let mut embed = serenity::CreateEmbed::new()
                 .author(serenity::CreateEmbedAuthor::new(format!("Queue | Page: {}", current_page + 1)).icon_url(
@@ -311,7 +317,7 @@ async fn queue_pagination_interaction(
                 ));
 
             for rendered in queued_metadata_chunks[current_page].iter() {
-                message.push_line(rendered);
+                message = message.push_line(rendered.as_str());
             }
 
             // set the description
@@ -319,14 +325,15 @@ async fn queue_pagination_interaction(
             response = response.embed(embed.to_owned());
             buttons.push(serenity::CreateButton::new(&next_button_id).emoji('▶'));
 
-            let components = serenity::CreateActionRow::Buttons(buttons);
+            let components = serenity::CreateActionRow::Buttons(buttons.into());
+            let components = serenity::CreateComponent::ActionRow(components);
             response.components(vec![components])
         };
 
         // Update the message with the new page contents
         press
             .create_response(
-                ctx.serenity_context(),
+                ctx.http(),
                 serenity::CreateInteractionResponse::UpdateMessage(response),
             )
             .await

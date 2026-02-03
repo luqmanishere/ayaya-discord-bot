@@ -100,14 +100,14 @@ pub async fn dep_versions(ctx: Context<'_>) -> CommandResult {
         .context(ExternalAsyncCommandSnafu)?;
     let yt_dlp_stdout = String::from_utf8(yt_dlp.stdout).unwrap_or_default();
     let yt_dlp_stderr = String::from_utf8(yt_dlp.stderr).unwrap_or_default();
-    message.push_line("## yt-dlp");
+    message = message.push_line("## yt-dlp");
     if !yt_dlp_stdout.is_empty() {
-        message.push_line("### stdout");
-        message.push_codeblock(yt_dlp_stdout, Some("sh"));
+        message = message.push_line("### stdout");
+        message = message.push_codeblock(yt_dlp_stdout.as_str(), Some("sh"));
     }
     if !yt_dlp_stderr.is_empty() {
-        message.push_line("### stderr");
-        message.push_codeblock(yt_dlp_stderr, Some("sh"));
+        message = message.push_line("### stderr");
+        message = message.push_codeblock(yt_dlp_stderr.as_str(), Some("sh"));
     }
 
     // TODO: add other external programs version

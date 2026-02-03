@@ -5,9 +5,7 @@ use std::sync::{
 
 use poise::serenity_prelude::{self as serenity, UserId};
 use serenity::{
-    Context as SerenityContext, async_trait,
-    http::Http,
-    model::{id::GuildId, prelude::ChannelId},
+    Context as SerenityContext, all::GenericChannelId, async_trait, http::Http, model::id::GuildId,
 };
 use songbird::{
     Event, EventContext, EventHandler as VoiceEventHandler, Songbird, tracks::PlayMode,
@@ -18,7 +16,7 @@ use super::utils::{EmbedOperation, YoutubeMetadata, metadata_to_embed};
 use crate::utils::check_msg;
 
 pub struct _SongFader {
-    pub chan_id: ChannelId,
+    pub chan_id: GenericChannelId,
     pub http: Arc<Http>,
 }
 
@@ -46,7 +44,7 @@ impl VoiceEventHandler for _SongFader {
 /// The check is ran every 60 seconds, so the 5 minutes actually has a margin
 /// of 1 min. Also starts counting when the bot is alone in the voice channel
 pub struct BotInactiveCounter {
-    pub channel_id: ChannelId,
+    pub channel_id: GenericChannelId,
     pub guild_id: GuildId,
     pub bot_user_id: UserId,
     pub ctx: SerenityContext,
@@ -87,7 +85,7 @@ impl BotInactiveCounter {
         if let Some(handler) = self.manager.get(self.guild_id) {
             // check if we are alone in the channel
             let alone_in_channel = {
-                match self.guild_id.to_guild_cached(&self.ctx) {
+                match self.guild_id.to_guild_cached(&self.ctx.cache) {
                     Some(guild) => {
                         let voice_states = guild.clone().voice_states;
                         voice_states.len() == 1 && voice_states.contains_key(&self.bot_user_id)
@@ -198,7 +196,7 @@ impl VoiceEventHandler for BotInactiveCounter {
 
 /// Notify the calling channel when a track starts to play
 pub struct TrackPlayNotifier {
-    pub channel_id: ChannelId,
+    pub channel_id: GenericChannelId,
     pub metadata: YoutubeMetadata,
     pub http: Arc<Http>,
 }
@@ -212,7 +210,7 @@ impl VoiceEventHandler for TrackPlayNotifier {
                 if track_state.playing == PlayMode::Play {
                     self.channel_id
                         .send_message(
-                            self.http.clone(),
+                            &self.http,
                             serenity::CreateMessage::default().embed(metadata_to_embed(
                                 EmbedOperation::NowPlayingNotification,
                                 &self.metadata,

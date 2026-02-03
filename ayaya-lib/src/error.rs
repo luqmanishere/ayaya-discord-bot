@@ -1,3 +1,4 @@
+use ::serenity::all::CacheHttp;
 use poise::serenity_prelude as serenity;
 use snafu::Snafu;
 use tracing::error;
@@ -12,22 +13,25 @@ pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
     error!("error error error {}", error);
     match error {
         poise::FrameworkError::ArgumentParse { error, .. } => {
-            if let Some(error) = error.downcast_ref::<serenity::RoleParseError>() {
-                error!("Found a RoleParseError: {:?}", error);
-            } else {
-                error!("Not a RoleParseError :(");
-            }
+            // if let Some(error) = error.downcast_ref::<serenity::RoleParseError>() {
+            //     error!("Found a RoleParseError: {:?}", error);
+            // } else {
+            //     error!("Not a RoleParseError :(");
+            // }
         }
         poise::FrameworkError::UnknownCommand {
-            ctx,
+            framework,
             msg,
             msg_content,
             ..
         } => {
             error!("unrecognized command: {}", msg_content);
-            msg.reply(ctx, format!("unrecognized command: {msg_content}"))
-                .await
-                .expect("no errors");
+            msg.reply(
+                framework.serenity_context.http(),
+                format!("unrecognized command: {msg_content}"),
+            )
+            .await
+            .expect("no errors");
         }
         poise::FrameworkError::Command { error, ctx, .. } => {
             ctx.data()
@@ -38,7 +42,10 @@ pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
             error!("Error executing command ({}): {}", cmd, error);
 
             if let Err(e) = ctx
-                .send(poise::CreateReply::default().embed(command_error_embed(cmd, error)))
+                .send(
+                    poise::CreateReply::default()
+                        .embed(command_error_embed(cmd.to_string(), error)),
+                )
                 .await
             {
                 error!("Error sending error message: {}", e);
@@ -260,7 +267,7 @@ pub enum InitError {
     },
 }
 
-pub fn command_error_embed(command: String, error: BotError) -> serenity::CreateEmbed {
+pub fn command_error_embed<'a>(command: String, error: BotError) -> serenity::CreateEmbed<'a> {
     let (error, help_text, color) = match &error {
         BotError::MusicCommandError { source } => (
             source.to_string(),
@@ -289,8 +296,8 @@ pub fn command_error_embed(command: String, error: BotError) -> serenity::Create
         )
         .description(
             serenity::MessageBuilder::default()
-                .push_line(format!("### {error}"))
-                .push_line(format!("**Help**: {help_text}"))
+                .push_line(format!("### {error}").as_str())
+                .push_line(format!("**Help**: {help_text}").as_str())
                 .to_string(),
         )
         .timestamp(serenity::Timestamp::now())

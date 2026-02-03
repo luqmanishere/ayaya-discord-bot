@@ -100,10 +100,14 @@ pub async fn mute(ctx: Context<'_>) -> Result<(), BotError> {
     let mut handler = handler_lock.lock().await;
 
     if handler.is_mute() {
-        check_msg(ctx.channel_id().say(ctx, "Already muted").await);
+        check_msg(ctx.channel_id().say(ctx.http(), "Already muted").await);
     } else {
         if let Err(e) = handler.mute(true).await {
-            check_msg(ctx.channel_id().say(ctx, format!("Failed: {e:?}")).await);
+            check_msg(
+                ctx.channel_id()
+                    .say(ctx.http(), format!("Failed: {e:?}"))
+                    .await,
+            );
         }
 
         ctx.say("Now muted").await.context(GeneralSerenitySnafu)?;

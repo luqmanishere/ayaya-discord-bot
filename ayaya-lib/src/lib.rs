@@ -4,7 +4,7 @@
 
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader, Read},
+    io::Read,
     path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, atomic::AtomicBool},
@@ -49,6 +49,7 @@ pub(crate) mod api;
 pub(crate) mod auth_http;
 pub(crate) mod constants;
 pub(crate) mod dashboard;
+pub mod event_handler;
 pub use ayaya_db::data;
 pub mod error;
 pub(crate) mod memes;
@@ -71,6 +72,7 @@ pub struct Data {
     songbird: Arc<songbird::Songbird>,
     user_id: RwLock<serenity::UserId>,
     data_manager: DataManager,
+    commands: Vec<poise::Command<Data, BotError>>,
     command_names: Vec<String>,
     command_categories: Vec<String>,
     command_categories_map: HashMap<String, Option<String>>,
@@ -114,11 +116,7 @@ pub async fn ayayabot(
     let manager = songbird::Songbird::serenity();
 
     // we do this for
-    let mut commands = vec![about(), help(), ping(), music(), gay(), tracker()];
-    commands.append(&mut voice_commands());
-    commands.append(&mut owner_commands());
-    commands.append(&mut stats_commands());
-    commands.append(&mut admin_commands());
+    let commands = gen_commands();
 
     let manager_clone = manager.clone();
     let metrics_registry_poise = metrics_registry.clone();
@@ -139,54 +137,7 @@ pub async fn ayayabot(
             pre_command: |ctx: Context<'_>| Box::pin(pre_command(ctx)),
             command_check: Some(|ctx: Context<'_>| Box::pin(global_checks(ctx))),
             on_error: |error: FrameworkError<'_, Data, BotError>| Box::pin(error_handler(error)),
-            event_handler: |ctx, event, framework, data| {
-                Box::pin(event_handler(ctx, event, framework, data))
-            },
             ..Default::default()
-        })
-        .setup(move |ctx, _ready, framework| {
-            Box::pin(async move {
-                info!("Setup...");
-                poise::builtins::register_globally(ctx, &framework.options().commands)
-                    .await
-                    .context(GeneralSerenitySnafu)?;
-                let command_names = framework
-                    .options()
-                    .commands
-                    .iter()
-                    .map(|e| e.name.to_string())
-                    .collect::<Vec<_>>();
-                let mut command_categories = framework
-                    .options()
-                    .commands
-                    .iter()
-                    .filter_map(|e| e.category.clone())
-                    .collect::<Vec<_>>();
-                command_categories.sort(); // sort to search for dupes
-                command_categories.dedup(); // remove duplicates
-                let command_categories_map = framework
-                    .options()
-                    .commands
-                    .iter()
-                    .map(|e| (e.name.clone(), e.category.clone()))
-                    .collect::<HashMap<_, _>>();
-
-                Ok(Data {
-                    http: HttpClient::new(),
-                    songbird: manager_clone,
-                    user_id: Default::default(),
-                    data_manager,
-                    command_names,
-                    command_categories,
-                    command_categories_map,
-                    ytdlp_config_path,
-                    data_dir,
-                    linger_map: Default::default(),
-                    secret_key,
-                    metrics_registry: metrics_registry_poise,
-                    metrics,
-                })
-            })
         })
         .build();
 
@@ -196,7 +147,52 @@ pub async fn ayayabot(
         | serenity::GatewayIntents::GUILD_PRESENCES
         | serenity::GatewayIntents::GUILD_MEMBERS;
 
+    let command_names = framework
+        .options()
+        .commands
+        .iter()
+        .map(|e| e.name.to_string())
+        .collect::<Vec<_>>();
+    let mut command_categories = framework
+        .options()
+        .commands
+        .iter()
+        .filter_map(|e| e.category.clone())
+        .map(|e| e.to_string())
+        .collect::<Vec<_>>();
+    command_categories.sort(); // sort to search for dupes
+    command_categories.dedup(); // remove duplicates
+    let command_categories_map = framework
+        .options()
+        .commands
+        .iter()
+        .map(|e| {
+            (
+                e.name.to_string(),
+                e.category.clone().map(|e| e.to_string()),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+    let data = Arc::new(Data {
+        http: HttpClient::new(),
+        songbird: manager_clone,
+        user_id: Default::default(),
+        data_manager,
+        commands: gen_commands(),
+        command_names,
+        command_categories,
+        command_categories_map,
+        ytdlp_config_path,
+        data_dir,
+        linger_map: Default::default(),
+        secret_key,
+        metrics_registry: metrics_registry_poise,
+        metrics,
+    });
+
     let discord = Discord {
+        data,
         framework,
         token,
         intents,
@@ -224,6 +220,16 @@ pub async fn ayayabot(
     Ok(AyayaDiscordBot { discord, router })
 }
 
+/// Update command generation here
+fn gen_commands() -> Vec<poise::Command<Data, BotError>> {
+    let mut commands = vec![about(), help(), ping(), music(), gay(), tracker()];
+    commands.append(&mut voice_commands());
+    commands.append(&mut owner_commands());
+    commands.append(&mut stats_commands());
+    commands.append(&mut admin_commands());
+    commands
+}
+
 /// Global checks applied to all commands, unless command is excluded
 async fn global_checks(ctx: poise::Context<'_, Data, BotError>) -> Result<bool, BotError> {
     // check if a command is allowed to be called
@@ -234,14 +240,14 @@ async fn pre_command(ctx: poise::Context<'_, Data, BotError>) {
     // metric increase
     ctx.data()
         .metrics
-        .increase_command_call_counter(ctx.command().name.clone())
+        .increase_command_call_counter(ctx.command().name.to_string())
         .await;
 
     // logging span
     let span = tracing::span!(tracing::Level::TRACE, "pre_command");
     let _guard = span.enter();
 
-    let command_name = ctx.command().name.clone();
+    let command_name = ctx.command().name.to_string();
     let author = ctx.author().clone();
     let channel_id = ctx.channel_id();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
@@ -341,67 +347,6 @@ async fn setup_logging(loki: Option<LokiOpts>) -> Result<(), BotError> {
     Ok(())
 }
 
-async fn event_handler(
-    _ctx: &serenity::Context,
-    event: &serenity::FullEvent,
-    _framework: poise::FrameworkContext<'_, Data, BotError>,
-    _data: &Data,
-) -> Result<(), BotError> {
-    match event {
-        serenity::FullEvent::Ready { data_about_bot, .. } => {
-            let bot_user_name = &data_about_bot.user.name;
-            let session_id = &data_about_bot.session_id;
-            let bot_user_id = data_about_bot.user.id;
-            info!(
-                "Logged in as {} with session id {}.",
-                bot_user_name, session_id
-            );
-            {
-                let mut user_id_lock = _data.user_id.write().await;
-                *user_id_lock = bot_user_id;
-            }
-
-            setup_cookies(
-                &_data.data_manager,
-                &_data.ytdlp_config_path,
-                &_data.secret_key,
-            )
-            .await?;
-
-            // test yt-dlp
-            #[expect(clippy::zombie_processes)]
-            let child = std::process::Command::new("yt-dlp")
-                .arg("-v")
-                // .arg("--extractor-args")
-                // .arg("youtube:player_client=web_creator,mweb")
-                .arg("-O")
-                .arg("title,channel")
-                .arg("https://www.youtube.com/watch?v=1aPOj0ERTEc")
-                .stderr(std::process::Stdio::piped())
-                .spawn()
-                .expect("yt-dlp runs");
-            let stderr = child
-                .stderr
-                .ok_or_else(|| std::io::Error::other("Could not capture stdout"))
-                .expect("cant get yt-dlp stdout");
-
-            let reader = BufReader::new(stderr);
-
-            reader
-                .lines()
-                .map_while(Result::ok)
-                .for_each(|line| info!("yt-dlp setup: {}", line));
-            info!("yt-dlp checks done");
-            _ctx.set_activity(Some(serenity::ActivityData::watching("Hoshimachi Suichan")));
-        }
-        serenity::FullEvent::CacheReady { guilds } => {
-            info!("Cached guild info is ready for {} guilds.", guilds.len());
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
 async fn setup_cookies(
     data_manager: &DataManager,
     ytdlp_config_path: &Path,
@@ -445,7 +390,7 @@ async fn setup_cookies(
 /// Pong!
 #[poise::command(prefix_command, slash_command)]
 async fn ping(ctx: Context<'_>) -> Result<(), BotError> {
-    let ping = ctx.ping().await;
+    let ping = ctx.ping().await.unwrap_or_default();
     ctx.reply(format!("Pong! {}ms", ping.as_millis()))
         .await
         .context(GeneralSerenitySnafu)?;
@@ -506,15 +451,19 @@ Consider leaving a star on the Github page!
 #[poise::command(slash_command, prefix_command)]
 pub async fn help(
     ctx: Context<'_>,
-    #[description = "Specific command to show help about"] command: Option<String>,
+    #[description = "Specific command to show help about"] _command: Option<String>,
 ) -> Result<(), BotError> {
-    let configuration = poise::builtins::PrettyHelpConfiguration {
-        // [configure aspects about the help message here]
-        color: serenity::Color::DARK_GREEN.tuple(),
-        ephemeral: true,
-        ..Default::default()
-    };
-    poise::builtins::pretty_help(ctx, command.as_deref(), configuration)
+    // TODO: fix help command
+    // let configuration = poise::builtins::PrettyHelpConfiguration {
+    //     // [configure aspects about the help message here]
+    //     color: serenity::Color::DARK_GREEN.tuple(),
+    //     ephemeral: true,
+    //     ..Default::default()
+    // };
+    // poise::builtins::pretty_help(ctx, command.as_deref(), configuration)
+    //     .await
+    //     .context(GeneralSerenitySnafu)?;
+    ctx.reply("Help under construction, check back later!")
         .await
         .context(GeneralSerenitySnafu)?;
     Ok(())

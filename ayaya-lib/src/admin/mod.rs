@@ -195,37 +195,37 @@ pub async fn list_command_restrictions(
         .context(DataManagerSnafu)?;
 
     let mut message = serenity::MessageBuilder::default();
-    message.push_line(format!("# Restrictions info for command: {}", &command));
+    message = message.push_line(format!("# Restrictions info for command: {}", &command).as_str());
 
-    message.push_line("### Allowed Users");
+    message = message.push_line("### Allowed Users");
     for (i, model) in allowed_users.iter().enumerate() {
         let user = serenity::UserId::new(model.user_id as u64)
             .to_user(ctx)
             .await
             .context(GeneralSerenitySnafu)?;
-        message.push_line(format!("{}. {}", i + 1, user.name));
+        message = message.push_line(format!("{}. {}", i + 1, user.name).as_str());
     }
-    message.push_line("### Command Roles");
+    message = message.push_line("### Command Roles");
     let roles = serenity::GuildId::new(guild_id)
-        .roles(ctx)
+        .roles(ctx.http())
         .await
         .context(GeneralSerenitySnafu)?;
     for (i, model) in required_roles_command.iter().enumerate() {
         let role = if let Some(role) = roles.get(&serenity::RoleId::new(model.role_id as u64)) {
-            role.name.clone()
+            role.name.to_string()
         } else {
             "Unknown Role".to_string()
         };
-        message.push_line(format!("{}. {}", i + 1, role));
+        message = message.push_line(format!("{}. {}", i + 1, role).as_str());
     }
-    message.push_line("### Category Roles");
+    message = message.push_line("### Category Roles");
     for (i, model) in required_roles_category.iter().enumerate() {
         let role = if let Some(role) = roles.get(&serenity::RoleId::new(model.role_id as u64)) {
-            role.name.clone()
+            role.name.to_string()
         } else {
             "Unknown Role".to_string()
         };
-        message.push_line(format!("{}. {}", i + 1, role));
+        message = message.push_line(format!("{}. {}", i + 1, role).as_str());
     }
 
     let embed = serenity::CreateEmbed::default().description(message.to_string());
@@ -236,12 +236,17 @@ pub async fn list_command_restrictions(
     Ok(())
 }
 
-async fn autocomplete_command_categories(ctx: Context<'_>, partial: &'_ str) -> Vec<String> {
+async fn autocomplete_command_categories<'a>(
+    ctx: Context<'_>,
+    partial: &'_ str,
+) -> serenity::CreateAutocompleteResponse<'a> {
     let partial = partial.to_lowercase();
-    let command_categories = &ctx.data().command_categories;
-    command_categories
-        .iter()
+    let command_categories = ctx.data().command_categories.clone();
+    let filtered = command_categories
+        .into_iter()
         .filter(|s| s.contains(&partial))
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>()
+        .map(|s| serenity::AutocompleteChoice::new(s.to_string(), s.to_string()))
+        .collect::<Vec<_>>();
+
+    serenity::CreateAutocompleteResponse::new().set_choices(filtered)
 }

@@ -163,7 +163,7 @@ pub async fn yt_search(term: &str, count: Option<usize>) -> Result<Vec<YoutubeMe
     Ok(metadata_vec)
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Copy)]
 pub enum EmbedOperation {
     YoutubeSearch,
     AddToQueue,
@@ -205,7 +205,7 @@ impl std::fmt::Display for EmbedOperation {
 }
 
 /// Template for all embeds
-pub fn embed_template(operation: &EmbedOperation) -> serenity::CreateEmbed {
+pub fn embed_template<'a>(operation: EmbedOperation) -> serenity::CreateEmbed<'a> {
     serenity::CreateEmbed::default()
         .author(
             serenity::CreateEmbedAuthor::new(format!("{operation}")).icon_url(
@@ -228,28 +228,27 @@ pub fn embed_template(operation: &EmbedOperation) -> serenity::CreateEmbed {
 // TODO: extract static pictures out to somewhere
 
 /// Converts AuxMetadata to a pretty embed
-pub fn metadata_to_embed(
+pub fn metadata_to_embed<'a>(
     operation: EmbedOperation,
     metadata: &YoutubeMetadata,
     track_state: Option<&songbird::tracks::TrackState>,
-) -> serenity::CreateEmbed {
+) -> serenity::CreateEmbed<'a> {
     let mut description = serenity::MessageBuilder::default();
-    description.push_line(format!(
-        "### {}",
-        metadata.title.clone().unwrap_or_unknown()
-    ));
+    description = description
+        .push_line(format!("### {}", metadata.title.clone().unwrap_or_unknown()).as_str());
 
     match operation {
         EmbedOperation::Seek(secs) => {
-            description.push_line(format!("Track seeked to {secs} seconds"));
+            description = description.push_line(format!("Track seeked to {secs} seconds").as_str());
         }
         EmbedOperation::MoveInQueue { source, target } => {
-            description.push_line(format!("Queue item {source} is moved to {target}"));
+            description =
+                description.push_line(format!("Queue item {source} is moved to {target}").as_str());
         }
         _ => (),
     };
 
-    let mut embed = embed_template(&operation).description(description.to_string());
+    let mut embed = embed_template(operation).description(description.to_string());
 
     embed = embed.fields([
         (
@@ -321,6 +320,7 @@ pub async fn create_search_interaction(
     ctx: Context<'_>,
     metadata_vec: Vec<YoutubeMetadata>,
 ) -> Result<String, BotError> {
+    // TODO: use component v2
     // Define some unique identifiers for the navigation buttons
     let ctx_id = ctx.id();
     let prev_button_id = format!("{ctx_id}prev");
@@ -350,7 +350,8 @@ pub async fn create_search_interaction(
         }
         buttons.push(serenity::CreateButton::new(&next_button_id).emoji('▶'));
 
-        let components = serenity::CreateActionRow::Buttons(buttons);
+        let components = serenity::CreateActionRow::Buttons(buttons.into());
+        let components = serenity::CreateComponent::ActionRow(components);
         reply.components(vec![components])
     };
 
@@ -358,13 +359,14 @@ pub async fn create_search_interaction(
 
     // Loop through incoming interactions with the navigation buttons
     let mut current_page = 0;
-    while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
-        // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
-        // button was pressed
-        .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-        // Timeout when no navigation button has been pressed for 1 minute
-        .timeout(std::time::Duration::from_secs(60))
-        .await
+    while let Some(press) =
+        serenity::collector::ComponentInteractionCollector::new(ctx.serenity_context())
+            // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
+            // button was pressed
+            .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+            // Timeout when no navigation button has been pressed for 1 minute
+            .timeout(std::time::Duration::from_secs(60))
+            .await
     {
         // Depending on which button was pressed, go to next or previous page
         if press.data.custom_id == next_button_id {
@@ -403,14 +405,15 @@ pub async fn create_search_interaction(
             }
             buttons.push(serenity::CreateButton::new(&next_button_id).emoji('▶'));
 
-            let components = serenity::CreateActionRow::Buttons(buttons);
+            let components = serenity::CreateActionRow::Buttons(buttons.into());
+            let components = serenity::CreateComponent::ActionRow(components);
             response.components(vec![components])
         };
 
         // Update the message with the new page contents
         press
             .create_response(
-                ctx.serenity_context(),
+                ctx.http(),
                 serenity::CreateInteractionResponse::UpdateMessage(response),
             )
             .await
@@ -419,18 +422,16 @@ pub async fn create_search_interaction(
     Err(MusicCommandError::SearchTimeout.into())
 }
 
-pub fn playlist_to_embed(
+pub fn playlist_to_embed<'a>(
     operation: &EmbedOperation,
     playlist: &Playlist,
     requester: Option<&serenity::User>,
-) -> serenity::CreateEmbed {
+) -> serenity::CreateEmbed<'a> {
     let mut description = serenity::MessageBuilder::default();
-    description.push_line(format!(
-        "### {}",
-        playlist.title.clone().unwrap_or_unknown()
-    ));
+    description = description
+        .push_line(format!("### {}", playlist.title.clone().unwrap_or_unknown()).as_str());
 
-    let mut embed = embed_template(operation).description(description.to_string());
+    let mut embed = embed_template(*operation).description(description.to_string());
 
     embed = embed.fields([(
         "Uploader",

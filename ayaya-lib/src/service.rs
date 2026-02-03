@@ -3,10 +3,10 @@ use std::sync::Arc;
 use axum::{async_trait, http::StatusCode};
 use axum::{extract::FromRequestParts, http::request::Parts};
 use axum_auth::{AuthBasicCustom, Rejection};
-use poise::serenity_prelude as serenity;
+use poise::serenity_prelude::{self as serenity, Token};
 use snafu::{ResultExt, Snafu};
 
-use crate::{Data, error::BotError};
+use crate::{Data, error::BotError, event_handler::StartupHandler};
 
 pub struct AyayaDiscordBot {
     pub discord: Discord,
@@ -18,6 +18,7 @@ pub struct Discord {
     pub token: String,
     pub intents: serenity::GatewayIntents,
     pub voice_manager_arc: Arc<songbird::Songbird>,
+    pub data: Arc<Data>,
 }
 
 use anyhow::Result;
@@ -33,11 +34,16 @@ impl AyayaDiscordBot {
         )
         .into_future();
 
-        let mut client = serenity::ClientBuilder::new(self.discord.token, self.discord.intents)
-            .voice_manager_arc(self.discord.voice_manager_arc)
-            .framework(self.discord.framework)
-            .await
-            .context(SerenityClientBuildSnafu)?;
+        let mut client = serenity::ClientBuilder::new(
+            Token::try_from(self.discord.token).unwrap(),
+            self.discord.intents,
+        )
+        .voice_manager(self.discord.voice_manager_arc)
+        .data(self.discord.data)
+        .event_handler(Arc::new(StartupHandler))
+        .framework(Box::new(self.discord.framework))
+        .await
+        .context(SerenityClientBuildSnafu)?;
 
         tokio::select! {
             _ = client.start_autosharded() => {},
@@ -61,11 +67,16 @@ impl shuttle_runtime::Service for AyayaDiscordBot {
         )
         .into_future();
 
-        let mut client = serenity::ClientBuilder::new(self.discord.token, self.discord.intents)
-            .voice_manager_arc(self.discord.voice_manager_arc)
-            .framework(self.discord.framework)
-            .await
-            .map_err(shuttle_runtime::CustomError::new)?;
+        let mut client = serenity::ClientBuilder::new(
+            Token::try_from(self.discord.token).unwrap(),
+            self.discord.intents,
+        )
+        .data(self.discord.data)
+        .voice_manager(self.discord.voice_manager_arc)
+        .framework(Box::new(self.discord.framework))
+        .event_handler(Arc::new(StartupHandler))
+        .await
+        .map_err(shuttle_runtime::CustomError::new)?;
 
         tokio::select! {
             _ = client.start_autosharded() => {},

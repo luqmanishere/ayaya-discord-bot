@@ -71,11 +71,15 @@ pub fn voice_commands() -> Commands {
     aliases("m")
 )]
 pub async fn music(ctx: Context<'_>) -> Result<(), BotError> {
-    let configuration = poise::builtins::HelpConfiguration {
-        // [configure aspects about the help message here]
-        ..Default::default()
-    };
-    poise::builtins::help(ctx, Some(&ctx.command().name), configuration)
+    // TODO: implement help again
+    // let configuration = poise::builtins::HelpConfiguration {
+    //     // [configure aspects about the help message here]
+    //     ..Default::default()
+    // };
+    // poise::builtins::help(ctx, Some(&ctx.command().name), configuration)
+    //     .await
+    //     .context(GeneralSerenitySnafu)?;
+    ctx.reply("Help is under construction")
         .await
         .context(GeneralSerenitySnafu)?;
     Ok(())

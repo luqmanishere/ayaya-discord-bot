@@ -194,7 +194,7 @@ pub async fn play_inner(
 #[tracing::instrument(skip(ctx, call, sources))]
 async fn handle_sources(
     call: Option<Arc<Mutex<songbird::Call>>>,
-    calling_channel_id: serenity::ChannelId,
+    calling_channel_id: serenity::GenericChannelId,
     mut sources: Vec<youtube::YoutubeDl>,
     ctx: Context<'_>,
     next: bool,
@@ -274,7 +274,7 @@ async fn insert_source(
     mut source: youtube::YoutubeDl,
     call: Option<Arc<Mutex<songbird::Call>>>,
     serenity_http: Arc<serenity::Http>,
-    calling_channel_id: serenity::ChannelId,
+    calling_channel_id: serenity::GenericChannelId,
     stats: StatsManager,
     user: serenity::User,
     guild_id: serenity::GuildId,
@@ -361,10 +361,10 @@ async fn insert_source(
 }
 
 /// Autocomplete for the play commands
-pub async fn autocomplete_play(
+pub async fn autocomplete_play<'a>(
     ctx: Context<'_>,
     partial: &str,
-) -> impl Iterator<Item = serenity::AutocompleteChoice> {
+) -> serenity::CreateAutocompleteResponse<'a> {
     let guild_id = GuildInfo::from_ctx(ctx).unwrap_or_default().guild_id;
     let user = ctx.author();
     // make all comparisons lowercase == easier comparisons
@@ -383,7 +383,7 @@ pub async fn autocomplete_play(
     completions.sort_by_key(|e| e.count);
     completions.reverse();
 
-    completions
+    let completions = completions
         .into_iter()
         .filter(move |s| {
             s.query.to_lowercase().contains(&partial)
@@ -414,8 +414,11 @@ pub async fn autocomplete_play(
                 }
             };
 
-            serenity::AutocompleteChoice::new(first_n_chars(name.as_str(), 100), query)
+            serenity::AutocompleteChoice::new(first_n_chars(name.as_str(), 100).to_string(), query)
         })
+        .collect::<Vec<_>>();
+
+    serenity::CreateAutocompleteResponse::new().set_choices(completions)
 }
 
 /// Truncate chars to a provided index

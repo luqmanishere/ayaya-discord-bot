@@ -77,6 +77,7 @@ pub async fn server_all_time_single(
     #[autocomplete = "autocomplete_command_names"] command: String,
 ) -> CommandResult {
     ctx.defer().await.context(GeneralSerenitySnafu)?;
+    let http = ctx.http();
 
     let data_manager = ctx.data().data_manager.clone();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
@@ -90,22 +91,21 @@ pub async fn server_all_time_single(
             model.reverse();
 
             // numbering
-            let desc = model
-                .iter()
-                .enumerate()
-                .map(|(i, e)| {
-                    format!(
-                        "{}. {}: {}",
-                        i + 1,
-                        match ctx.cache().user(e.user_id as u64) {
-                            Some(res) => res.display_name().to_string(),
-                            None => format!("Unknown({})", e.user_id),
-                        },
-                        e.count
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
+            let mut lines = Vec::new();
+            for (i, e) in model.iter().enumerate() {
+                let line = format!(
+                    "{}. {}: {}",
+                    i + 1,
+                    match serenity::UserId::new(e.user_id as u64).to_user(http).await {
+                        Ok(res) => res.display_name().to_string(),
+                        Err(_) => format!("Unknown({})", e.user_id),
+                    },
+                    e.count
+                );
+                lines.push(line);
+            }
+
+            let desc = lines.join("\n");
 
             let embed = serenity::CreateEmbed::new()
                 .title(format!("All users calls for command: {command}"))

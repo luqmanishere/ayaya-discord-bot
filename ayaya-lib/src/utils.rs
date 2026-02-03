@@ -36,15 +36,15 @@ pub fn get_guild(ctx: Context<'_>) -> Result<serenity::Guild, BotError> {
 
 pub fn get_guild_name(ctx: Context<'_>) -> Result<String, BotError> {
     Ok(get_guild_id(ctx)?
-        .name(ctx)
+        .name(ctx.cache())
         .unwrap_or("Unknown Guild".to_string()))
 }
 
 pub fn songbird_channel_to_serenity_channel(
     songbird_voice_channel_id: songbird::id::ChannelId,
-) -> serenity::ChannelId {
-    let channel_id: u64 = songbird_voice_channel_id.0.into();
-    serenity::ChannelId::from(channel_id)
+) -> serenity::all::GenericChannelId {
+    let channel_id: u64 = songbird_voice_channel_id.get();
+    serenity::all::GenericChannelId::new(channel_id)
 }
 
 #[derive(Debug, Clone, Default)]
@@ -75,14 +75,25 @@ impl GuildInfo {
 #[derive(Debug, Clone)]
 pub struct ChannelInfo {
     pub channel_name: String,
-    pub channel_id: serenity::ChannelId,
+    pub channel_id: serenity::GenericChannelId,
     pub is_voice: bool,
 }
 
 impl ChannelInfo {
     pub async fn from_ctx(ctx: Context<'_>, is_voice: bool) -> Result<Self, BotError> {
         let channel_id = ctx.channel_id();
-        let channel_name = channel_id.name(ctx).await.context(GeneralSerenitySnafu)?;
+        let channel = channel_id
+            .to_channel(ctx.http(), None)
+            .await
+            .context(GeneralSerenitySnafu)?;
+        let channel_name = match channel {
+            serenity::Channel::Guild(guild_channel) => guild_channel.base.name.to_string(),
+            serenity::Channel::GuildThread(guild_thread) => guild_thread.base.name.to_string(),
+            serenity::Channel::Private(private_channel) => {
+                private_channel.recipient.display_name().to_string()
+            }
+            _ => todo!(),
+        };
         Ok(Self {
             channel_name,
             channel_id,
@@ -100,7 +111,18 @@ impl ChannelInfo {
                 guild_info: guild_info.clone(),
             },
         )?);
-        let channel_name = channel_id.name(ctx).await.context(GeneralSerenitySnafu)?;
+        let channel = channel_id
+            .to_channel(ctx.http(), Some(guild_info.guild_id))
+            .await
+            .unwrap();
+        let channel_name = match channel {
+            serenity::Channel::Guild(guild_channel) => guild_channel.base.name.to_string(),
+            serenity::Channel::GuildThread(guild_thread) => guild_thread.base.name.to_string(),
+            serenity::Channel::Private(private_channel) => {
+                private_channel.recipient.display_name().to_string()
+            }
+            _ => todo!(),
+        };
         Ok(Self {
             channel_name,
             channel_id,
@@ -110,10 +132,18 @@ impl ChannelInfo {
 
     pub async fn from_serenity_id(
         ctx: Context<'_>,
-        channel_id: serenity::ChannelId,
+        channel_id: serenity::GenericChannelId,
         is_voice: bool,
     ) -> Result<Self, BotError> {
-        let channel_name = channel_id.name(ctx).await.context(GeneralSerenitySnafu)?;
+        let channel = channel_id.to_channel(ctx.http(), None).await.unwrap();
+        let channel_name = match channel {
+            serenity::Channel::Guild(guild_channel) => guild_channel.base.name.to_string(),
+            serenity::Channel::GuildThread(guild_thread) => guild_thread.base.name.to_string(),
+            serenity::Channel::Private(private_channel) => {
+                private_channel.recipient.display_name().to_string()
+            }
+            _ => todo!(),
+        };
         Ok(Self {
             channel_name,
             channel_id,
@@ -123,14 +153,19 @@ impl ChannelInfo {
 }
 
 /// Autocomplete function for command names
-pub async fn autocomplete_command_names(ctx: Context<'_>, partial: &str) -> Vec<String> {
+pub async fn autocomplete_command_names<'a>(
+    ctx: Context<'_>,
+    partial: &str,
+) -> serenity::CreateAutocompleteResponse<'a> {
     let partial = partial.to_lowercase();
     let command_names = &ctx.data().command_names;
-    command_names
+    let filtered = command_names
         .iter()
         .filter(|s| s.contains(&partial))
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>()
+        .map(|s| serenity::AutocompleteChoice::new(s.to_string(), s.to_string()))
+        .collect::<Vec<_>>();
+
+    serenity::CreateAutocompleteResponse::new().set_choices(filtered)
 }
 
 /// Check command to determine if a commmand is allowed for a user.
@@ -147,11 +182,7 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
     let user_id = ctx.author().id.get();
     let guild_id = GuildInfo::guild_id_or_0(ctx);
     let command = ctx.command().name.clone();
-    let command_category = ctx
-        .command()
-        .category
-        .clone()
-        .unwrap_or("Unknown".to_string());
+    let command_category = ctx.command().category.clone().unwrap_or("Unknown".into());
 
     // TODO: cache
 
@@ -176,7 +207,7 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
             let role_id = role.role_id as u64;
             if ctx
                 .author()
-                .has_role(ctx, guild_id, role_id)
+                .has_role(ctx, guild_id.into(), role_id.into())
                 .await
                 .context(GeneralSerenitySnafu)?
             {
@@ -204,7 +235,7 @@ pub async fn check_command_allowed(ctx: Context<'_>) -> Result<bool, BotError> {
                 let role_id = role.role_id as u64;
                 if ctx
                     .author()
-                    .has_role(ctx, guild_id, role_id)
+                    .has_role(ctx, guild_id.into(), role_id.into())
                     .await
                     .context(GeneralSerenitySnafu)?
                 {
