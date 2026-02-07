@@ -8,6 +8,7 @@ mod m20250901_092422_wuwa_pull_tracker;
 mod m20251104_000001_dashboard_allowlist;
 mod m20251104_000002_dashboard_tokens;
 mod m20260127_000001_wuwa_import_state;
+mod m20260207_060550_akend_pull_tracker;
 
 pub struct Migrator;
 
@@ -22,6 +23,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20251104_000001_dashboard_allowlist::Migration),
             Box::new(m20251104_000002_dashboard_tokens::Migration),
             Box::new(m20260127_000001_wuwa_import_state::Migration),
+            Box::new(m20260207_060550_akend_pull_tracker::Migration),
         ]
     }
 }

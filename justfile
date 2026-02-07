@@ -14,20 +14,20 @@ fresh-sqlite:
 
 # generate entities for sqlite db
 generate-sqlite-all:
-    sea-orm-cli generate entity --date-time-crate time -o entity-sqlite/src -u "sqlite://dev/stats.sqlite?mode=rwc" -l --with-prelude all
+    sea-orm-cli generate entity --date-time-crate time -o crates/ayaya-db/src -u "sqlite://dev/stats.sqlite?mode=rwc"
 
 generate-sqlite-tables TABLES:
-    sea-orm-cli generate entity --date-time-crate time -o entity-sqlite/src -u "sqlite://dev/stats.sqlite?mode=rwc" -l --with-prelude all --tables {{TABLES}}
+    sea-orm-cli generate entity --date-time-crate time -o crates/ayaya-db/src -u "sqlite://dev/stats.sqlite?mode=rwc" --tables {{TABLES}}
 
 # generate a new migration with NAME
 generate-migration NAME:
-    sea-orm-cli migrate generate -d migration-sqlite -u {{sqlite-url}} {{NAME}}
+    sea-orm-cli migrate generate -d crates/ayaya-db/migration -u {{sqlite-url}} {{NAME}}
 
 db-up:
-    sea-orm-cli migrate up -d migration-sqlite -u {{sqlite-url}}
+    sea-orm-cli migrate up -d crates/ayaya-db/migration -u {{sqlite-url}}
 
 db-down:
-    sea-orm-cli migrate down -d migration-sqlite -u {{sqlite-url}}
+    sea-orm-cli migrate down -d crates/ayaya-db/migration -u {{sqlite-url}}
 
 bump:
     #!/usr/bin/env bash

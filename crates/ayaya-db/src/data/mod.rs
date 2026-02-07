@@ -1,5 +1,6 @@
 //! Manage database connection and caching
 //!
+pub mod akend_tracker;
 pub mod dashboard;
 pub mod permissions;
 pub mod sounds;
@@ -9,8 +10,8 @@ pub mod wuwa_tracker;
 
 use std::sync::{Arc, Mutex};
 
-use crate::entity::prelude::*;
 use crate::error::DataError;
+use crate::{data::akend_tracker::AkEndTracker, entity::prelude::*};
 use lru_mem::LruCache;
 use migration::{Migrator as SqliteMigrator, MigratorTrait};
 use permissions::Permissions;
@@ -54,6 +55,7 @@ pub struct DataManager {
     stats: StatsManager,
     sounds: SoundsManager,
     wuwa_tracker: WuwaPullsManager,
+    akend_tracker: AkEndTracker,
     autocomplete_cache: Autocomplete,
 }
 
@@ -78,6 +80,7 @@ impl DataManager {
         let stats = StatsManager::new(db.clone(), metrics_handler.clone());
         let sounds = SoundsManager::new(db.clone(), metrics_handler.clone());
         let wuwa_tracker = WuwaPullsManager::new(db.clone(), metrics_handler.clone());
+        let akend_tracker = AkEndTracker::new(db.clone(), metrics_handler.clone());
         Ok(Self {
             db,
             metrics_handler,
@@ -85,6 +88,7 @@ impl DataManager {
             stats,
             sounds,
             wuwa_tracker,
+            akend_tracker,
             autocomplete_cache: Arc::new(Mutex::new(LruCache::new(1000 * 1024))),
         })
     }
@@ -103,6 +107,10 @@ impl DataManager {
 
     pub fn wuwa_tracker(&self) -> WuwaPullsManager {
         self.wuwa_tracker.clone()
+    }
+
+    pub fn akend_tracker(&self) -> AkEndTracker {
+        self.akend_tracker.clone()
     }
 
     /// Log command calls to the database. Will also increment the command counter.

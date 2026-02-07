@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use snafu::ResultExt;
 use strum::IntoEnumIterator;
 use url::Url;
 
@@ -117,7 +116,7 @@ impl GameAdapter for AkEndAdapter {
         session: &Self::Session,
         client: &reqwest::Client,
     ) -> Result<Vec<Self::Pull>, Self::Error> {
-        // TODO: absolutely bonkers logic incoming
+        // absolutely bonkers logic incoming
 
         let mut pulls = vec![];
 

@@ -166,6 +166,13 @@ pub enum BotError {
     GenericError {
         source: Box<dyn std::error::Error + Send + Sync>,
     },
+
+    #[snafu(whatever, display("{message}"))]
+    Whatever {
+        message: String,
+        #[snafu(source(from(Box<dyn std::error::Error + Send + Sync>, Some)))]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
 }
 
 pub trait UserFriendlyError {
@@ -238,6 +245,7 @@ impl ErrorName for BotError {
             BotError::GenericError { .. } => "generic_error",
             BotError::AgeKeyFromStr { .. } => "age_key_from_str_error",
             BotError::AgeDecrypt { .. } => "age_decrypt",
+            BotError::Whatever { .. } => "whatever",
         };
         format!("main::{name}")
     }
