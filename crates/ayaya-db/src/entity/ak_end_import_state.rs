@@ -3,22 +3,14 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "ak_end_pull")]
+#[sea_orm(table_name = "ak_end_import_state")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub id: Uuid,
-    pub user_id: i64,
     pub ak_end_user_id: i64,
-    pub pool_type: String,
+    #[sea_orm(primary_key, auto_increment = false)]
     pub pool_id: String,
-    pub pool_name: String,
-    pub char_id: String,
-    pub char_name: String,
-    pub rarity: i32,
-    pub is_free: bool,
-    pub is_new: bool,
-    pub time: TimeDateTimeWithTimeZone,
-    pub seq_id: String,
+    pub last_time: TimeDateTimeWithTimeZone,
+    pub count_at_time: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

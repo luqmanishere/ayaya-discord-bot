@@ -46,6 +46,31 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_table(
+                Table::create()
+                    .table(AkEndImportState::Table)
+                    .if_not_exists()
+                    .col(integer(AkEndImportState::AkEndUserId).not_null())
+                    .col(string(AkEndImportState::PoolId).not_null())
+                    .col(timestamp_with_time_zone(AkEndImportState::LastTime).not_null())
+                    .col(integer(AkEndImportState::CountAtTime).not_null())
+                    .primary_key(
+                        Index::create()
+                            .col(AkEndImportState::AkEndUserId)
+                            .col(AkEndImportState::PoolId),
+                    )
+                    .foreign_key(
+                        ForeignKeyCreateStatement::new()
+                            .from_tbl(AkEndImportState::Table)
+                            .from_col(AkEndImportState::AkEndUserId)
+                            .to_tbl(AkEndUser::Table)
+                            .to_col(AkEndUser::AkEndUserId),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -57,6 +82,11 @@ impl MigrationTrait for Migration {
         manager
             .drop_table(Table::drop().table(AkEndPull::Table).to_owned())
             .await?;
+
+        manager
+            .drop_table(Table::drop().table(AkEndImportState::Table).to_owned())
+            .await?;
+
         Ok(())
     }
 }
@@ -85,4 +115,13 @@ enum AkEndUser {
     UserId,
     AkEndUserId,
     UserDesc,
+}
+
+#[derive(DeriveIden)]
+enum AkEndImportState {
+    Table,
+    AkEndUserId,
+    PoolId,
+    LastTime,
+    CountAtTime,
 }

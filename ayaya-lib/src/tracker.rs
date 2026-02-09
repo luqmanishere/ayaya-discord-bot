@@ -12,8 +12,8 @@ use crate::{
 };
 
 use ayaya_tracker::gacha_tracker::{
-    AdapterKind, CardPoolType, GameAdapter, GameId, TrackerError, adapter_for,
-    apply_import_boundary,
+    AdapterKind, AkEndPullDto, CardPoolType, GameAdapter, GameId, TrackerError, WuwaPullDto,
+    adapter_for, apply_import_boundary,
 };
 
 #[poise::command(slash_command, aliases("t"))]
@@ -133,6 +133,16 @@ enum SupportedGames {
     WutheringWaves,
     #[strum(to_string = "Arknights Endfield")]
     AkEnd,
+}
+
+fn parse_akend_ts(raw: &str) -> time::OffsetDateTime {
+    let value = raw.parse::<i128>().expect("unix timestamp");
+    if value > 1_000_000_000_000 {
+        let nanos = value.checked_mul(1_000_000).expect("unix timestamp nanos");
+        time::OffsetDateTime::from_unix_timestamp_nanos(nanos).expect("proper unix timestamp")
+    } else {
+        time::OffsetDateTime::from_unix_timestamp(value as i64).expect("proper unix timestamp")
+    }
 }
 
 impl SupportedGames {
@@ -393,11 +403,7 @@ async fn add_account_modal_ui(
     let user = ctx.author();
     let data = ctx.data().data_manager.clone();
 
-    let title = format!(
-        "# Add {} Account for {}",
-        game.to_string(),
-        user.display_name()
-    );
+    let title = format!("Add {} Account", game.to_string(),);
 
     let account_id_custom_id = format!("{}_account_id", user.id);
     let account_id_component =
@@ -551,6 +557,26 @@ async fn pull_import_modal(
                 .get_akend_users_by_user_id(user.id.get())
                 .await
                 .context(DataManagerSnafu)?;
+            if list.is_empty() {
+                pre_interaction
+                    .create_response(ctx.http(), serenity::CreateInteractionResponse::Acknowledge)
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+                let message = format!(
+                    "No {} accounts found. Please register an account via the tracker menu.",
+                    game.to_string()
+                );
+                pre_interaction
+                    .create_followup(
+                        ctx.http(),
+                        serenity::CreateInteractionResponseFollowup::new()
+                            .ephemeral(true)
+                            .content(message),
+                    )
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+                return Ok(());
+            };
             let list = list
                 .iter()
                 .map(|e| {
@@ -611,22 +637,38 @@ async fn pull_import_modal(
                     component: label_component,
                     ..
                 }) = component
-                    && let serenity::LabelComponent::InputText(input_text) = label_component
                 {
-                    let custom_id = input_text.custom_id.as_str();
-                    if custom_id == link_custom_id {
-                        link = input_text.value.clone().unwrap_or_default().into_string();
-                    } else if custom_id == user_account_select_component_custom_id {
-                        match input_text.value.clone().unwrap_or_default().parse::<i64>() {
-                            Ok(val) => game_account_id = val,
-                            Err(_) => {
-                                // TODO: better error handling here
-                                pre_interaction.create_followup(ctx.http(), serenity::CreateInteractionResponseFollowup::new().content("Invalid Account UID. Ensure numbers only and no spaces ")).await.context(GeneralSerenitySnafu)?;
-                                whatever!("Unable to create account: invalid account UID provided");
+                    match label_component {
+                        serenity::LabelComponent::InputText(input_text) => {
+                            let comp_custom_id = input_text.custom_id.as_str();
+                            if comp_custom_id == link_custom_id {
+                                link = input_text.value.clone().unwrap_or_default().into_string();
+                            } else {
+                                tracing::warn!("Unknown interaction custom_id: {comp_custom_id}");
                             }
                         }
-                    } else {
-                        tracing::warn!("Unknown interaction custom_id: {custom_id}");
+                        serenity::LabelComponent::SelectMenu(select_menu) => {
+                            let comp_custom_id = select_menu.custom_id.as_str();
+                            if comp_custom_id == user_account_select_component_custom_id {
+                                match select_menu.values[0].clone().parse::<i64>() {
+                                    Ok(val) => {
+                                        tracing::info!(
+                                            "AkEnd import: entered account UID: {}",
+                                            val
+                                        );
+                                        game_account_id = val;
+                                    }
+                                    Err(_) => {
+                                        // TODO: better error handling here
+                                        modal_interaction.create_followup(ctx.http(), serenity::CreateInteractionResponseFollowup::new().content("Invalid Account UID. Ensure numbers only and no spaces ")).await.context(GeneralSerenitySnafu)?;
+                                        whatever!(
+                                            "Unable to create account: invalid account UID provided"
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -736,7 +778,150 @@ async fn pull_import_modal(
                 .context(GeneralSerenitySnafu)?;
             }
             AdapterKind::AkEnd(adapter) => {
-                todo!()
+                tracing::info!(
+                    "AkEnd import start: user_id={}, game_account_id={}, link_len={}",
+                    user.id.get(),
+                    game_account_id,
+                    link.len()
+                );
+                let session = adapter.parse_link(&link).context(TrackerSnafu)?;
+
+                let pulls_manager = ctx.data().data_manager.akend_tracker();
+
+                tracing::info!("AkEnd import: fetching akend users for discord user");
+                let user_game_accounts = pulls_manager
+                    .get_akend_users_by_user_id(user.id.get())
+                    .await
+                    .context(DataManagerSnafu)?;
+
+                if let Some(model) = user_game_accounts
+                    .iter()
+                    .find(|e| e.ak_end_user_id == game_account_id)
+                {
+                    tracing::info!(
+                        "AkEnd import: matched account {} for user {}",
+                        model.ak_end_user_id,
+                        user.id.get()
+                    );
+                    tracing::info!("AkEnd import: fetching pulls from adapter");
+                    let pulls = adapter
+                        .fetch_pulls(&session, &ctx.data().http)
+                        .await
+                        .context(TrackerSnafu)?;
+
+                    let pulls_len = pulls.len();
+                    tracing::info!("length: {pulls_len}");
+
+                    if pulls.is_empty() {
+                        modal_interaction
+                            .create_followup(
+                                ctx.http(),
+                                serenity::CreateInteractionResponseFollowup::new()
+                                    .ephemeral(true)
+                                    .content("No new records found."),
+                            )
+                            .await
+                            .context(GeneralSerenitySnafu)?;
+                        return Ok(());
+                    }
+
+                    let mut pulls_by_pool: HashMap<String, Vec<_>> = HashMap::new();
+                    for pull in pulls {
+                        let pool_id = adapter.pool_id(&pull).to_string();
+                        pulls_by_pool.entry(pool_id).or_default().push(pull);
+                    }
+
+                    let mut new_pulls = Vec::new();
+                    let mut updated_boundaries = Vec::new();
+
+                    for (pool_id, mut pool_pulls) in pulls_by_pool {
+                        tracing::info!("AkEnd import: pool {pool_id} size={}", pool_pulls.len());
+                        pool_pulls.sort_by_key(|p| parse_akend_ts(&p.gacha_ts));
+
+                        tracing::info!("AkEnd import: fetching import boundary for pool {pool_id}");
+                        let boundary = pulls_manager
+                            .get_akend_import_state(model.ak_end_user_id, &pool_id)
+                            .await
+                            .context(DataManagerSnafu)?;
+
+                        let filtered = apply_import_boundary(&pool_pulls, boundary, |p| {
+                            parse_akend_ts(&p.gacha_ts)
+                        });
+
+                        new_pulls.extend(filtered.new_items.into_iter().cloned());
+
+                        if let Some(next_boundary) = filtered.next_boundary {
+                            updated_boundaries.push((pool_id, next_boundary));
+                        }
+                    }
+
+                    if new_pulls.is_empty() {
+                        modal_interaction
+                            .create_followup(
+                                ctx.http(),
+                                serenity::CreateInteractionResponseFollowup::new()
+                                    .ephemeral(true)
+                                    .content("No new records found."),
+                            )
+                            .await
+                            .context(GeneralSerenitySnafu)?;
+
+                        return Ok(());
+                    }
+
+                    let records: Vec<AkEndPullDto> = new_pulls
+                        .into_iter()
+                        .map(|pull| {
+                            adapter.normalize_pull(pull, model.ak_end_user_id.to_string().as_str())
+                        })
+                        .collect();
+
+                    tracing::info!(
+                        "AkEnd import: inserting {} records for account {}",
+                        records.len(),
+                        model.ak_end_user_id
+                    );
+                    let inserted = pulls_manager
+                        .insert_akend_pull_records(user.id.get(), model.ak_end_user_id, records)
+                        .await
+                        .context(DataManagerSnafu)?;
+
+                    tracing::info!(
+                        "AkEnd import: updating {} boundaries",
+                        updated_boundaries.len()
+                    );
+                    for (pool_id, boundary) in updated_boundaries {
+                        pulls_manager
+                            .upsert_akend_import_state(model.ak_end_user_id, &pool_id, boundary)
+                            .await
+                            .context(DataManagerSnafu)?;
+                    }
+
+                    tracing::info!(
+                        "AkEnd import: completed with pulls_len={}, inserted={}",
+                        pulls_len,
+                        inserted
+                    );
+                    modal_interaction
+                        .create_followup(
+                            ctx.http(),
+                            serenity::CreateInteractionResponseFollowup::new()
+                                .ephemeral(true)
+                                .flags(serenity::MessageFlags::IS_COMPONENTS_V2 | serenity::MessageFlags::EPHEMERAL)
+                                // TODO: better formatting
+                                .components(vec![serenity::CreateComponent::TextDisplay(
+                                    serenity::CreateTextDisplay::new(format!("Records parsed: {pulls_len}, {inserted} new records inserted into database"))
+                                )])
+                        )
+                        .await
+                        .context(GeneralSerenitySnafu)?;
+                } else {
+                    tracing::warn!(
+                        "AkEnd import: no matching account for user_id={} game_account_id={}",
+                        user.id.get(),
+                        game_account_id
+                    );
+                }
             }
         }
     }

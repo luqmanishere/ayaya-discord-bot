@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::data::utils::DataTiming;
 use crate::error::{DataError, DatabaseSnafu};
 use ayaya_core::metrics::{DataOperationType, MetricsSink};
-use ayaya_core::tracker::{wuwa::WuwaPullDto, ImportBoundary};
+use ayaya_core::tracker::{ImportBoundary, wuwa::WuwaPullDto};
 
 use super::DataResult;
 
@@ -132,12 +132,11 @@ impl WuwaPullsManager {
 
         let mut pull_models = Vec::new();
         for pull in pulls {
-            let resource_id = i32::try_from(pull.resource_id).map_err(|_| {
-                DataError::DatabaseError {
-                operation: OP.to_string(),
-                source: DbErr::Custom("resource_id out of range".to_string()),
-                }
-            })?;
+            let resource_id =
+                i32::try_from(pull.resource_id).map_err(|_| DataError::DatabaseError {
+                    operation: OP.to_string(),
+                    source: DbErr::Custom("resource_id out of range".to_string()),
+                })?;
 
             let pull_type =
                 wuwa_pool_type_to_i32(&pull.pool_id).ok_or_else(|| DataError::DatabaseError {

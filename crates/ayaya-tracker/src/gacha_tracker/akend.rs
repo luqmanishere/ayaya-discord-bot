@@ -101,7 +101,7 @@ impl GameAdapter for AkEndAdapter {
                 std::borrow::Cow::Borrowed("server_id") => {
                     session_builder.set_server_id(value.parse::<u8>().unwrap().try_into().unwrap());
                 }
-                std::borrow::Cow::Borrowed("u8_token") => {
+                std::borrow::Cow::Borrowed("u8_token") | std::borrow::Cow::Borrowed("token") => {
                     session_builder.set_u8_token(value.to_string());
                 }
                 _ => {}
@@ -111,6 +111,7 @@ impl GameAdapter for AkEndAdapter {
         Ok(session)
     }
 
+    #[tracing::instrument(skip(client, session))]
     async fn fetch_pulls(
         &self,
         session: &Self::Session,
@@ -121,15 +122,13 @@ impl GameAdapter for AkEndAdapter {
         let mut pulls = vec![];
 
         for pool_type in AkEndGachaPool::iter() {
-            dbg!(&pool_type);
             let first_req_url = build_url(session, pool_type, None);
-            dbg!(&first_req_url);
             let first_req = client
                 .get(first_req_url)
                 .send()
                 .await
                 .map_err(|e| TrackerError::WuwaRequestFailed { source: e })?;
-            dbg!(first_req.status());
+            tracing::debug!("First request status: {}", first_req.status());
             let json: AkEndResponseDes = first_req.json().await.unwrap();
             let mut has_more = if json.data.has_more {
                 Some(json.data.list.last().unwrap().seq_id.clone())
@@ -168,8 +167,7 @@ impl GameAdapter for AkEndAdapter {
     }
 
     fn normalize_pull(&self, pull: Self::Pull, user_game_id: &str) -> Self::Dto {
-        let ts = pull.gacha_ts.parse::<i64>().expect("unix timestamp");
-        let ts = time::OffsetDateTime::from_unix_timestamp(ts).expect("proper unix timestamp");
+        let ts = parse_akend_ts(&pull.gacha_ts);
         Self::Dto {
             user_game_id: user_game_id.to_string(),
             pool_type: pull.pool_type.unwrap().get_api_name(),
@@ -188,6 +186,7 @@ impl GameAdapter for AkEndAdapter {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+#[expect(dead_code)]
 pub struct AkEndResponseDes {
     code: Option<u64>,
     data: DataDes,
@@ -205,16 +204,16 @@ struct DataDes {
 #[serde(rename_all = "camelCase")]
 pub struct ParsedAkEndPull {
     #[serde(skip)]
-    pool_type: Option<AkEndGachaPool>,
-    pool_id: String,
-    pool_name: String,
-    char_id: String,
-    char_name: String,
-    rarity: i32,
-    is_free: bool,
-    is_new: bool,
-    gacha_ts: String,
-    seq_id: String,
+    pub pool_type: Option<AkEndGachaPool>,
+    pub pool_id: String,
+    pub pool_name: String,
+    pub char_id: String,
+    pub char_name: String,
+    pub rarity: i32,
+    pub is_free: bool,
+    pub is_new: bool,
+    pub gacha_ts: String,
+    pub seq_id: String,
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, Hash, Eq, PartialEq, strum::EnumIter)]
@@ -252,20 +251,30 @@ impl std::fmt::Display for AkEndGachaPool {
 fn build_url(session: &AkEndSession, pool_type: AkEndGachaPool, seq_id: Option<String>) -> String {
     static BASE_URL: &str = "https://ef-webview.gryphline.com/api/record/char";
 
-    if let Some(seq_id) = seq_id {
-        format!(
-            "{BASE_URL}?lang=en-us&pool_type={pool_type}&server_id={server_id}&token={token}&seq_id={seq_id}",
-            pool_type = pool_type.get_api_name(),
-            token = session.u8_token,
-            server_id = session.server_id.clone() as u64
-        )
+    let mut url = Url::parse(BASE_URL).expect("valid AkEnd base url");
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs.append_pair("lang", "en-us");
+        pairs.append_pair("pool_type", &pool_type.get_api_name());
+        pairs.append_pair("server_id", &(session.server_id.clone() as u64).to_string());
+        pairs.append_pair("token", &session.u8_token);
+        if let Some(seq_id) = seq_id {
+            pairs.append_pair("seq_id", &seq_id);
+        }
+    }
+    url.to_string()
+}
+
+fn parse_akend_ts(raw: &str) -> time::OffsetDateTime {
+    let value = raw.parse::<i128>().expect("unix timestamp");
+    if value > 1_000_000_000_000 {
+        let nanos = value
+            .checked_mul(1_000_000)
+            .expect("unix timestamp nanos");
+        time::OffsetDateTime::from_unix_timestamp_nanos(nanos)
+            .expect("proper unix timestamp")
     } else {
-        format!(
-            "{BASE_URL}?lang=en-us&pool_type={pool_type}&server_id={server_id}&token={token}",
-            pool_type = pool_type.get_api_name(),
-            token = session.u8_token,
-            server_id = session.server_id.clone() as u64
-        )
+        time::OffsetDateTime::from_unix_timestamp(value as i64).expect("proper unix timestamp")
     }
 }
 #[cfg(test)]
@@ -313,6 +322,13 @@ mod tests {
             .fetch_pulls(&session, &client)
             .await
             .expect("fetch pulls");
+
+        let user_game_id = "12345";
+
+        let pulls = pulls
+            .iter()
+            .map(|e| adapter.normalize_pull(e.clone(), user_game_id))
+            .collect::<Vec<_>>();
 
         dbg!(&pulls);
         dbg!(pulls.len());

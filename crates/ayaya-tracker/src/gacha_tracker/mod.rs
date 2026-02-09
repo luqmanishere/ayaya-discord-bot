@@ -11,7 +11,7 @@ use crate::gacha_tracker::akend::AkEndAdapter;
 pub use self::error::TrackerError;
 pub use self::types::{CardPoolType, DeserializeWrapper, ParsedWuwaPull, ResourceType};
 use self::wuwa::WuwaAdapter;
-pub use ayaya_core::tracker::{akend::AkEndPullDto, wuwa::WuwaPullDto, ImportBoundary};
+pub use ayaya_core::tracker::{ImportBoundary, akend::AkEndPullDto, wuwa::WuwaPullDto};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GameId {
