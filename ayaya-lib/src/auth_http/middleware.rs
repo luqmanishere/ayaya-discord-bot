@@ -49,17 +49,15 @@ impl AuthMiddleware {
         let mut authed_user = None;
         let mut authed_token_id = None;
         for token_model in tokens {
-            if verify_token(token, &token_model.token_hash) {
-                if state
+            if verify_token(token, &token_model.token_hash)
+                && state
                     .data_manager
                     .is_allowlisted(token_model.user_id)
                     .await
                     .map_err(|_| AuthError::InvalidToken)?
-                {
-                    authed_user = Some(token_model.user_id);
-                    authed_token_id = Some(token_model.token_id);
-                    break;
-                }
+            {
+                authed_user = Some(token_model.user_id);
+                authed_token_id = Some(token_model.token_id);
             }
         }
 

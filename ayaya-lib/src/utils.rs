@@ -114,7 +114,7 @@ impl ChannelInfo {
         let channel = channel_id
             .to_channel(ctx.http(), Some(guild_info.guild_id))
             .await
-            .unwrap();
+            .context(GeneralSerenitySnafu)?;
         let channel_name = match channel {
             serenity::Channel::Guild(guild_channel) => guild_channel.base.name.to_string(),
             serenity::Channel::GuildThread(guild_thread) => guild_thread.base.name.to_string(),
@@ -135,7 +135,10 @@ impl ChannelInfo {
         channel_id: serenity::GenericChannelId,
         is_voice: bool,
     ) -> Result<Self, BotError> {
-        let channel = channel_id.to_channel(ctx.http(), None).await.unwrap();
+        let channel = channel_id
+            .to_channel(ctx.http(), None)
+            .await
+            .context(GeneralSerenitySnafu)?;
         let channel_name = match channel {
             serenity::Channel::Guild(guild_channel) => guild_channel.base.name.to_string(),
             serenity::Channel::GuildThread(guild_thread) => guild_thread.base.name.to_string(),

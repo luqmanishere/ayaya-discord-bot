@@ -30,7 +30,7 @@ impl Drop for DataTiming {
         let elapsed = std::time::Instant::now() - self.start;
         let elapsed = elapsed.as_secs_f64();
         let name = self.name.clone();
-        let operation_type = self.operation_type.clone();
+        let operation_type = self.operation_type;
         tracing::debug!(
             "timed {} operation type: {} for: {} seconds",
             name,

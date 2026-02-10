@@ -12,13 +12,7 @@ use crate::{
 pub async fn error_handler(error: poise::FrameworkError<'_, Data, BotError>) {
     error!("error error error {}", error);
     match error {
-        poise::FrameworkError::ArgumentParse { error, .. } => {
-            // if let Some(error) = error.downcast_ref::<serenity::RoleParseError>() {
-            //     error!("Found a RoleParseError: {:?}", error);
-            // } else {
-            //     error!("Not a RoleParseError :(");
-            // }
-        }
+        poise::FrameworkError::ArgumentParse { .. } => {}
         poise::FrameworkError::UnknownCommand {
             framework,
             msg,

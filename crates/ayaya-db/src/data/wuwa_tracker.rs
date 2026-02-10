@@ -155,11 +155,11 @@ impl WuwaPullsManager {
 
             let pull_model = wuwa_pull::ActiveModel {
                 id: ActiveValue::Set(uuid::Uuid::new_v4()),
-                wuwa_user_id: ActiveValue::Set(wuwa_user_id as i32),
+                wuwa_user_id: ActiveValue::Set(wuwa_user_id as i64),
                 pull_type: ActiveValue::Set(pull_type),
                 resource_id: ActiveValue::Set(resource_id),
-                quality_level: ActiveValue::Set(pull.quality as i32),
-                count: ActiveValue::Set(pull.count as i32),
+                quality_level: ActiveValue::Set(pull.quality),
+                count: ActiveValue::Set(pull.count),
                 time: ActiveValue::Set(pull.time),
             };
             pull_models.push(pull_model);

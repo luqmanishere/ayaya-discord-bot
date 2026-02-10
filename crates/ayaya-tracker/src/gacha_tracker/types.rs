@@ -50,7 +50,6 @@ impl std::fmt::Display for ResourceType {
 }
 
 #[derive(Debug, Deserialize, Copy, Clone, Eq, Hash, PartialEq)]
-#[expect(clippy::enum_variant_names)]
 pub enum CardPoolType {
     #[serde(rename = "Resonators Accurate Modulation")]
     EventCharacterConvene,

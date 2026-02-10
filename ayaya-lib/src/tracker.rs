@@ -12,8 +12,8 @@ use crate::{
 };
 
 use ayaya_tracker::gacha_tracker::{
-    AdapterKind, AkEndPullDto, CardPoolType, GameAdapter, GameId, TrackerError, WuwaPullDto,
-    adapter_for, apply_import_boundary,
+    AdapterKind, AkEndPullDto, CardPoolType, GameAdapter, GameId, TrackerError, adapter_for,
+    apply_import_boundary,
 };
 
 #[poise::command(slash_command, aliases("t"))]
@@ -263,12 +263,8 @@ async fn main_account_management_ui(
 ) -> Result<(), BotError> {
     let user = ctx.author();
     let data = ctx.data().data_manager.clone();
-    let title = format!(
-        "# Manage {}'s {} Accounts",
-        user.display_name(),
-        game.to_string()
-    );
-    let subtitle = format!("## Current linked accounts:");
+    let title = format!("# Manage {}'s {} Accounts", user.display_name(), game);
+    let subtitle = "## Current linked accounts:";
     let accounts = match game {
         SupportedGames::WutheringWaves => {
             let wuwa_tracker = data.wuwa_tracker();
@@ -389,7 +385,6 @@ async fn main_account_management_ui(
                 whatever!("Invalid action")
             }
         }
-    } else {
     }
 
     Ok(())
@@ -403,7 +398,7 @@ async fn add_account_modal_ui(
     let user = ctx.author();
     let data = ctx.data().data_manager.clone();
 
-    let title = format!("Add {} Account", game.to_string(),);
+    let title = format!("Add {} Account", game);
 
     let account_id_custom_id = format!("{}_account_id", user.id);
     let account_id_component =
@@ -564,7 +559,7 @@ async fn pull_import_modal(
                     .context(GeneralSerenitySnafu)?;
                 let message = format!(
                     "No {} accounts found. Please register an account via the tracker menu.",
-                    game.to_string()
+                    game
                 );
                 pre_interaction
                     .create_followup(
@@ -577,16 +572,14 @@ async fn pull_import_modal(
                     .context(GeneralSerenitySnafu)?;
                 return Ok(());
             };
-            let list = list
-                .iter()
+            list.iter()
                 .map(|e| {
                     serenity::CreateSelectMenuOption::new(
                         format!("{}: {}", e.ak_end_user_id, e.user_desc),
                         e.ak_end_user_id.to_string(),
                     )
                 })
-                .collect::<Vec<_>>();
-            list
+                .collect::<Vec<_>>()
         }
     };
     let user_account_select_component_custom_id = format!("{}_user_account", user.id.get());

@@ -18,10 +18,10 @@ impl EventHandler for StartupHandler {
                 // TODO: migrate setup function
                 tracing::info!("Setup is running after Ready Event");
                 let data: Arc<Data> = context.data();
-                let commands = data.commands.iter().map(|e| e).collect::<Vec<_>>();
+                let commands = data.commands.iter().collect::<Vec<_>>();
                 poise::builtins::register_globally(context.http(), commands)
                     .await
-                    .unwrap();
+                    .expect("Error registering commands");
 
                 let bot_user_name = &data_about_bot.user.name;
                 let session_id = &data_about_bot.session_id;

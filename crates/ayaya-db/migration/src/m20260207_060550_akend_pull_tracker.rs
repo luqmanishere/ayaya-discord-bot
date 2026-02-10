@@ -110,6 +110,7 @@ enum AkEndPull {
 }
 
 #[derive(DeriveIden)]
+#[expect(clippy::enum_variant_names)]
 enum AkEndUser {
     Table,
     UserId,

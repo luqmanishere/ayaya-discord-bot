@@ -52,7 +52,7 @@ enum WuwaImportState {
 }
 
 #[derive(DeriveIden)]
-#[expect(clippy::enum_variant_names)]
+#[allow(clippy::enum_variant_names)]
 enum WuwaUser {
     Table,
     WuwaUserId,

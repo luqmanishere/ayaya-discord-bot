@@ -35,7 +35,7 @@ impl AyayaDiscordBot {
         .into_future();
 
         let mut client = serenity::ClientBuilder::new(
-            Token::try_from(self.discord.token).unwrap(),
+            Token::try_from(self.discord.token).expect("A valid discord token"),
             self.discord.intents,
         )
         .voice_manager(self.discord.voice_manager_arc)
@@ -68,7 +68,7 @@ impl shuttle_runtime::Service for AyayaDiscordBot {
         .into_future();
 
         let mut client = serenity::ClientBuilder::new(
-            Token::try_from(self.discord.token).unwrap(),
+            Token::try_from(self.discord.token).expect("Valid discord token provided"),
             self.discord.intents,
         )
         .data(self.discord.data)

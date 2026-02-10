@@ -7,7 +7,7 @@ use ayaya_core::{
     metrics::{DataOperationType, MetricsSink},
     tracker::{ImportBoundary, akend::AkEndPullDto},
 };
-use sea_orm::{ActiveValue, IntoActiveModel, prelude::*, sqlx::pool};
+use sea_orm::{ActiveValue, IntoActiveModel, prelude::*};
 use snafu::ResultExt;
 
 use crate::{
@@ -56,7 +56,7 @@ impl AkEndTracker {
             .await
             .context(DatabaseSnafu { operation: OP })?;
 
-        if let Some(_) = user {
+        if user.is_some() {
             return Err(DataError::DuplicateEntry {
                 object: "akend_user".to_string(),
             });

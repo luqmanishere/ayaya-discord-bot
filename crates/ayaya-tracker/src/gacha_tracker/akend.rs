@@ -163,7 +163,7 @@ impl GameAdapter for AkEndAdapter {
     }
 
     fn pool_id(&self, pull: &Self::Pull) -> Self::PoolId {
-        pull.pool_type.unwrap().clone()
+        pull.pool_type.unwrap()
     }
 
     fn normalize_pull(&self, pull: Self::Pull, user_game_id: &str) -> Self::Dto {
@@ -268,11 +268,8 @@ fn build_url(session: &AkEndSession, pool_type: AkEndGachaPool, seq_id: Option<S
 fn parse_akend_ts(raw: &str) -> time::OffsetDateTime {
     let value = raw.parse::<i128>().expect("unix timestamp");
     if value > 1_000_000_000_000 {
-        let nanos = value
-            .checked_mul(1_000_000)
-            .expect("unix timestamp nanos");
-        time::OffsetDateTime::from_unix_timestamp_nanos(nanos)
-            .expect("proper unix timestamp")
+        let nanos = value.checked_mul(1_000_000).expect("unix timestamp nanos");
+        time::OffsetDateTime::from_unix_timestamp_nanos(nanos).expect("proper unix timestamp")
     } else {
         time::OffsetDateTime::from_unix_timestamp(value as i64).expect("proper unix timestamp")
     }
