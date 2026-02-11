@@ -16,9 +16,7 @@ use axum::{
     body::Body,
     extract::State,
     http::{
-        HeaderValue,
-        Method,
-        StatusCode,
+        HeaderValue, Method, StatusCode,
         header::{AUTHORIZATION, CONTENT_TYPE},
     },
     response::{IntoResponse, Response},
@@ -40,13 +38,13 @@ use snafu::ResultExt;
 use stats::stats_commands;
 use time::{UtcOffset, format_description};
 use tokio::sync::{Mutex as TokioMutex, RwLock};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{debug, error, info, level_filters::LevelFilter, subscriber::set_global_default};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{EnvFilter, fmt::time::OffsetTime, layer::SubscriberExt};
 use tracker::tracker;
 use utils::GuildInfo;
 use voice::voice_commands;
-use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::{error::*, voice::commands::music};
 

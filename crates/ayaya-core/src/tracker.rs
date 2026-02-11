@@ -25,7 +25,13 @@ pub mod akend {
     use time::OffsetDateTime;
 
     #[derive(Debug, Clone)]
-    pub struct AkEndPullDto {
+    pub enum AkEndPullDto {
+        Character(AkEndCharPullDto),
+        Weapon(AkEndWeapPullDto),
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct AkEndCharPullDto {
         pub user_game_id: String,
         pub pool_type: String,
         pub pool_id: String,
@@ -34,6 +40,21 @@ pub mod akend {
         pub char_name: String,
         pub rarity: i32,
         pub is_free: bool,
+        pub is_new: bool,
+        pub time: OffsetDateTime,
+        pub seq_id: String,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct AkEndWeapPullDto {
+        pub user_game_id: String,
+        pub pool_type: String,
+        pub pool_id: String,
+        pub pool_name: String,
+        pub weapon_id: String,
+        pub weapon_name: String,
+        pub weapon_type: String,
+        pub rarity: i32,
         pub is_new: bool,
         pub time: OffsetDateTime,
         pub seq_id: String,

@@ -1,8 +1,9 @@
 pub mod prelude;
 
+pub mod ak_end_char_pull;
 pub mod ak_end_import_state;
-pub mod ak_end_pull;
 pub mod ak_end_user;
+pub mod ak_end_weap_pull;
 pub mod ban_shit_music;
 pub mod ban_user_command_use;
 pub mod command_allow_user;

@@ -16,6 +16,8 @@ use ayaya_tracker::gacha_tracker::{
     akend::AkEndGachaPool, apply_import_boundary,
 };
 
+// TODO: split this file up
+
 #[poise::command(slash_command, aliases("t"))]
 pub async fn tracker(ctx: Context<'_>) -> CommandResult {
     ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
@@ -832,6 +834,7 @@ async fn pull_import_modal(
                         return Ok(());
                     }
 
+                    // Start boundary processing
                     let mut pulls_by_pool: HashMap<String, Vec<_>> = HashMap::new();
                     for pull in pulls {
                         let pool_id = adapter.pool_id(&pull).to_string();
@@ -843,7 +846,7 @@ async fn pull_import_modal(
 
                     for (pool_id, mut pool_pulls) in pulls_by_pool {
                         tracing::info!("AkEnd import: pool {pool_id} size={}", pool_pulls.len());
-                        pool_pulls.sort_by_key(|p| parse_akend_ts(&p.gacha_ts));
+                        pool_pulls.sort_by_key(|p| parse_akend_ts(p.gacha_ts()));
 
                         tracing::info!("AkEnd import: fetching import boundary for pool {pool_id}");
                         let boundary = pulls_manager
@@ -852,7 +855,7 @@ async fn pull_import_modal(
                             .context(DataManagerSnafu)?;
 
                         let filtered = apply_import_boundary(&pool_pulls, boundary, |p| {
-                            parse_akend_ts(&p.gacha_ts)
+                            parse_akend_ts(p.gacha_ts())
                         });
 
                         new_pulls.extend(filtered.new_items.into_iter().cloned());
@@ -875,6 +878,7 @@ async fn pull_import_modal(
 
                         return Ok(());
                     }
+                    // end boundary processing
 
                     let records: Vec<AkEndPullDto> = new_pulls
                         .into_iter()
@@ -1016,9 +1020,10 @@ async fn pulls_data_ui(
                 .context(DataManagerSnafu)?;
 
             if akend_accounts.is_empty() {
-                let text_comp = serenity::CreateComponent::TextDisplay(
-                    serenity::CreateTextDisplay::new("No AkEnd Account found for you."),
-                );
+                let text_comp =
+                    serenity::CreateComponent::TextDisplay(serenity::CreateTextDisplay::new(
+                        "No Arknights Endfield account found for you.",
+                    ));
                 pre_interaction
                     .create_followup(
                         ctx.http(),
@@ -1032,9 +1037,13 @@ async fn pulls_data_ui(
             } else {
                 for account in akend_accounts {
                     let pulls = akend_tracker
-                        .get_pulls_from_akend_id(account.ak_end_user_id)
+                        .get_all_pulls_from_akend_id(account.ak_end_user_id)
                         .await
                         .context(DataManagerSnafu)?;
+
+                    // TODO: summary data by pool type: total pull count, current count to pity, count to soft pity 25
+                    // TODO: history of pulled 6 stars,
+                    // TODO: summoned character count
 
                     let six_stars = pulls.iter().filter(|e| e.rarity == 6).collect::<Vec<_>>();
                     let limited_chars = six_stars

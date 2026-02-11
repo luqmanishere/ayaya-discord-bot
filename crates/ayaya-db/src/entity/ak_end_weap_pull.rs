@@ -1,0 +1,40 @@
+use sea_orm::entity::prelude::*;
+
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
+#[sea_orm(table_name = "ak_end_weap_pull")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: Uuid,
+    pub user_id: i64,
+    pub ak_end_user_id: i64,
+    pub pool_type: String,
+    pub pool_id: String,
+    pub pool_name: String,
+    pub weapon_id: String,
+    pub weapon_name: String,
+    pub weapon_type: String,
+    pub rarity: i32,
+    pub is_new: bool,
+    pub time: TimeDateTimeWithTimeZone,
+    pub seq_id: String,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::ak_end_user::Entity",
+        from = "Column::AkEndUserId",
+        to = "super::ak_end_user::Column::AkEndUserId",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    AkEndUser,
+}
+
+impl Related<super::ak_end_user::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AkEndUser.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}

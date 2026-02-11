@@ -1,3 +1,4 @@
+use ayaya_core::tracker::akend::{AkEndCharPullDto, AkEndWeapPullDto};
 use serde::Deserialize;
 use strum::IntoEnumIterator;
 use url::Url;
@@ -121,6 +122,7 @@ impl GameAdapter for AkEndAdapter {
 
         let mut pulls = vec![];
 
+        // TODO: split chars and weapon pulls
         for pool_type in AkEndGachaPool::iter() {
             let first_req_url = build_url(session, pool_type, None);
             let first_req = client
@@ -130,29 +132,51 @@ impl GameAdapter for AkEndAdapter {
                 .map_err(|e| TrackerError::WuwaRequestFailed { source: e })?;
             tracing::debug!("First request status: {}", first_req.status());
             let json: AkEndResponseDes = first_req.json().await.unwrap();
-            let mut has_more = if json.data.has_more {
-                Some(json.data.list.last().unwrap().seq_id.clone())
+            let mut has_more = if json.data.has_more
+                && let Some(pull) = json.data.list.last()
+            {
+                Some(pull.seq_id().to_string())
             } else {
                 None
             };
 
+            let data = json.data.list.into_iter().map(|mut e| match &mut e {
+                ParsedAkEndPull::Character(char) => {
+                    char.pool_type = Some(pool_type);
+                    e
+                }
+                ParsedAkEndPull::Weapon(weap) => {
+                    weap.pool_type = Some(pool_type);
+                    e
+                }
+            });
+            pulls.extend(data);
+
             while let Some(ref seq_id) = has_more {
-                let req_url = build_url(session, pool_type, Some(seq_id.clone()));
+                let req_url = build_url(session, pool_type, Some(seq_id));
                 let req = client
                     .get(req_url)
                     .send()
                     .await
                     .map_err(|e| TrackerError::WuwaRequestFailed { source: e })?;
                 let json: AkEndResponseDes = req.json().await.unwrap();
-                if json.data.has_more {
-                    has_more = Some(json.data.list.last().unwrap().seq_id.clone());
+                if json.data.has_more
+                    && let Some(pull) = json.data.list.last()
+                {
+                    has_more = Some(pull.seq_id().to_string());
                 } else {
                     has_more = None;
                 }
 
-                let data = json.data.list.into_iter().map(|mut e| {
-                    e.pool_type = Some(pool_type);
-                    e
+                let data = json.data.list.into_iter().map(|mut e| match &mut e {
+                    ParsedAkEndPull::Character(char) => {
+                        char.pool_type = Some(pool_type);
+                        e
+                    }
+                    ParsedAkEndPull::Weapon(weap) => {
+                        weap.pool_type = Some(pool_type);
+                        e
+                    }
                 });
 
                 pulls.extend(data);
@@ -163,23 +187,43 @@ impl GameAdapter for AkEndAdapter {
     }
 
     fn pool_id(&self, pull: &Self::Pull) -> Self::PoolId {
-        pull.pool_type.unwrap()
+        pull.pool_type().unwrap()
     }
 
     fn normalize_pull(&self, pull: Self::Pull, user_game_id: &str) -> Self::Dto {
-        let ts = parse_akend_ts(&pull.gacha_ts);
-        Self::Dto {
-            user_game_id: user_game_id.to_string(),
-            pool_type: pull.pool_type.unwrap().get_api_name(),
-            pool_id: pull.pool_id,
-            pool_name: pull.pool_name,
-            char_id: pull.char_id,
-            char_name: pull.char_name,
-            rarity: pull.rarity,
-            is_free: pull.is_free,
-            is_new: pull.is_new,
-            time: ts,
-            seq_id: pull.seq_id,
+        match pull {
+            ParsedAkEndPull::Character(pull) => {
+                let ts = parse_akend_ts(&pull.gacha_ts);
+                AkEndPullDto::Character(AkEndCharPullDto {
+                    user_game_id: user_game_id.to_string(),
+                    pool_type: pull.pool_type.unwrap().get_api_name(),
+                    pool_id: pull.pool_id,
+                    pool_name: pull.pool_name,
+                    char_id: pull.char_id,
+                    char_name: pull.char_name,
+                    rarity: pull.rarity,
+                    is_free: pull.is_free,
+                    is_new: pull.is_new,
+                    time: ts,
+                    seq_id: pull.seq_id,
+                })
+            }
+            ParsedAkEndPull::Weapon(pull) => {
+                let ts = parse_akend_ts(&pull.gacha_ts);
+                AkEndPullDto::Weapon(AkEndWeapPullDto {
+                    user_game_id: user_game_id.to_string(),
+                    pool_type: pull.pool_type.expect("initialized").get_api_name(),
+                    pool_id: pull.pool_id,
+                    pool_name: pull.pool_name,
+                    weapon_id: pull.weapon_id,
+                    weapon_name: pull.weapon_name,
+                    weapon_type: pull.weapon_type,
+                    rarity: pull.rarity,
+                    is_new: pull.is_new,
+                    time: ts,
+                    seq_id: pull.seq_id,
+                })
+            }
         }
     }
 }
@@ -202,15 +246,62 @@ struct DataDes {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct ParsedAkEndPull {
+#[serde(untagged)]
+pub enum ParsedAkEndPull {
+    Character(ParsedAkEndCharPull),
+    Weapon(ParsedAkEndWeapPull),
+}
+
+impl ParsedAkEndPull {
+    pub fn pool_type(&self) -> Option<AkEndGachaPool> {
+        match self {
+            ParsedAkEndPull::Character(pull) => pull.pool_type,
+            ParsedAkEndPull::Weapon(pull) => pull.pool_type,
+        }
+    }
+
+    pub fn gacha_ts(&self) -> &str {
+        match self {
+            ParsedAkEndPull::Character(pull) => pull.gacha_ts.as_str(),
+            ParsedAkEndPull::Weapon(pull) => pull.gacha_ts.as_str(),
+        }
+    }
+
+    pub fn seq_id(&self) -> &str {
+        match self {
+            ParsedAkEndPull::Character(pull) => pull.seq_id.as_str(),
+            ParsedAkEndPull::Weapon(pull) => pull.seq_id.as_str(),
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedAkEndCharPull {
+    #[serde(skip)]
+    pool_type: Option<AkEndGachaPool>,
+    pool_id: String,
+    pool_name: String,
+    char_id: String,
+    char_name: String,
+    rarity: i32,
+    is_free: bool,
+    is_new: bool,
+    gacha_ts: String,
+    seq_id: String,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedAkEndWeapPull {
     #[serde(skip)]
     pub pool_type: Option<AkEndGachaPool>,
     pub pool_id: String,
     pub pool_name: String,
-    pub char_id: String,
-    pub char_name: String,
+    pub weapon_id: String,
+    pub weapon_name: String,
+    pub weapon_type: String,
     pub rarity: i32,
-    pub is_free: bool,
     pub is_new: bool,
     pub gacha_ts: String,
     pub seq_id: String,
@@ -224,6 +315,7 @@ pub enum AkEndGachaPool {
     Standard,
     #[serde(alias = "E_CharacterGachaPoolType_Beginner")]
     Beginner,
+    Weapon,
 }
 
 impl AkEndGachaPool {
@@ -232,6 +324,7 @@ impl AkEndGachaPool {
             AkEndGachaPool::Special => "E_CharacterGachaPoolType_Special",
             AkEndGachaPool::Standard => "E_CharacterGachaPoolType_Standard",
             AkEndGachaPool::Beginner => "E_CharacterGachaPoolType_Beginner",
+            AkEndGachaPool::Weapon => "Weapon",
         }
         .to_string()
     }
@@ -243,26 +336,42 @@ impl std::fmt::Display for AkEndGachaPool {
             Self::Special => "Special",
             Self::Standard => "Standard",
             Self::Beginner => "Beginner",
+            Self::Weapon => "Weapon",
         };
         write!(f, "{label}")
     }
 }
 
-fn build_url(session: &AkEndSession, pool_type: AkEndGachaPool, seq_id: Option<String>) -> String {
-    static BASE_URL: &str = "https://ef-webview.gryphline.com/api/record/char";
+fn build_url(session: &AkEndSession, pool_type: AkEndGachaPool, seq_id: Option<&str>) -> String {
+    static BASE_CHAR_URL: &str = "https://ef-webview.gryphline.com/api/record/char";
+    static BASE_WEAPON_URL: &str = "https://ef-webview.gryphline.com/api/record/weapon";
 
-    let mut url = Url::parse(BASE_URL).expect("valid AkEnd base url");
-    {
-        let mut pairs = url.query_pairs_mut();
-        pairs.append_pair("lang", "en-us");
-        pairs.append_pair("pool_type", &pool_type.get_api_name());
-        pairs.append_pair("server_id", &(session.server_id.clone() as u64).to_string());
-        pairs.append_pair("token", &session.u8_token);
-        if let Some(seq_id) = seq_id {
-            pairs.append_pair("seq_id", &seq_id);
+    if pool_type != AkEndGachaPool::Weapon {
+        let mut url = Url::parse(BASE_CHAR_URL).expect("valid AkEnd base url");
+        {
+            let mut pairs = url.query_pairs_mut();
+            pairs.append_pair("lang", "en-us");
+            pairs.append_pair("pool_type", &pool_type.get_api_name());
+            pairs.append_pair("server_id", &(session.server_id.clone() as u64).to_string());
+            pairs.append_pair("token", &session.u8_token);
+            if let Some(seq_id) = seq_id {
+                pairs.append_pair("seq_id", seq_id);
+            }
         }
+        url.to_string()
+    } else {
+        let mut url = Url::parse(BASE_WEAPON_URL).expect("valid base weapon url");
+        {
+            let mut pairs = url.query_pairs_mut();
+            pairs.append_pair("lang", "en-us");
+            pairs.append_pair("server_id", &(session.server_id.clone() as u64).to_string());
+            pairs.append_pair("token", &session.u8_token);
+            if let Some(seq_id) = seq_id {
+                pairs.append_pair("seq_id", seq_id);
+            }
+        }
+        url.to_string()
     }
-    url.to_string()
 }
 
 fn parse_akend_ts(raw: &str) -> time::OffsetDateTime {
@@ -289,6 +398,12 @@ mod tests {
         assert!(!response.data.list.is_empty());
 
         let first = &response.data.list[0];
+        let first = match first {
+            ParsedAkEndPull::Character(first) => first,
+            _ => {
+                panic!("First response is a character!");
+            }
+        };
         assert!(!first.pool_id.is_empty());
         assert!(!first.char_id.is_empty());
         assert!(!first.char_name.is_empty());
@@ -299,7 +414,12 @@ mod tests {
                 .data
                 .list
                 .iter()
-                .find(|e| e.char_name == "Laevatain")
+                .find(|e| {
+                    match e {
+                        ParsedAkEndPull::Character(pull) => pull.char_name == "Laevatain",
+                        ParsedAkEndPull::Weapon(pull) => pull.weapon_name == "Forgeborn Scathe",
+                    }
+                })
                 .is_some()
         );
     }
@@ -330,5 +450,11 @@ mod tests {
         dbg!(&pulls);
         dbg!(pulls.len());
         assert!(!pulls.is_empty());
+        let (char, wep): (Vec<_>, Vec<_>) = pulls
+            .into_iter()
+            .partition(|e| matches!(e, AkEndPullDto::Character(_)));
+
+        dbg!(char.len());
+        dbg!(wep.len());
     }
 }
