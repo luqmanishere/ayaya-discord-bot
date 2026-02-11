@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [2026.2.11-1] - 2026-02-11
+
+### Changed
+
+- Factor out dashboard into its own thing
+
 ## [2026.2.11-0] - 2026-02-11
 
 ### Added
@@ -480,6 +486,7 @@ and this project adheres to [Calendar Versioning](https://calver.org/).
 - Delete from queue
 - Remove unused workflow
 
+[2026.2.11-1]: https://github.com///compare/v2026.2.11-0..v2026.2.11-1
 [2026.2.11-0]: https://github.com///compare/v2026.2.1-2..v2026.2.11-0
 [2026.2.1-2]: https://github.com///compare/v2026.2.1-1..v2026.2.1-2
 [2026.2.1-1]: https://github.com///compare/v2026.2.1-0..v2026.2.1-1
