@@ -13,7 +13,7 @@ use crate::{
 
 use ayaya_tracker::gacha_tracker::{
     AdapterKind, AkEndPullDto, CardPoolType, GameAdapter, GameId, TrackerError, adapter_for,
-    apply_import_boundary,
+    akend::AkEndGachaPool, apply_import_boundary,
 };
 
 #[poise::command(slash_command, aliases("t"))]
@@ -466,8 +466,23 @@ async fn add_account_modal_ui(
                         match input_text.value.clone().unwrap_or_default().parse::<i64>() {
                             Ok(val) => account_id = val,
                             Err(_) => {
-                                // TODO: better error handling here
-                                pre_interaction.create_followup(ctx.http(), serenity::CreateInteractionResponseFollowup::new().content("Invalid Account UID. Ensure numbers only and no spaces ")).await.context(GeneralSerenitySnafu)?;
+                                let component = serenity::CreateContainerComponent::TextDisplay(
+                                    serenity::CreateTextDisplay::new(
+                                        "Invalid Account UID. Ensure numbers only and no spaces ",
+                                    ),
+                                );
+                                let component = serenity::CreateComponent::Container(
+                                    serenity::CreateContainer::new(vec![component])
+                                        .accent_color(serenity::Colour::RED),
+                                );
+                                pre_interaction
+                                    .create_followup(
+                                        ctx.http(),
+                                        serenity::CreateInteractionResponseFollowup::new()
+                                            .components(vec![component]),
+                                    )
+                                    .await
+                                    .context(GeneralSerenitySnafu)?;
                                 whatever!("Unable to create account: invalid account UID provided");
                             }
                         }
@@ -686,7 +701,6 @@ async fn pull_import_modal(
                     }
                 } else {
                     // register the player id owner
-                    // TODO: interface
                     pulls_manager
                         .insert_wuwa_user(ctx.author().id.get(), player_id)
                         .await
@@ -994,7 +1008,60 @@ async fn pulls_data_ui(
             }
         }
         SupportedGames::AkEnd => {
-            // TODO: implement
+            let akend_tracker = ctx.data().data_manager.akend_tracker();
+
+            let akend_accounts = akend_tracker
+                .get_akend_users_by_user_id(user_id.get())
+                .await
+                .context(DataManagerSnafu)?;
+
+            if akend_accounts.is_empty() {
+                let text_comp = serenity::CreateComponent::TextDisplay(
+                    serenity::CreateTextDisplay::new("No AkEnd Account found for you."),
+                );
+                pre_interaction
+                    .create_followup(
+                        ctx.http(),
+                        serenity::CreateInteractionResponseFollowup::new()
+                            .ephemeral(false)
+                            .flags(serenity::MessageFlags::IS_COMPONENTS_V2)
+                            .components(vec![text_comp]),
+                    )
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+            } else {
+                for account in akend_accounts {
+                    let pulls = akend_tracker
+                        .get_pulls_from_akend_id(account.ak_end_user_id)
+                        .await
+                        .context(DataManagerSnafu)?;
+
+                    let six_stars = pulls.iter().filter(|e| e.rarity == 6).collect::<Vec<_>>();
+                    let limited_chars = six_stars
+                        .iter()
+                        .filter(|e| e.pool_type == AkEndGachaPool::Special.get_api_name())
+                        .count();
+
+                    let msg = format!(
+                        "Account ID {}: Limited 6 star characters obtained: {limited_chars}",
+                        account.ak_end_user_id
+                    );
+                    let text_comp = serenity::CreateComponent::TextDisplay(
+                        serenity::CreateTextDisplay::new(msg),
+                    );
+
+                    pre_interaction
+                        .create_followup(
+                            ctx.http(),
+                            serenity::CreateInteractionResponseFollowup::new()
+                                .ephemeral(false)
+                                .flags(serenity::MessageFlags::IS_COMPONENTS_V2)
+                                .components(vec![text_comp]),
+                        )
+                        .await
+                        .context(GeneralSerenitySnafu)?;
+                }
+            }
         }
     }
     Ok(())
