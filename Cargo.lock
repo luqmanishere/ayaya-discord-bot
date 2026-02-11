@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "ayaya-core"
-version = "2026.2.1-2"
+version = "2026.2.11-0"
 dependencies = [
  "argon2",
  "async-trait",
@@ -562,7 +562,7 @@ dependencies = [
 
 [[package]]
 name = "ayaya-db"
-version = "2026.2.1-2"
+version = "2026.2.11-0"
 dependencies = [
  "ayaya-core",
  "bincode",
@@ -581,7 +581,7 @@ dependencies = [
 
 [[package]]
 name = "ayaya-lib"
-version = "2026.2.1-2"
+version = "2026.2.11-0"
 dependencies = [
  "age",
  "anyhow",
@@ -629,7 +629,7 @@ dependencies = [
 
 [[package]]
 name = "ayaya-runner-local"
-version = "2026.2.1-2"
+version = "2026.2.11-0"
 dependencies = [
  "ayaya-lib",
  "dotenvy",
@@ -639,7 +639,7 @@ dependencies = [
 
 [[package]]
 name = "ayaya-runner-shuttle"
-version = "2026.2.1-2"
+version = "2026.2.11-0"
 dependencies = [
  "anyhow",
  "ayaya-lib",
@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "ayaya-tracker"
-version = "2026.2.1-2"
+version = "2026.2.11-0"
 dependencies = [
  "ayaya-core",
  "bon",
@@ -3701,7 +3701,7 @@ dependencies = [
 
 [[package]]
 name = "migration"
-version = "2026.2.1-2"
+version = "2026.2.11-0"
 dependencies = [
  "async-std",
  "sea-orm-migration",
