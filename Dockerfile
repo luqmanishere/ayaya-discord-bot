@@ -2,7 +2,7 @@ FROM rust:latest AS chef
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
 # install build dependencies
-RUN apt update && apt install -y cmake nodejs npm
+RUN apt update && apt install -y cmake
 RUN cargo install cargo-chef
 WORKDIR /usr/src/ayayadc
 
@@ -18,9 +18,6 @@ COPY --from=planner /usr/src/ayayadc/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 # Build the whole project
 COPY . .
-WORKDIR /usr/src/ayayadc/dashboard
-RUN npm install
-RUN npm run build
 WORKDIR /usr/src/ayayadc
 RUN cargo build --release
 

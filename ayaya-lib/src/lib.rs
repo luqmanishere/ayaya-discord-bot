@@ -15,7 +15,12 @@ use anyhow::Result;
 use axum::{
     body::Body,
     extract::State,
-    http::{StatusCode, header::CONTENT_TYPE},
+    http::{
+        HeaderValue,
+        Method,
+        StatusCode,
+        header::{AUTHORIZATION, CONTENT_TYPE},
+    },
     response::{IntoResponse, Response},
 };
 use base64::Engine as _;
@@ -41,6 +46,7 @@ use tracing_subscriber::{EnvFilter, fmt::time::OffsetTime, layer::SubscriberExt}
 use tracker::tracker;
 use utils::GuildInfo;
 use voice::voice_commands;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::{error::*, voice::commands::music};
 
@@ -48,7 +54,6 @@ pub(crate) mod admin;
 pub(crate) mod api;
 pub(crate) mod auth_http;
 pub(crate) mod constants;
-pub(crate) mod dashboard;
 pub mod event_handler;
 pub use ayaya_db::data;
 pub mod error;
@@ -211,13 +216,48 @@ pub async fn ayayabot(
             auth_http::middleware::AuthMiddleware::require_auth,
         ));
 
+    let cors_layer = build_cors_layer();
+
     let router = axum::Router::new()
         .nest("/api", api_routes)
         .route("/metrics", axum::routing::get(metrics_handler))
-        .fallback(dashboard::dashboard_handler)
+        .layer(cors_layer)
         .with_state(axum_state);
 
     Ok(AyayaDiscordBot { discord, router })
+}
+
+fn build_cors_layer() -> CorsLayer {
+    let allow_origin = match std::env::var("CORS_ALLOWED_ORIGINS") {
+        Ok(value) if value.trim() == "*" => AllowOrigin::any(),
+        Ok(value) => {
+            let origins = value
+                .split(',')
+                .map(str::trim)
+                .filter(|origin| !origin.is_empty())
+                .filter_map(|origin| origin.parse::<HeaderValue>().ok())
+                .collect::<Vec<_>>();
+            if origins.is_empty() {
+                AllowOrigin::any()
+            } else {
+                AllowOrigin::list(origins)
+            }
+        }
+        Err(_) => AllowOrigin::any(),
+    };
+
+    CorsLayer::new()
+        .allow_origin(allow_origin)
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE])
+        .allow_credentials(false)
 }
 
 /// Update command generation here
