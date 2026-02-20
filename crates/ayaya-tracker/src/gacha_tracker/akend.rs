@@ -62,6 +62,43 @@ impl AkEndSessionBuilder {
     }
 }
 
+impl AkEndAdapter {
+    async fn fetch(
+        client: &reqwest::Client,
+        session: &AkEndSession,
+        pool_type: AkEndGachaPool,
+        seq_id: Option<&str>,
+    ) -> Result<(impl Iterator<Item = ParsedAkEndPull>, Option<String>), TrackerError> {
+        let first_req_url = build_url(session, pool_type, seq_id);
+        let first_req = client
+            .get(first_req_url)
+            .send()
+            .await
+            .map_err(|e| TrackerError::WuwaRequestFailed { source: e })?;
+        tracing::debug!("First request status: {}", first_req.status());
+        let json: AkEndResponseDes = first_req.json().await.unwrap();
+        let has_more = if json.data.has_more
+            && let Some(pull) = json.data.list.last()
+        {
+            Some(pull.seq_id().to_string())
+        } else {
+            None
+        };
+
+        let data = json.data.list.into_iter().map(move |mut e| match &mut e {
+            ParsedAkEndPull::Character(char) => {
+                char.pool_type = Some(pool_type);
+                e
+            }
+            ParsedAkEndPull::Weapon(weap) => {
+                weap.pool_type = Some(pool_type);
+                e
+            }
+        });
+        Ok((data, has_more))
+    }
+}
+
 impl GameAdapter for AkEndAdapter {
     type Session = AkEndSession;
 
@@ -122,64 +159,17 @@ impl GameAdapter for AkEndAdapter {
 
         let mut pulls = vec![];
 
-        // TODO: split chars and weapon pulls
         for pool_type in AkEndGachaPool::iter() {
-            let first_req_url = build_url(session, pool_type, None);
-            let first_req = client
-                .get(first_req_url)
-                .send()
-                .await
-                .map_err(|e| TrackerError::WuwaRequestFailed { source: e })?;
-            tracing::debug!("First request status: {}", first_req.status());
-            let json: AkEndResponseDes = first_req.json().await.unwrap();
-            let mut has_more = if json.data.has_more
-                && let Some(pull) = json.data.list.last()
-            {
-                Some(pull.seq_id().to_string())
-            } else {
-                None
-            };
-
-            let data = json.data.list.into_iter().map(|mut e| match &mut e {
-                ParsedAkEndPull::Character(char) => {
-                    char.pool_type = Some(pool_type);
-                    e
-                }
-                ParsedAkEndPull::Weapon(weap) => {
-                    weap.pool_type = Some(pool_type);
-                    e
-                }
-            });
+            let (data, mut has_more) =
+                AkEndAdapter::fetch(client, session, pool_type, None).await?;
             pulls.extend(data);
 
             while let Some(ref seq_id) = has_more {
-                let req_url = build_url(session, pool_type, Some(seq_id));
-                let req = client
-                    .get(req_url)
-                    .send()
-                    .await
-                    .map_err(|e| TrackerError::WuwaRequestFailed { source: e })?;
-                let json: AkEndResponseDes = req.json().await.unwrap();
-                if json.data.has_more
-                    && let Some(pull) = json.data.list.last()
-                {
-                    has_more = Some(pull.seq_id().to_string());
-                } else {
-                    has_more = None;
-                }
-
-                let data = json.data.list.into_iter().map(|mut e| match &mut e {
-                    ParsedAkEndPull::Character(char) => {
-                        char.pool_type = Some(pool_type);
-                        e
-                    }
-                    ParsedAkEndPull::Weapon(weap) => {
-                        weap.pool_type = Some(pool_type);
-                        e
-                    }
-                });
+                let (data, seq_id) =
+                    AkEndAdapter::fetch(client, session, pool_type, Some(seq_id)).await?;
 
                 pulls.extend(data);
+                has_more = seq_id;
             }
         }
 

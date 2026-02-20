@@ -277,7 +277,7 @@ impl Compose for YoutubeDl {
         #[expect(clippy::single_match_else)]
         match result.protocol {
             Some(Protocol::M3U8Native) => {
-                tracing::debug!(
+                tracing::info!(
                     "Using HLS, url: {}, format_id: {}",
                     result.url,
                     result.format_id
@@ -288,7 +288,7 @@ impl Compose for YoutubeDl {
                 req.create_async().await
             }
             _ => {
-                tracing::debug!(
+                tracing::info!(
                     "Using HTTP, url: {}, format_id: {}",
                     result.url,
                     result.format_id

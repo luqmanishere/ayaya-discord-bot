@@ -321,7 +321,7 @@ impl AkEndTracker {
         Ok(count)
     }
 
-    pub async fn get_all_pulls_from_akend_id(
+    pub async fn get_all_char_pulls_from_akend_id(
         &self,
         akend_user_id: i64,
     ) -> DataResult<Vec<AkEndCharPullModel>> {
