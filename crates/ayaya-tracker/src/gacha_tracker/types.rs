@@ -49,7 +49,7 @@ impl std::fmt::Display for ResourceType {
     }
 }
 
-#[derive(Debug, Deserialize, Copy, Clone, Eq, Hash, PartialEq)]
+#[derive(Debug, Deserialize, Copy, Clone, Eq, Hash, PartialEq, strum::EnumIter)]
 pub enum CardPoolType {
     #[serde(rename = "Resonators Accurate Modulation")]
     EventCharacterConvene,
@@ -59,6 +59,17 @@ pub enum CardPoolType {
     StandardCharacterConvene,
     #[serde(rename = "Full-Range Modualtion")]
     StandardWeaponConvene,
+}
+
+impl CardPoolType {
+    pub fn user_names(&self) -> String {
+        match self {
+            CardPoolType::EventCharacterConvene => "Event Character Banner".to_string(),
+            CardPoolType::EventWeaponConvene => "Event Weapon Banner".to_string(),
+            CardPoolType::StandardCharacterConvene => "Standard Character Banner".to_string(),
+            CardPoolType::StandardWeaponConvene => "Standard Weapon Banner".to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for CardPoolType {

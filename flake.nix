@@ -58,8 +58,10 @@
             cargo-llvm-cov
             cargo-nextest
             bun
+            mold
           ];
           buildInputs = with pkgs; [iconv.dev libopus.dev cargo-shuttle openssl];
+          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath [pkgs.libopus pkgs.openssl]}:$LD_LIBRARY_PATH";
         };
       }
     );

@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
 use ::serenity::small_fixed_array::FixedString;
+use ayaya_db::entity::prelude::*;
 use ayaya_tracker::gacha_tracker::{
     AdapterKind, AkEndPullDto, CardPoolType, GameAdapter, TrackerError, adapter_for,
     akend::AkEndGachaPool, apply_import_boundary,
 };
 use poise::serenity_prelude as serenity;
+use sea_orm::Iterable;
 use snafu::{ResultExt, whatever};
 
 use crate::{
@@ -510,7 +512,7 @@ pub async fn pulls_data_ui(
             if akend_accounts.is_empty() {
                 let text_comp =
                     serenity::CreateComponent::TextDisplay(serenity::CreateTextDisplay::new(
-                        "No Arknights Endfield account found for you.",
+                        "You have no registered Arknights Endfield account.",
                     ));
                 pre_interaction
                     .create_followup(
@@ -523,43 +525,143 @@ pub async fn pulls_data_ui(
                     .await
                     .context(GeneralSerenitySnafu)?;
             } else {
-                for account in akend_accounts {
-                    let pulls = akend_tracker
-                        .get_all_char_pulls_from_akend_id(account.ak_end_user_id)
-                        .await
-                        .context(DataManagerSnafu)?;
+                // TODO: collapse this into a single composed response once all AkEnd
+                // summary sections and component interactions are implemented.
+                let as_custom_id = format!("{}_data_account_select", user_id.get());
+                let bs_custom_id = format!("{}_data_banner_select", user_id.get());
 
-                    // TODO: summary data by pool type: total pull count, current count to pity, count to soft pity 25
-                    // TODO: history of pulled 6 stars,
-                    // TODO: summoned character count
+                // TODO: replace the hardcoded first-account default with the selected
+                // account once component interaction handling is wired up.
+                let akend_user_id_index = 0;
+                let pulls = akend_tracker
+                    .get_all_char_pulls_from_akend_id(
+                        akend_accounts[akend_user_id_index].ak_end_user_id,
+                    )
+                    .await
+                    .context(DataManagerSnafu)?;
 
-                    let six_stars = pulls.iter().filter(|e| e.rarity == 6).collect::<Vec<_>>();
-                    let limited_chars = six_stars
-                        .iter()
-                        .filter(|e| e.pool_type == AkEndGachaPool::Special.get_api_name())
-                        .count();
+                // comp 1: account select
+                let account_select_comp = account_select_comp(&akend_accounts, &as_custom_id);
+                // comp 2: banner selector
+                let banner_selector = banner_select_comp(game, &bs_custom_id);
 
-                    let msg = format!(
-                        "Account ID {}: Limited 6 star characters obtained: {limited_chars}",
-                        account.ak_end_user_id
-                    );
-                    let text_comp = serenity::CreateComponent::TextDisplay(
-                        serenity::CreateTextDisplay::new(msg),
-                    );
+                // comp 3: pulls summary
+                let pulls_summary = char_pull_summary_akend(
+                    &akend_accounts[akend_user_id_index],
+                    &pulls,
+                    AkEndGachaPool::Special,
+                );
 
-                    pre_interaction
-                        .create_followup(
-                            ctx.http(),
-                            serenity::CreateInteractionResponseFollowup::new()
-                                .ephemeral(false)
-                                .flags(serenity::MessageFlags::IS_COMPONENTS_V2)
-                                .components(vec![text_comp]),
-                        )
-                        .await
-                        .context(GeneralSerenitySnafu)?;
-                }
+                // TODO: comp 4: add pulled 6 star summary
+
+                // TODO: comp 5: add summoned character count
+
+                // TODO: comp 6: add pull history
+
+                pre_interaction
+                    .create_followup(
+                        ctx.http(),
+                        serenity::CreateInteractionResponseFollowup::new()
+                            .ephemeral(false)
+                            .flags(serenity::MessageFlags::IS_COMPONENTS_V2)
+                            .components(vec![account_select_comp, banner_selector, pulls_summary]),
+                    )
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+
+                // TODO: update this followup when account and banner selection
+                // interactions can re-render the summary dynamically.
             }
         }
     }
     Ok(())
+}
+
+fn account_select_comp<'a>(
+    akend_accounts: &Vec<ayaya_db::entity::prelude::AkEndUserModel>,
+    custom_id: &'a str,
+) -> serenity::CreateComponent<'a> {
+    serenity::CreateComponent::ActionRow(serenity::CreateActionRow::SelectMenu(
+        serenity::CreateSelectMenu::new(
+            custom_id,
+            serenity::CreateSelectMenuKind::String {
+                options: akend_accounts
+                    .iter()
+                    .map(|e| {
+                        serenity::CreateSelectMenuOption::new(
+                            e.user_desc.to_string(),
+                            e.user_id.to_string(),
+                        )
+                    })
+                    .collect(),
+            },
+        )
+        .placeholder("Choose an Account"),
+    ))
+}
+
+fn banner_select_comp<'a>(
+    game: SupportedGames,
+    custom_id: &'a str,
+) -> serenity::CreateComponent<'a> {
+    match game {
+        SupportedGames::WutheringWaves => {
+            let choices = CardPoolType::iter()
+                .map(|e| serenity::CreateSelectMenuOption::new(e.user_names(), e.to_string()))
+                .collect();
+            serenity::CreateComponent::ActionRow(serenity::CreateActionRow::SelectMenu(
+                serenity::CreateSelectMenu::new(
+                    custom_id,
+                    serenity::CreateSelectMenuKind::String { options: choices },
+                )
+                .placeholder("Choose a banner"),
+            ))
+        }
+        SupportedGames::AkEnd => {
+            let choices = AkEndGachaPool::iter()
+                .map(|e| serenity::CreateSelectMenuOption::new(e.to_string(), e.get_api_name()))
+                .collect();
+            serenity::CreateComponent::ActionRow(serenity::CreateActionRow::SelectMenu(
+                serenity::CreateSelectMenu::new(
+                    custom_id,
+                    serenity::CreateSelectMenuKind::String { options: choices },
+                )
+                .placeholder("Choose a banner"),
+            ))
+        }
+    }
+}
+
+pub fn char_pull_summary_akend<'a>(
+    account: &AkEndUserModel,
+    pulls: &Vec<AkEndCharPullModel>,
+    banner: AkEndGachaPool,
+) -> serenity::CreateComponent<'a> {
+    // filter for banner
+    let banner_pulles = pulls
+        .iter()
+        .filter(|e| banner == e.pool_type)
+        .collect::<Vec<_>>();
+    let mut sorted = banner_pulles.clone();
+    sorted.sort_by_key(|e| e.seq_id);
+    // TODO: remove this debug output after the summary uses the sorted pulls.
+    dbg!(&sorted);
+
+    // TODO: add pity calculations and expose the next 5-star / 6-star thresholds.
+    let total_banner_count = banner_pulles.len();
+
+    let header = format!(
+        "# Account: {} ({})",
+        account.ak_end_user_id, account.user_desc
+    );
+    let header2 = format!("## Pulls Summary for {} banner", banner.to_string());
+    let banner_count_message = format!("Total pulls on banner: {total_banner_count}");
+    // TODO: include pity fields in the rendered summary once they are computed.
+    let to_pity6 = format!("6 star pity: ");
+    let to_pity5 = format!("5 star pity:");
+    let message = format!("{}\n{}\n{}", header, header2, banner_count_message);
+
+    let text_display =
+        serenity::CreateContainerComponent::TextDisplay(serenity::CreateTextDisplay::new(message));
+    serenity::CreateComponent::Container(serenity::CreateContainer::new(vec![text_display]))
 }

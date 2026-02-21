@@ -184,6 +184,7 @@ impl GameAdapter for AkEndAdapter {
         match pull {
             ParsedAkEndPull::Character(pull) => {
                 let ts = parse_akend_ts(&pull.gacha_ts);
+                let seq_id = pull.seq_id.parse().expect("seq id is numeric");
                 AkEndPullDto::Character(AkEndCharPullDto {
                     user_game_id: user_game_id.to_string(),
                     pool_type: pull.pool_type.unwrap().get_api_name(),
@@ -195,11 +196,12 @@ impl GameAdapter for AkEndAdapter {
                     is_free: pull.is_free,
                     is_new: pull.is_new,
                     time: ts,
-                    seq_id: pull.seq_id,
+                    seq_id: seq_id,
                 })
             }
             ParsedAkEndPull::Weapon(pull) => {
                 let ts = parse_akend_ts(&pull.gacha_ts);
+                let seq_id = pull.seq_id.parse().expect("seq id is numeric");
                 AkEndPullDto::Weapon(AkEndWeapPullDto {
                     user_game_id: user_game_id.to_string(),
                     pool_type: pull.pool_type.expect("initialized").get_api_name(),
@@ -211,7 +213,7 @@ impl GameAdapter for AkEndAdapter {
                     rarity: pull.rarity,
                     is_new: pull.is_new,
                     time: ts,
-                    seq_id: pull.seq_id,
+                    seq_id: seq_id,
                 })
             }
         }
@@ -309,6 +311,8 @@ pub enum AkEndGachaPool {
 }
 
 impl AkEndGachaPool {
+    /// Get the canonical API names of variants. Use the display impl if you need
+    /// a user friendly name
     pub fn get_api_name(&self) -> String {
         match self {
             AkEndGachaPool::Special => "E_CharacterGachaPoolType_Special",
@@ -329,6 +333,18 @@ impl std::fmt::Display for AkEndGachaPool {
             Self::Weapon => "Weapon",
         };
         write!(f, "{label}")
+    }
+}
+
+impl PartialEq<String> for AkEndGachaPool {
+    fn eq(&self, other: &String) -> bool {
+        &self.get_api_name() == other
+    }
+}
+
+impl PartialEq<&str> for AkEndGachaPool {
+    fn eq(&self, other: &&str) -> bool {
+        &&self.get_api_name() == other
     }
 }
 

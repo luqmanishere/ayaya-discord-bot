@@ -1,0 +1,471 @@
+use sea_orm_migration::{prelude::*, schema::*};
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // rename old table to old
+        manager
+            .rename_table(
+                Table::rename()
+                    .table(AkEndCharPull::Table, AkEndCharPullOld::Table)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .rename_table(
+                Table::rename()
+                    .table(AkEndWeapPull::Table, AkEndWeapPullOld::Table)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(AkEndCharPull::Table)
+                    .if_not_exists()
+                    .col(uuid(AkEndCharPull::Id).primary_key())
+                    .col(integer(AkEndCharPull::UserId).not_null())
+                    .col(integer(AkEndCharPull::AkEndUserId).not_null())
+                    .col(string(AkEndCharPull::PoolType).not_null())
+                    .col(string(AkEndCharPull::PoolId).not_null())
+                    .col(string(AkEndCharPull::PoolName).not_null())
+                    .col(string(AkEndCharPull::CharId).not_null())
+                    .col(string(AkEndCharPull::CharName).not_null())
+                    .col(integer(AkEndCharPull::Rarity).not_null())
+                    .col(boolean(AkEndCharPull::IsFree).not_null())
+                    .col(boolean(AkEndCharPull::IsNew).not_null())
+                    .col(timestamp_with_time_zone(AkEndCharPull::Time).not_null())
+                    .col(integer(AkEndCharPull::SeqId).not_null())
+                    .foreign_key(
+                        ForeignKeyCreateStatement::new()
+                            .from_tbl(AkEndCharPull::Table)
+                            .from_col(AkEndCharPull::AkEndUserId)
+                            .to_tbl(AkEndUser::Table)
+                            .to_col(AkEndUser::AkEndUserId),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(AkEndWeapPull::Table)
+                    .if_not_exists()
+                    .col(uuid(AkEndWeapPull::Id).primary_key())
+                    .col(integer(AkEndWeapPull::UserId).not_null())
+                    .col(integer(AkEndWeapPull::AkEndUserId).not_null())
+                    .col(string(AkEndWeapPull::PoolType).not_null())
+                    .col(string(AkEndWeapPull::PoolId).not_null())
+                    .col(string(AkEndWeapPull::PoolName).not_null())
+                    .col(string(AkEndWeapPull::WeaponId).not_null())
+                    .col(string(AkEndWeapPull::WeaponName).not_null())
+                    .col(string(AkEndWeapPull::WeaponType).not_null())
+                    .col(integer(AkEndWeapPull::Rarity).not_null())
+                    .col(boolean(AkEndWeapPull::IsNew).not_null())
+                    .col(timestamp_with_time_zone(AkEndWeapPull::Time).not_null())
+                    .col(integer(AkEndWeapPull::SeqId).not_null())
+                    .foreign_key(
+                        ForeignKeyCreateStatement::new()
+                            .from_tbl(AkEndWeapPull::Table)
+                            .from_col(AkEndWeapPull::AkEndUserId)
+                            .to_tbl(AkEndUser::Table)
+                            .to_col(AkEndUser::AkEndUserId),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .exec_stmt(
+                Query::insert()
+                    .into_table(AkEndCharPull::Table)
+                    .columns({
+                        use AkEndCharPull::*;
+                        [
+                            Id,
+                            UserId,
+                            AkEndUserId,
+                            PoolType,
+                            PoolId,
+                            PoolName,
+                            CharId,
+                            CharName,
+                            Rarity,
+                            IsFree,
+                            IsNew,
+                            Time,
+                            SeqId,
+                        ]
+                    })
+                    .select_from(
+                        Query::select()
+                            .columns({
+                                use AkEndCharPullOld::*;
+                                [
+                                    Id,
+                                    UserId,
+                                    AkEndUserId,
+                                    PoolType,
+                                    PoolId,
+                                    PoolName,
+                                    CharId,
+                                    CharName,
+                                    Rarity,
+                                    IsFree,
+                                    IsNew,
+                                    Time,
+                                ]
+                            })
+                            .expr_as(
+                                Expr::col(AkEndCharPullOld::SeqId).cast_as("integer"),
+                                AkEndCharPull::SeqId,
+                            )
+                            .from(AkEndCharPullOld::Table)
+                            .order_by_expr(
+                                Expr::col(AkEndCharPullOld::SeqId).cast_as("integer"),
+                                Order::Asc,
+                            )
+                            .to_owned(),
+                    )
+                    .unwrap()
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .exec_stmt(
+                Query::insert()
+                    .into_table(AkEndWeapPull::Table)
+                    .columns({
+                        use AkEndWeapPull::*;
+                        [
+                            Id,
+                            UserId,
+                            AkEndUserId,
+                            PoolType,
+                            PoolId,
+                            PoolName,
+                            WeaponId,
+                            WeaponName,
+                            WeaponType,
+                            Rarity,
+                            IsNew,
+                            Time,
+                            SeqId,
+                        ]
+                    })
+                    .select_from(
+                        Query::select()
+                            .columns({
+                                use AkEndWeapPullOld::*;
+                                [
+                                    Id,
+                                    UserId,
+                                    AkEndUserId,
+                                    PoolType,
+                                    PoolId,
+                                    PoolName,
+                                    WeaponId,
+                                    WeaponName,
+                                    WeaponType,
+                                    Rarity,
+                                    IsNew,
+                                    Time,
+                                ]
+                            })
+                            .expr_as(
+                                Expr::col(AkEndWeapPullOld::SeqId).cast_as("integer"),
+                                AkEndWeapPull::SeqId,
+                            )
+                            .from(AkEndWeapPullOld::Table)
+                            .order_by_expr(
+                                Expr::col(AkEndWeapPullOld::SeqId).cast_as("integer"),
+                                Order::Asc,
+                            )
+                            .to_owned(),
+                    )
+                    .unwrap()
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(AkEndCharPullOld::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(AkEndWeapPullOld::Table).to_owned())
+            .await?;
+        Ok(())
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .rename_table(
+                Table::rename()
+                    .table(AkEndCharPull::Table, AkEndCharPullOld::Table)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .rename_table(
+                Table::rename()
+                    .table(AkEndWeapPull::Table, AkEndWeapPullOld::Table)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(AkEndCharPull::Table)
+                    .if_not_exists()
+                    .col(uuid(AkEndCharPull::Id).primary_key())
+                    .col(integer(AkEndCharPull::UserId).not_null())
+                    .col(integer(AkEndCharPull::AkEndUserId).not_null())
+                    .col(string(AkEndCharPull::PoolType).not_null())
+                    .col(string(AkEndCharPull::PoolId).not_null())
+                    .col(string(AkEndCharPull::PoolName).not_null())
+                    .col(string(AkEndCharPull::CharId).not_null())
+                    .col(string(AkEndCharPull::CharName).not_null())
+                    .col(integer(AkEndCharPull::Rarity).not_null())
+                    .col(boolean(AkEndCharPull::IsFree).not_null())
+                    .col(boolean(AkEndCharPull::IsNew).not_null())
+                    .col(timestamp_with_time_zone(AkEndCharPull::Time).not_null())
+                    .col(string(AkEndCharPull::SeqId).not_null())
+                    .foreign_key(
+                        ForeignKeyCreateStatement::new()
+                            .from_tbl(AkEndCharPull::Table)
+                            .from_col(AkEndCharPull::AkEndUserId)
+                            .to_tbl(AkEndUser::Table)
+                            .to_col(AkEndUser::AkEndUserId),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(AkEndWeapPull::Table)
+                    .if_not_exists()
+                    .col(uuid(AkEndWeapPull::Id).primary_key())
+                    .col(integer(AkEndWeapPull::UserId).not_null())
+                    .col(integer(AkEndWeapPull::AkEndUserId).not_null())
+                    .col(string(AkEndWeapPull::PoolType).not_null())
+                    .col(string(AkEndWeapPull::PoolId).not_null())
+                    .col(string(AkEndWeapPull::PoolName).not_null())
+                    .col(string(AkEndWeapPull::WeaponId).not_null())
+                    .col(string(AkEndWeapPull::WeaponName).not_null())
+                    .col(string(AkEndWeapPull::WeaponType).not_null())
+                    .col(integer(AkEndWeapPull::Rarity).not_null())
+                    .col(boolean(AkEndWeapPull::IsNew).not_null())
+                    .col(timestamp_with_time_zone(AkEndWeapPull::Time).not_null())
+                    .col(string(AkEndWeapPull::SeqId).not_null())
+                    .foreign_key(
+                        ForeignKeyCreateStatement::new()
+                            .from_tbl(AkEndWeapPull::Table)
+                            .from_col(AkEndWeapPull::AkEndUserId)
+                            .to_tbl(AkEndUser::Table)
+                            .to_col(AkEndUser::AkEndUserId),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .exec_stmt(
+                Query::insert()
+                    .into_table(AkEndCharPull::Table)
+                    .columns({
+                        use AkEndCharPull::*;
+                        [
+                            Id,
+                            UserId,
+                            AkEndUserId,
+                            PoolType,
+                            PoolId,
+                            PoolName,
+                            CharId,
+                            CharName,
+                            Rarity,
+                            IsFree,
+                            IsNew,
+                            Time,
+                            SeqId,
+                        ]
+                    })
+                    .select_from(
+                        Query::select()
+                            .columns({
+                                use AkEndCharPullOld::*;
+                                [
+                                    Id,
+                                    UserId,
+                                    AkEndUserId,
+                                    PoolType,
+                                    PoolId,
+                                    PoolName,
+                                    CharId,
+                                    CharName,
+                                    Rarity,
+                                    IsFree,
+                                    IsNew,
+                                    Time,
+                                    SeqId,
+                                ]
+                            })
+                            .from(AkEndCharPullOld::Table)
+                            .order_by(AkEndCharPullOld::SeqId, Order::Asc)
+                            .to_owned(),
+                    )
+                    .unwrap()
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .exec_stmt(
+                Query::insert()
+                    .into_table(AkEndWeapPull::Table)
+                    .columns({
+                        use AkEndWeapPull::*;
+                        [
+                            Id,
+                            UserId,
+                            AkEndUserId,
+                            PoolType,
+                            PoolId,
+                            PoolName,
+                            WeaponId,
+                            WeaponName,
+                            WeaponType,
+                            Rarity,
+                            IsNew,
+                            Time,
+                            SeqId,
+                        ]
+                    })
+                    .select_from(
+                        Query::select()
+                            .columns({
+                                use AkEndWeapPullOld::*;
+                                [
+                                    Id,
+                                    UserId,
+                                    AkEndUserId,
+                                    PoolType,
+                                    PoolId,
+                                    PoolName,
+                                    WeaponId,
+                                    WeaponName,
+                                    WeaponType,
+                                    Rarity,
+                                    IsNew,
+                                    Time,
+                                    SeqId,
+                                ]
+                            })
+                            .from(AkEndWeapPullOld::Table)
+                            .order_by(AkEndWeapPullOld::SeqId, Order::Asc)
+                            .to_owned(),
+                    )
+                    .unwrap()
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(AkEndCharPullOld::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(AkEndWeapPullOld::Table).to_owned())
+            .await?;
+        Ok(())
+    }
+}
+
+#[derive(DeriveIden)]
+enum AkEndCharPull {
+    Table,
+    Id,
+    UserId,
+    AkEndUserId,
+    PoolType,
+    PoolId,
+    PoolName,
+    CharId,
+    CharName,
+    Rarity,
+    IsFree,
+    IsNew,
+    Time,
+    SeqId,
+}
+
+#[derive(DeriveIden)]
+enum AkEndWeapPull {
+    Table,
+    Id,
+    UserId,
+    AkEndUserId,
+    PoolType,
+    PoolId,
+    PoolName,
+    WeaponId,
+    WeaponName,
+    WeaponType,
+    Rarity,
+    IsNew,
+    Time,
+    SeqId,
+}
+
+#[derive(DeriveIden)]
+enum AkEndCharPullOld {
+    Table,
+    Id,
+    UserId,
+    AkEndUserId,
+    PoolType,
+    PoolId,
+    PoolName,
+    CharId,
+    CharName,
+    Rarity,
+    IsFree,
+    IsNew,
+    Time,
+    SeqId,
+}
+
+#[derive(DeriveIden)]
+enum AkEndWeapPullOld {
+    Table,
+    Id,
+    UserId,
+    AkEndUserId,
+    PoolType,
+    PoolId,
+    PoolName,
+    WeaponId,
+    WeaponName,
+    WeaponType,
+    Rarity,
+    IsNew,
+    Time,
+    SeqId,
+}
+
+#[derive(DeriveIden)]
+#[expect(clippy::enum_variant_names)]
+enum AkEndUser {
+    Table,
+    AkEndUserId,
+}

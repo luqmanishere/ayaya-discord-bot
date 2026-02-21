@@ -42,7 +42,7 @@ pub mod akend {
         pub is_free: bool,
         pub is_new: bool,
         pub time: OffsetDateTime,
-        pub seq_id: String,
+        pub seq_id: i64,
     }
 
     #[derive(Debug, Clone)]
@@ -57,6 +57,6 @@ pub mod akend {
         pub rarity: i32,
         pub is_new: bool,
         pub time: OffsetDateTime,
-        pub seq_id: String,
+        pub seq_id: i64,
     }
 }

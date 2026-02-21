@@ -18,7 +18,7 @@ pub struct Model {
     pub is_free: bool,
     pub is_new: bool,
     pub time: TimeDateTimeWithTimeZone,
-    pub seq_id: String,
+    pub seq_id: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
