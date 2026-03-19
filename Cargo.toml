@@ -72,6 +72,7 @@ features = [
 
 [workspace.dependencies.songbird]
 # version = "0.5.0"
-git = "https://github.com/serenity-rs/songbird.git"
-branch = "serenity-next"
+git = "https://github.com/jtscuba/songbird.git"
+# branch = "serenity-next"
+rev = "2ee686af37a692cd189a17771beda426ae7f051f"
 features = ["builtin-queue", "driver", "serenity"]
