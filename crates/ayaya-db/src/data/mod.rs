@@ -6,6 +6,7 @@ pub mod permissions;
 pub mod sounds;
 pub mod stats;
 mod utils;
+pub mod voice;
 pub mod wuwa_tracker;
 
 use std::sync::{Arc, Mutex};
@@ -26,6 +27,7 @@ use sounds::SoundsManager;
 use stats::StatsManager;
 use time::UtcOffset;
 use utils::DataTiming;
+use voice::VoiceManager;
 
 use crate::data::wuwa_tracker::WuwaPullsManager;
 use crate::error::{
@@ -54,6 +56,7 @@ pub struct DataManager {
     permissions: Permissions,
     stats: StatsManager,
     sounds: SoundsManager,
+    voice: VoiceManager,
     wuwa_tracker: WuwaPullsManager,
     akend_tracker: AkEndTracker,
     autocomplete_cache: Autocomplete,
@@ -79,6 +82,7 @@ impl DataManager {
         let permissions = Permissions::new(db.clone(), metrics_handler.clone()).await?;
         let stats = StatsManager::new(db.clone(), metrics_handler.clone());
         let sounds = SoundsManager::new(db.clone(), metrics_handler.clone());
+        let voice = VoiceManager::new(db.clone(), metrics_handler.clone());
         let wuwa_tracker = WuwaPullsManager::new(db.clone(), metrics_handler.clone());
         let akend_tracker = AkEndTracker::new(db.clone(), metrics_handler.clone());
         Ok(Self {
@@ -87,6 +91,7 @@ impl DataManager {
             permissions,
             stats,
             sounds,
+            voice,
             wuwa_tracker,
             akend_tracker,
             autocomplete_cache: Arc::new(Mutex::new(LruCache::new(1000 * 1024))),
@@ -103,6 +108,10 @@ impl DataManager {
 
     pub fn sounds(&self) -> SoundsManager {
         self.sounds.clone()
+    }
+
+    pub fn voice(&self) -> VoiceManager {
+        self.voice.clone()
     }
 
     pub fn wuwa_tracker(&self) -> WuwaPullsManager {

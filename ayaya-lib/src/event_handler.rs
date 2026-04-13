@@ -3,7 +3,9 @@ use std::{
     sync::Arc,
 };
 
+use ayaya_db::data::voice::{VoiceSessionEndReason, VoiceStateUpdateInput};
 use serenity::all::{ActivityData, CacheHttp, Context, EventHandler, FullEvent};
+use time::OffsetDateTime;
 
 use crate::{Data, setup_cookies};
 
@@ -74,8 +76,125 @@ impl EventHandler for StartupHandler {
             }
             FullEvent::CacheReady { guilds, .. } => {
                 tracing::info!("Cached guild info is ready for {} guilds.", guilds.len());
+                reconcile_cached_voice_states(
+                    context,
+                    guilds.as_slice(),
+                    OffsetDateTime::now_utc(),
+                )
+                .await;
+            }
+            FullEvent::VoiceStateUpdate { old, new, .. } => {
+                persist_voice_state_update(context, old.as_ref(), new).await;
             }
             _ => {}
         }
     }
+}
+
+async fn persist_voice_state_update(
+    context: &Context,
+    old: Option<&serenity::all::VoiceState>,
+    new: &serenity::all::VoiceState,
+) {
+    let Some(guild_id) = new
+        .guild_id
+        .or_else(|| old.and_then(|state| state.guild_id))
+    else {
+        tracing::debug!("Skipping voice state update without guild id");
+        return;
+    };
+
+    let input = VoiceStateUpdateInput {
+        guild_id: guild_id.get() as i64,
+        user_id: new.user_id.get() as i64,
+        from_channel_id: old
+            .and_then(|state| state.channel_id)
+            .map(|channel_id| channel_id.get() as i64),
+        to_channel_id: new.channel_id.map(|channel_id| channel_id.get() as i64),
+        occurred_at: OffsetDateTime::now_utc(),
+        self_mute: new.self_mute(),
+        self_deaf: new.self_deaf(),
+        mute: new.mute(),
+        deaf: new.deaf(),
+        self_stream: new.self_stream().unwrap_or(false),
+        self_video: new.self_video(),
+        suppress: new.suppress(),
+        request_to_speak_at: new
+            .request_to_speak_timestamp
+            .and_then(timestamp_to_offset_datetime),
+        raw_state_json: serde_json::to_string(new).ok(),
+        start_is_estimated: old.is_none(),
+    };
+
+    let data: Arc<Data> = context.data();
+    if let Err(error) = data
+        .data_manager
+        .voice()
+        .apply_voice_state_update(input)
+        .await
+    {
+        tracing::error!("Failed to persist voice state update: {error}");
+    }
+}
+
+async fn reconcile_cached_voice_states(
+    context: &Context,
+    guild_ids: &[serenity::all::GuildId],
+    startup_time: OffsetDateTime,
+) {
+    let data: Arc<Data> = context.data();
+    let voice_manager = data.data_manager.voice();
+
+    if let Err(error) = voice_manager
+        .close_all_open_voice_sessions(startup_time, VoiceSessionEndReason::BotRestart)
+        .await
+    {
+        tracing::error!("Failed to close open voice sessions during reconciliation: {error}");
+        return;
+    }
+
+    for guild_id in guild_ids {
+        let active_voice_states = {
+            let Some(guild) = guild_id.to_guild_cached(&context.cache) else {
+                continue;
+            };
+
+            guild
+                .voice_states
+                .iter()
+                .filter_map(|state| {
+                    let channel_id = state.channel_id?;
+                    Some((
+                        state.user_id.get() as i64,
+                        channel_id.get() as i64,
+                        serde_json::to_string(state).ok(),
+                    ))
+                })
+                .collect::<Vec<_>>()
+        };
+
+        for (user_id, channel_id, raw_state_json) in active_voice_states {
+            if let Err(error) = voice_manager
+                .ensure_open_voice_session(
+                    guild_id.get() as i64,
+                    user_id,
+                    channel_id,
+                    startup_time,
+                    raw_state_json,
+                )
+                .await
+            {
+                tracing::error!(
+                    "Failed to reconcile voice session for guild {} user {}: {}",
+                    guild_id,
+                    user_id,
+                    error
+                );
+            }
+        }
+    }
+}
+
+fn timestamp_to_offset_datetime(timestamp: serenity::all::Timestamp) -> Option<OffsetDateTime> {
+    OffsetDateTime::from_unix_timestamp(timestamp.unix_timestamp()).ok()
 }

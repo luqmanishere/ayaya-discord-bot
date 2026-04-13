@@ -11,6 +11,7 @@ mod m20260127_000001_wuwa_import_state;
 mod m20260207_060550_akend_pull_tracker;
 mod m20260220_020540_akend_pull_weapons;
 mod m20260221_152529_akend_numeric_seqid;
+mod m20260413_142658_voicechat_mon;
 
 pub struct Migrator;
 
@@ -28,6 +29,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260207_060550_akend_pull_tracker::Migration),
             Box::new(m20260220_020540_akend_pull_weapons::Migration),
             Box::new(m20260221_152529_akend_numeric_seqid::Migration),
+            Box::new(m20260413_142658_voicechat_mon::Migration),
         ]
     }
 }

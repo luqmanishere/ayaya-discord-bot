@@ -17,6 +17,8 @@ pub mod sounds;
 pub mod upload_noticed;
 pub mod user_command_all_time_statistics;
 pub mod user_play_queries;
+pub mod voice_sessions;
+pub mod voice_state_events;
 pub mod wuwa_import_state;
 pub mod wuwa_pull;
 pub mod wuwa_resource;
