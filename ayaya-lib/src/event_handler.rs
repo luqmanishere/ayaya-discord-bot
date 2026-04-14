@@ -126,6 +126,13 @@ async fn persist_voice_state_update(
         start_is_estimated: old.is_none(),
     };
 
+    {
+        let context = context.clone();
+        let input = input.clone();
+        tokio::spawn(async move {
+            notify_channel(context, input).await;
+        });
+    }
     let data: Arc<Data> = context.data();
     if let Err(error) = data
         .data_manager
@@ -197,4 +204,93 @@ async fn reconcile_cached_voice_states(
 
 fn timestamp_to_offset_datetime(timestamp: serenity::all::Timestamp) -> Option<OffsetDateTime> {
     OffsetDateTime::from_unix_timestamp(timestamp.unix_timestamp()).ok()
+}
+
+async fn notify_channel(ctx: Context, input: VoiceStateUpdateInput) {
+    use serenity::all::{ChannelId, GuildId, UserId};
+
+    const BRD_CH_ID: ChannelId = ChannelId::new(1493505984591827038);
+
+    let brd_ch = BRD_CH_ID
+        .to_guild_channel(ctx.clone(), Some(GuildId::new(599271821862371338)))
+        .await
+        .expect("brd channel exists");
+
+    let kind = input.classify();
+    let user = UserId::new(input.user_id as u64)
+        .to_user(ctx.clone())
+        .await
+        .expect("user exists");
+    let guild_id = GuildId::new(input.guild_id as u64);
+    let guild_name = guild_id
+        .clone()
+        .to_guild_cached(&ctx.cache)
+        .expect("guild is cached")
+        .name
+        .clone();
+
+    let msg = match kind {
+        ayaya_db::data::voice::VoiceEventKind::Join => {
+            let vc = ChannelId::new(input.to_channel_id.expect("a join") as u64)
+                .to_guild_channel(ctx.clone(), Some(guild_id))
+                .await
+                .unwrap();
+            let vc_name = vc.base.name.to_string();
+
+            format!(
+                "`{}` joined the channel `{}` in guild `{}`",
+                user.name, vc_name, guild_name
+            )
+        }
+        ayaya_db::data::voice::VoiceEventKind::Leave => {
+            let vc = ChannelId::new(input.from_channel_id.expect("a leave") as u64)
+                .to_guild_channel(ctx.clone(), Some(guild_id))
+                .await
+                .expect("channel exists");
+            format!(
+                "`{}` left the channel `{}` in guild `{}`",
+                user.name, vc.base.name, guild_name
+            )
+        }
+        ayaya_db::data::voice::VoiceEventKind::Move => {
+            let to_vc = ChannelId::new(input.to_channel_id.expect("a join") as u64)
+                .to_guild_channel(ctx.clone(), Some(guild_id))
+                .await
+                .expect("channel exists");
+            let from_vc = ChannelId::new(input.from_channel_id.expect("a join") as u64)
+                .to_guild_channel(ctx.clone(), Some(guild_id))
+                .await
+                .expect("channel exists");
+
+            format!(
+                "`{}` moved from `{}` to `{}` in guild `{}`",
+                user.name, from_vc.base.name, to_vc.base.name, guild_name
+            )
+        }
+        ayaya_db::data::voice::VoiceEventKind::StateChange => return,
+    };
+    brd_ch
+        .send_message(
+            &ctx.http,
+            serenity::all::CreateMessage::new().embed(embed_template(&ctx, &msg)),
+        )
+        .await
+        .unwrap();
+}
+
+fn embed_template<'a>(ctx: &Context, msg: &'a str) -> serenity::all::CreateEmbed<'a> {
+    let avatar_url = ctx.cache.current_user().avatar_url();
+
+    let embed = serenity::all::CreateEmbed::new()
+        .description(msg)
+        .color(serenity::all::Color::ROHRKATZE_BLUE)
+        .timestamp(serenity::all::Timestamp::now())
+        .footer(serenity::all::CreateEmbedFooter::new("Ayaya Discord Bot"));
+    let author = if let Some(avatar_url) = avatar_url {
+        serenity::all::CreateEmbedAuthor::new("StalkerYaya").icon_url(avatar_url)
+    } else {
+        serenity::all::CreateEmbedAuthor::new("StalkerYaya")
+    };
+
+    embed.author(author)
 }
