@@ -3,7 +3,7 @@
 use poise::serenity_prelude as serenity;
 use rand::seq::SliceRandom;
 use snafu::ResultExt;
-use tracing::{error, warn};
+use tracing::error;
 
 use crate::{
     CommandResult, Context,
@@ -11,7 +11,7 @@ use crate::{
     utils::{ChannelInfo, GuildInfo, OptionExt, get_guild_id},
     voice::{
         error::MusicCommandError,
-        utils::{self, YoutubeMetadata, metadata_to_embed},
+        utils::{self, YoutubeMetadata, embed_template, metadata_to_embed},
     },
 };
 
@@ -25,6 +25,7 @@ use crate::{
     category = "Music"
 )]
 pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
     let guild_id = get_guild_id(ctx)?;
     let guild_info = GuildInfo::from_ctx(ctx)?;
 
@@ -59,14 +60,7 @@ pub async fn queue(ctx: Context<'_>) -> Result<(), BotError> {
             return Ok(());
         };
 
-        if let Err(BotError::MusicCommandError {
-            source: MusicCommandError::SearchTimeout,
-        }) = queue_pagination_interaction(ctx, queue_vec).await
-        {
-            return Ok(());
-        } else {
-            warn!("Waited too long");
-        };
+        queue_pagination_interaction(ctx, queue_vec).await?;
     } else {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }
@@ -145,6 +139,39 @@ pub async fn delete(ctx: Context<'_>, queue_position: u64) -> Result<(), BotErro
         } else {
             // TODO: zero is an error
         }
+    } else {
+        return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
+    }
+
+    Ok(())
+}
+
+/// Clears the queue.
+#[tracing::instrument(skip(ctx), fields(user_id = %ctx.author().id, guild_id = get_guild_id(ctx)?.get()))]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    aliases("c"),
+    category = "Music"
+)]
+pub async fn clear(ctx: Context<'_>) -> Result<(), BotError> {
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
+    let guild_info = GuildInfo::from_ctx(ctx)?;
+
+    let manager = ctx.data().songbird.clone();
+
+    if let Some(handler_lock) = manager.get(guild_info.guild_id) {
+        let lock = handler_lock.lock().await;
+        lock.queue().modify_queue(|queue| {
+            let _ = queue.split_off(0);
+        });
+
+        ctx.send(
+            poise::CreateReply::default().embed(embed_template(utils::EmbedOperation::ClearQueue)),
+        )
+        .await
+        .context(GeneralSerenitySnafu)?;
     } else {
         return Err(MusicCommandError::BotVoiceNotJoined { guild_info }.into());
     }
@@ -252,8 +279,7 @@ async fn queue_pagination_interaction(
     // create the first reply
     let reply = {
         let mut buttons = vec![serenity::CreateButton::new(&prev_button_id).emoji('◀')];
-        let mut reply =
-            poise::CreateReply::default().flags(serenity::MessageFlags::IS_COMPONENTS_V2);
+        let mut reply = poise::CreateReply::default();
         let mut message = serenity::MessageBuilder::default();
         let mut embed = serenity::CreateEmbed::new()
             .author(serenity::CreateEmbedAuthor::new(format!("Queue | Page: {}", current_page  +1)).icon_url(
@@ -304,8 +330,7 @@ async fn queue_pagination_interaction(
 
         let response = {
             let mut buttons = vec![serenity::CreateButton::new(&prev_button_id).emoji('◀')];
-            let mut response = serenity::CreateInteractionResponseMessage::new()
-                .flags(serenity::MessageFlags::IS_COMPONENTS_V2);
+            let mut response = serenity::CreateInteractionResponseMessage::new();
             let mut message = serenity::MessageBuilder::default();
             let mut embed = serenity::CreateEmbed::new()
                 .author(serenity::CreateEmbedAuthor::new(format!("Queue | Page: {}", current_page + 1)).icon_url(
@@ -339,8 +364,7 @@ async fn queue_pagination_interaction(
             .await
             .context(GeneralSerenitySnafu)?;
     }
-    // TODO: its own error
-    Err(MusicCommandError::SearchTimeout.into())
+    Ok(())
 }
 
 /// Swap item positions in queue. Use the queue command to view the queue

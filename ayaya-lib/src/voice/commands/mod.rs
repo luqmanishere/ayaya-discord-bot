@@ -30,6 +30,7 @@ pub fn voice_commands() -> Commands {
         stop(),
         seek(),
         delete(),
+        clear(),
         loop_track(),
         stop_loop(),
         ting(),
@@ -64,6 +65,7 @@ pub fn voice_commands() -> Commands {
         "seek",
         "deafen",
         "delete",
+        "clear",
         "loop_track",
         "stop_loop",
         "play_next"
