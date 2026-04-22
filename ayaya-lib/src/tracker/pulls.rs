@@ -657,8 +657,8 @@ pub fn char_pull_summary_akend<'a>(
     let header2 = format!("## Pulls Summary for {} banner", banner.to_string());
     let banner_count_message = format!("Total pulls on banner: {total_banner_count}");
     // TODO: include pity fields in the rendered summary once they are computed.
-    let to_pity6 = format!("6 star pity: ");
-    let to_pity5 = format!("5 star pity:");
+    let _to_pity6 = format!("6 star pity: ");
+    let _to_pity5 = format!("5 star pity:");
     let message = format!("{}\n{}\n{}", header, header2, banner_count_message);
 
     let text_display =
