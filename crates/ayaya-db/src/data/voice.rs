@@ -3,14 +3,14 @@ use std::sync::Arc;
 use ayaya_core::metrics::{DataOperationType, MetricsSink};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, DatabaseTransaction,
-    EntityTrait, IntoActiveModel, QueryFilter, QueryOrder, TransactionTrait,
+    EntityTrait, IntoActiveModel, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
 };
 use snafu::ResultExt;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 use super::{DataResult, utils::DataTiming};
-use crate::entity::{voice_sessions, voice_state_events};
+use crate::entity::{prelude::*, voice_sessions, voice_state_events};
 use crate::error::DatabaseSnafu;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -298,6 +298,30 @@ impl VoiceManager {
         }
 
         Ok(count)
+    }
+
+    pub async fn get_server_voice_sessions(
+        &self,
+        server_id: u64,
+    ) -> DataResult<Vec<voice_sessions::Model>> {
+        const OP: &str = "close_all_open_voice_sessions";
+        self.metrics_handler
+            .data_access(OP, DataOperationType::Write)
+            .await;
+        let _timing = DataTiming::new(
+            OP.to_string(),
+            DataOperationType::Write,
+            Some(self.metrics_handler.clone()),
+        );
+
+        let models = VoiceSessions::find()
+            .filter(voice_sessions::Column::GuildId.eq(server_id))
+            .group_by(voice_sessions::Column::UserId)
+            .all(&self.db)
+            .await
+            .context(DatabaseSnafu { operation: OP })?;
+
+        Ok(models)
     }
 }
 

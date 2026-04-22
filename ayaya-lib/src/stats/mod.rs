@@ -1,5 +1,7 @@
 //! Commands for stats
 //!
+use std::collections::HashMap;
+
 use poise::serenity_prelude::{self as serenity, Mentionable};
 use snafu::ResultExt;
 
@@ -10,7 +12,11 @@ use crate::{
 };
 
 pub fn stats_commands() -> Commands {
-    vec![user_all_time_single(), server_all_time_single()]
+    vec![
+        user_all_time_single(),
+        server_all_time_single(),
+        server_voice_stats(),
+    ]
 }
 
 /// Shows the total amount of specific command invocations for a user.
@@ -128,6 +134,71 @@ pub async fn server_all_time_single(
         }
         Err(_) => {
             ctx.reply(format!("Data for command name `{command}` is not found"))
+                .await
+                .context(GeneralSerenitySnafu)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// A measure of no life
+#[poise::command(slash_command, prefix_command, category = "Statistics")]
+pub async fn server_voice_stats(
+    ctx: Context<'_>,
+    server_id: Option<serenity::GuildId>,
+) -> CommandResult {
+    ctx.defer().await.context(GeneralSerenitySnafu)?;
+
+    let data_manager = ctx.data().data_manager.clone();
+    let guild_id = if let Some(guild_id) = server_id {
+        guild_id.get()
+    } else {
+        GuildInfo::guild_id_or_0(ctx)
+    };
+
+    match data_manager
+        .voice()
+        .get_server_voice_sessions(guild_id)
+        .await
+    {
+        Ok(models) => {
+            // calculate length for each user
+            let mut map: std::collections::HashMap<u64, time::Duration> = HashMap::default();
+
+            for model in models {
+                if let Some(left_at) = model.left_at {
+                    let dur = left_at - model.joined_at;
+                    map.entry(model.user_id as u64)
+                        .and_modify(|e| {
+                            *e = e.saturating_add(dur);
+                        })
+                        .or_insert(dur);
+                } else {
+                    tracing::warn!("no left at time found, skipping");
+                }
+            }
+
+            let mut msg = serenity::MessageBuilder::default()
+                .push_line(format!("# Voicechat Stats: {guild_id}").as_str());
+
+            for (i, (user_id, dur)) in map.iter().enumerate() {
+                let i = i + 1;
+                let user = serenity::UserId::new(*user_id)
+                    .to_user(ctx)
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+                let dur = humantime::format_duration(dur.unsigned_abs()).to_string();
+                let line = format!("{i}. {}: {}", user.name, dur);
+                msg = msg.push_line(line.as_str());
+            }
+
+            ctx.reply(msg.to_string())
+                .await
+                .context(GeneralSerenitySnafu)?;
+        }
+        Err(_) => {
+            ctx.say("No data found")
                 .await
                 .context(GeneralSerenitySnafu)?;
         }
