@@ -17,6 +17,7 @@ ayaya-tracker = { path = "../crates/ayaya-tracker" }
 base64 = { workspace = true }
 bincode = { workspace = true }
 humantime = { version = "2" }
+itertools = { version = "0.15" }
 lru-mem = { workspace = true }
 poise.workspace = true
 prometheus-client = { version = "0.22" }

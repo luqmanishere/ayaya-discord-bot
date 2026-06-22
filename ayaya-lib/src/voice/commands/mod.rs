@@ -41,6 +41,7 @@ pub fn voice_commands() -> Commands {
         upload_sound(),
         play_sound(),
         rename_sound(),
+        soundboard(),
     ]
 }
 

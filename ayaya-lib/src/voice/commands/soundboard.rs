@@ -1,5 +1,6 @@
 use std::{io::Read, sync::Arc};
 
+use ::serenity::all::CollectComponentInteractions;
 use error::SoundboardError;
 use poise::serenity_prelude as serenity;
 use snafu::ResultExt;
@@ -19,6 +20,220 @@ use crate::{
 };
 
 use super::join;
+
+const SOUND_PAGE_SIZE: usize = 25;
+
+/// Play sounds in a voice channel
+#[poise::command(slash_command, guild_only, ephemeral, category = "Soundboard")]
+pub async fn soundboard(ctx: Context<'_>) -> CommandResult {
+    ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
+    let user: &serenity::User = ctx.author();
+    let sound_manager = ctx.data().data_manager.sounds();
+
+    let sounds = sound_manager
+        .get_user_sounds_and_public(&user.id)
+        .await
+        .unwrap_or_default();
+
+    let search = String::new();
+    let mut page_num = 0_usize;
+    let mut selected_sound_id = String::new();
+
+    let comps = render_soundboard(&sounds, &search, page_num, &selected_sound_id);
+
+    let message = poise::CreateReply::new()
+        .components(comps)
+        .flags(serenity::MessageFlags::EPHEMERAL | serenity::MessageFlags::IS_COMPONENTS_V2);
+
+    let rep = ctx.reply_builder(message);
+    let rep = ctx.send(rep).await.context(GeneralSerenitySnafu)?;
+    let rep = rep.message().await.context(GeneralSerenitySnafu)?;
+
+    while let Some(interaction) = rep
+        .id
+        .collect_component_interactions(ctx.serenity_context())
+        .timeout(std::time::Duration::from_mins(30))
+        .await
+    {
+        match interaction.data.custom_id.as_str() {
+            id if id == "next" => {
+                page_num = page_num
+                    .saturating_add(1)
+                    .min(last_soundboard_page(&sounds, &search));
+
+                interaction
+                    .create_response(
+                        ctx.http(),
+                        serenity::CreateInteractionResponse::UpdateMessage(
+                            serenity::CreateInteractionResponseMessage::new().components(
+                                render_soundboard(&sounds, &search, page_num, &selected_sound_id),
+                            ),
+                        ),
+                    )
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+            }
+            id if id == "prev" => {
+                page_num = page_num.saturating_sub(1);
+
+                interaction
+                    .create_response(
+                        ctx.http(),
+                        serenity::CreateInteractionResponse::UpdateMessage(
+                            serenity::CreateInteractionResponseMessage::new().components(
+                                render_soundboard(&sounds, &search, page_num, &selected_sound_id),
+                            ),
+                        ),
+                    )
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+            }
+            id if id == "play" => {
+                interaction
+                    .create_response(ctx.http(), serenity::CreateInteractionResponse::Acknowledge)
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+
+                // TODO: play the sound
+                let sound_id = uuid::Uuid::parse_str(&selected_sound_id)
+                    .expect("proper error hanlding in ocming");
+                play_sound_inner(ctx, sound_id, false).await?;
+            }
+
+            id if id == "select" => {
+                match interaction.data.kind {
+                    serenity::ComponentInteractionDataKind::StringSelect { ref values } => {
+                        selected_sound_id = values[0].to_string();
+                    }
+                    _ => {}
+                }
+
+                interaction
+                    .create_response(
+                        ctx.http(),
+                        serenity::CreateInteractionResponse::UpdateMessage(
+                            serenity::CreateInteractionResponseMessage::new().components(
+                                render_soundboard(&sounds, &search, page_num, &selected_sound_id),
+                            ),
+                        ),
+                    )
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+            }
+            _ => {
+                interaction
+                    .create_response(ctx.http(), serenity::CreateInteractionResponse::Acknowledge)
+                    .await
+                    .context(GeneralSerenitySnafu)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn render_soundboard<'a>(
+    sounds: &'a [ayaya_db::entity::sounds::Model],
+    search: &str,
+    page_num: usize,
+    selected_sound_id: &String,
+) -> Vec<serenity::CreateComponent<'a>> {
+    // codex did this, and damn i never knew
+    let total_sounds = filtered_sound_count(sounds, search);
+    let last_page = last_page_for_count(total_sounds);
+    let page_num = page_num.min(last_page);
+    let start = page_num.saturating_mul(SOUND_PAGE_SIZE);
+    let models = sounds
+        .iter()
+        .filter(|e| search.is_empty() || e.sound_name.contains(search))
+        .skip(start)
+        .take(SOUND_PAGE_SIZE)
+        .collect::<Vec<_>>();
+
+    let top_buttons = vec![
+        serenity::CreateButton::new("search").label("Search (WIP)"),
+        serenity::CreateButton::new("clear").label("Clear (WIP)"),
+    ];
+    let top_buttons_action = serenity::CreateActionRow::buttons(top_buttons);
+
+    let mut msg = serenity::MessageBuilder::default();
+    msg = msg.push_line("# Soundboard");
+    if !models.is_empty() {
+        for (i, model) in models.iter().enumerate() {
+            let index = i + 1;
+            msg = msg.push_line(format!("{}. {}", index, model.sound_name).as_str());
+        }
+    } else {
+        msg = msg.push_line(format!("No sounds found.").as_str());
+    }
+
+    msg = msg.push_line(format!("Page number: {}", page_num + 1).as_str());
+    let text_display = serenity::CreateTextDisplay::new(msg.to_string());
+    let text_display = serenity::CreateContainerComponent::TextDisplay(text_display);
+    let text_display = serenity::CreateContainer::new(vec![text_display]);
+
+    let opts = if !models.is_empty() {
+        models
+            .iter()
+            .map(|e| {
+                let sound_id = e.sound_id.to_string();
+                serenity::CreateSelectMenuOption::new(e.sound_name.as_str(), sound_id.clone())
+                    .default_selection(sound_id == *selected_sound_id)
+            })
+            .collect()
+    } else {
+        vec![serenity::CreateSelectMenuOption::new(
+            "No Sounds found",
+            "deadbeef",
+        )]
+        .into_iter()
+        .collect()
+    };
+    let sel = serenity::CreateSelectMenu::new(
+        "select",
+        serenity::CreateSelectMenuKind::String { options: opts },
+    );
+    let sel_action = serenity::CreateActionRow::SelectMenu(sel);
+
+    let mut bot_buttons = Vec::new();
+    if page_num > 0 {
+        bot_buttons.push(serenity::CreateButton::new("prev").label("Previous"));
+    }
+    {
+        let mut button = serenity::CreateButton::new("play").label("Play");
+        if selected_sound_id.is_empty() {
+            button = button.disabled(true);
+        }
+        bot_buttons.push(button);
+    }
+    if page_num < last_page {
+        bot_buttons.push(serenity::CreateButton::new("next").label("Next"));
+    }
+    let bot_buttons_action = serenity::CreateActionRow::buttons(bot_buttons);
+
+    let comp = vec![
+        serenity::CreateComponent::ActionRow(top_buttons_action),
+        serenity::CreateComponent::Container(text_display),
+        serenity::CreateComponent::ActionRow(sel_action),
+        serenity::CreateComponent::ActionRow(bot_buttons_action),
+    ];
+    comp
+}
+
+fn filtered_sound_count(sounds: &[ayaya_db::entity::sounds::Model], search: &str) -> usize {
+    sounds
+        .iter()
+        .filter(|e| search.is_empty() || e.sound_name.contains(search))
+        .count()
+}
+
+fn last_soundboard_page(sounds: &[ayaya_db::entity::sounds::Model], search: &str) -> usize {
+    last_page_for_count(filtered_sound_count(sounds, search))
+}
+
+fn last_page_for_count(count: usize) -> usize {
+    count.saturating_sub(1) / SOUND_PAGE_SIZE
+}
 
 /// Upload a sound to the server. Guaranteed to accept valid MP3 files.
 #[poise::command(
@@ -185,6 +400,15 @@ pub async fn play_sound(
     let sound_id = uuid::Uuid::parse_str(&sound_id).expect("proper error hanlding in ocming");
     ctx.defer_ephemeral().await.context(GeneralSerenitySnafu)?;
 
+    play_sound_inner(ctx, sound_id, true).await?;
+    Ok(())
+}
+
+pub async fn play_sound_inner(
+    ctx: Context<'_>,
+    sound_id: uuid::Uuid,
+    create_repeat: bool,
+) -> CommandResult {
     let guild_id = crate::utils::get_guild_id(ctx)?;
 
     if join::join_inner(ctx, false, true).await? {
@@ -213,15 +437,18 @@ pub async fn play_sound(
         lock.play(input.into());
     }
 
-    // TODO: which sound is played?
-    let sound_data = ctx
-        .data()
-        .data_manager
-        .sounds()
-        .get_sound_details(sound_id)
-        .await
-        .expect("valid sound was not found");
-    create_sound_repeat(ctx, &ctx.author().id, sound_data, call).await?;
+    if create_repeat {
+        // TODO: which sound is played?
+        let sound_data = ctx
+            .data()
+            .data_manager
+            .sounds()
+            .get_sound_details(sound_id)
+            .await
+            .expect("valid sound was not found");
+        create_sound_repeat(ctx, &ctx.author().id, sound_data, call).await?;
+    }
+
     Ok(())
 }
 
@@ -383,49 +610,83 @@ pub async fn create_sound_repeat(
 ) -> Result<(), BotError> {
     // TODO: use component v2
     // Define some unique identifiers for the navigation buttons
-    let ctx_id = ctx.id();
-    let user_id = user_id.get();
+    let ctx_id = ctx.id().to_string();
+    let user_id = *user_id;
     let sound_id = sound.sound_id;
-    let repeat_id = format!("{ctx_id}_{user_id}_{sound_id}");
-    let mut count = 1;
+    let repeat_id = format!("{ctx_id}_{}_{}", user_id.get(), sound_id);
+    let count = 1;
 
     let buttons = vec![
         serenity::CreateButton::new(&repeat_id)
             .style(serenity::ButtonStyle::Success)
             .label("Repeat"),
     ];
-    let embed = |count: i32| {
-        let description = serenity::MessageBuilder::default()
-            .push_line(format!("# {}", sound.sound_name).as_str())
-            .push_line(format!("Played {count} time(s). Play again?").as_str())
-            .build();
-
-        embed_template(EmbedOperation::SoundPlayed).description(description.to_string())
-    };
     let components = serenity::CreateActionRow::Buttons(buttons.into());
     let components = serenity::CreateComponent::ActionRow(components);
     let reply = poise::CreateReply::default()
-        .embed(embed(count))
+        .embed(sound_repeat_embed(&sound, count))
         .components(vec![components]);
 
-    ctx.send(reply).await.context(GeneralSerenitySnafu)?;
+    let message_id = {
+        let reply = ctx.send(reply).await.context(GeneralSerenitySnafu)?;
+        reply.message().await.context(GeneralSerenitySnafu)?.id
+    };
+
+    let serenity_context = ctx.serenity_context().clone();
+    let http = ctx.serenity_context().http.clone();
+    let data_dir = ctx.data().data_dir.clone();
+    tokio::spawn(async move {
+        if let Err(error) = run_sound_repeat_collector(
+            serenity_context,
+            http,
+            message_id,
+            ctx_id,
+            repeat_id,
+            user_id,
+            sound,
+            call,
+            data_dir,
+        )
+        .await
+        {
+            tracing::warn!(?error, "sound repeat collector failed");
+        }
+    });
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_sound_repeat_collector(
+    serenity_context: serenity::Context,
+    http: Arc<serenity::Http>,
+    message_id: serenity::MessageId,
+    ctx_id: String,
+    repeat_id: String,
+    user_id: serenity::UserId,
+    sound: ayaya_db::entity::sounds::Model,
+    call: Arc<Mutex<songbird::Call>>,
+    data_dir: std::path::PathBuf,
+) -> Result<(), BotError> {
+    let sound_id = sound.sound_id;
+    let mut count = 1;
 
     // Loop through incoming interactions with the navigation buttons
-    while let Some(press) =
-        serenity::collector::ComponentInteractionCollector::new(ctx.serenity_context())
+    while let Some(press) = {
+        let custom_id_prefix = ctx_id.clone();
+        message_id
+            .collect_component_interactions(&serenity_context)
             // We defined our button IDs to start with `ctx_id`. If they don't, some other command's
             // button was pressed
-            .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+            .filter(move |press| {
+                press.user.id == user_id && press.data.custom_id.starts_with(&custom_id_prefix)
+            })
             // Timeout when no navigation button has been pressed for 1 minute
             .timeout(std::time::Duration::from_secs(300))
             .await
-    {
+    } {
         if press.data.custom_id == repeat_id {
-            let path = ctx
-                .data()
-                .data_dir
-                .join("sounds")
-                .join(format!("{sound_id}.mp3"));
+            let path = data_dir.join("sounds").join(format!("{sound_id}.mp3"));
             tracing::info!("path: {}", path.display());
             let input = songbird::input::File::new(path);
 
@@ -436,9 +697,10 @@ pub async fn create_sound_repeat(
             count += 1;
             press
                 .create_response(
-                    ctx.http(),
+                    &http,
                     serenity::CreateInteractionResponse::UpdateMessage(
-                        serenity::CreateInteractionResponseMessage::new().embed(embed(count)),
+                        serenity::CreateInteractionResponseMessage::new()
+                            .embed(sound_repeat_embed(&sound, count)),
                     ),
                 )
                 .await
@@ -447,6 +709,18 @@ pub async fn create_sound_repeat(
     }
 
     Ok(())
+}
+
+fn sound_repeat_embed<'a>(
+    sound: &ayaya_db::entity::sounds::Model,
+    count: i32,
+) -> serenity::CreateEmbed<'a> {
+    let description = serenity::MessageBuilder::default()
+        .push_line(format!("# {}", sound.sound_name).as_str())
+        .push_line(format!("Played {count} time(s). Play again?").as_str())
+        .build();
+
+    embed_template(EmbedOperation::SoundPlayed).description(description.to_string())
 }
 
 pub mod error {
