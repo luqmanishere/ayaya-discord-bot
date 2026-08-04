@@ -1,17 +1,25 @@
 //! This module is a custom implementation of the YoutubeSource
 
-use reqwest::{
-    Client,
-    header::{HeaderMap, HeaderName, HeaderValue},
-};
+use reqwest::Client;
 use serenity::async_trait;
 use songbird::input::{
-    AudioStream, AudioStreamError, AuxMetadata, Compose, HlsRequest, HttpRequest, Input,
+    AsyncAdapterStream, AsyncMediaSource, AudioStream, AudioStreamError, AuxMetadata, Compose,
+    Input,
 };
-use std::error::Error;
-use symphonia::core::io::MediaSource;
+use std::{
+    error::Error,
+    io::{ErrorKind as IoErrorKind, Result as IoResult, SeekFrom},
+    pin::Pin,
+    process::Stdio,
+    task::{Context, Poll},
+};
+use symphonia::core::{io::MediaSource, probe::Hint};
+use tokio::{
+    io::{AsyncRead, AsyncSeek, ReadBuf},
+    process::{Child, ChildStdout, Command as TokioCommand},
+};
 use tracing::{info, warn};
-use youtube_dl::{Protocol, YoutubeDlOutput};
+use youtube_dl::YoutubeDlOutput;
 
 use crate::{
     data::stats::StatsManager,
@@ -45,14 +53,13 @@ impl std::fmt::Display for QueryType {
 
 /// A lazily instantiated call to download a file, finding its URL via youtube-dl.
 ///
-/// By default, this uses yt-dlp and is backed by an [`HttpRequest`]. This handler
-/// attempts to find the best audio-only source (typically `WebM`, enabling low-cost
-/// Opus frame passthrough).
-///
-/// [`HttpRequest`]: super::HttpRequest
+/// By default, this uses yt-dlp and streams the selected best audio source (typically
+/// WebM, enabling low-cost Opus frame passthrough) from a spawned yt-dlp process.
 #[derive(Clone)]
 pub struct YoutubeDl {
     program: &'static str,
+    // Retained for API compatibility; streaming no longer performs direct HTTP fetches.
+    #[expect(dead_code)]
     client: Client,
     aux_metadata: Option<AuxMetadata>,
     youtube_metadata: Option<YoutubeMetadata>,
@@ -249,6 +256,59 @@ impl From<YoutubeDl> for Input {
     }
 }
 
+/// Exposes a `yt-dlp` child process's stdout as a non-seekable async media stream.
+///
+/// yt-dlp writes the selected audio (WebM/Opus) to stdout via `-o -`. The child is
+/// killed when this is dropped (e.g. when the track ends or is skipped).
+struct YtDlpProcess {
+    stdout: ChildStdout,
+    child: Child,
+}
+
+impl AsyncRead for YtDlpProcess {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<IoResult<()>> {
+        Pin::new(&mut self.get_mut().stdout).poll_read(cx, buf)
+    }
+}
+
+impl AsyncSeek for YtDlpProcess {
+    fn start_seek(self: Pin<&mut Self>, _position: SeekFrom) -> IoResult<()> {
+        Err(IoErrorKind::Unsupported.into())
+    }
+
+    fn poll_complete(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<IoResult<u64>> {
+        unreachable!()
+    }
+}
+
+impl Drop for YtDlpProcess {
+    fn drop(&mut self) {
+        let _ = self.child.start_kill();
+    }
+}
+
+#[async_trait]
+impl AsyncMediaSource for YtDlpProcess {
+    fn is_seekable(&self) -> bool {
+        false
+    }
+
+    async fn byte_len(&self) -> Option<u64> {
+        None
+    }
+
+    async fn try_resume(
+        &mut self,
+        _offset: u64,
+    ) -> Result<Box<dyn AsyncMediaSource>, AudioStreamError> {
+        Err(AudioStreamError::Unsupported)
+    }
+}
+
 #[async_trait]
 impl Compose for YoutubeDl {
     fn create(&mut self) -> Result<AudioStream<Box<dyn MediaSource>>, AudioStreamError> {
@@ -261,48 +321,56 @@ impl Compose for YoutubeDl {
         // panic safety: `query` should have ensured > 0 results if `Ok`
         let result = self.query().await?;
 
-        let mut headers = HeaderMap::default();
+        // Prefer the resolved watch URL so the same video is streamed; fall back
+        // to the raw query string (e.g. a direct-link URL) otherwise.
+        let stream_target = result
+            .webpage_url
+            .clone()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| match &self.query {
+                QueryType::Url(url) => url.clone(),
+                QueryType::Search(search) => format!("ytsearch1:{search}"),
+            });
 
-        if let Some(map) = result.http_headers {
-            headers.extend(map.iter().filter_map(|(k, v)| {
-                let header_value = v.clone().unwrap_or_default();
-                Some((
-                    HeaderName::from_bytes(k.as_bytes()).ok()?,
-                    HeaderValue::from_str(header_value.as_str()).ok()?,
-                ))
-            }));
-        }
+        info!("Streaming via yt-dlp for: {stream_target}");
 
-        // TODO: measure the format id hits
-        #[expect(clippy::single_match_else)]
-        match result.protocol {
-            Some(Protocol::M3U8Native) => {
-                tracing::info!(
-                    "Using HLS, url: {}, format_id: {}",
-                    result.url,
-                    result.format_id
-                );
-                let mut req =
-                    HlsRequest::new_with_headers(self.client.clone(), result.url, headers);
+        // Stream the best audio format through yt-dlp itself (handles cookies and
+        // YouTube's PO-token challenge) instead of a direct HTTP GET, which
+        // googlevideo rejects with 403 for these URLs.
+        let mut child = TokioCommand::new(self.program)
+            .arg("--quiet")
+            .arg("--no-progress")
+            .arg("--no-playlist")
+            .arg("-f")
+            .arg(YT_DLP_FORMAT_ARGS)
+            .arg("-o")
+            .arg("-")
+            .arg(&stream_target)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .map_err(|e| AudioStreamError::Fail(Box::new(e)))?;
 
-                req.create_async().await
-            }
-            _ => {
-                tracing::info!(
-                    "Using HTTP, url: {}, format_id: {}",
-                    result.url,
-                    result.format_id
-                );
-                let mut req = HttpRequest {
-                    client: self.client.clone(),
-                    request: result.url,
-                    headers,
-                    content_length: result.filesize,
-                };
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| AudioStreamError::Fail("failed to capture yt-dlp stdout".into()))?;
 
-                req.create_async().await
-            }
-        }
+        let stream = AsyncAdapterStream::new(
+            Box::new(YtDlpProcess { stdout, child }) as Box<dyn AsyncMediaSource>,
+            64 * 1024,
+        );
+
+        // YT_DLP_FORMAT_ARGS selects a single audio-only WebM/Opus stream, enabling
+        // Opus passthrough in songbird.
+        let mut hint = Hint::new();
+        hint.mime_type("audio/webm");
+
+        Ok(AudioStream {
+            input: Box::new(stream) as Box<dyn MediaSource>,
+            hint: Some(hint),
+        })
     }
 
     fn should_create_async(&self) -> bool {
