@@ -22,7 +22,7 @@ async fn main() -> Result<(), Error> {
             let cookies_path = yt_dlp_config_dir.join("cookies.txt");
             // TODO: this config should be handled by the lib
             let yt_dlp_config = format!(
-                "--cookies {}\n--no-js-runtime\n--js-runtime node",
+                "--cookies {}\n--no-js-runtime\n--js-runtime deno",
                 cookies_path.to_str().unwrap_or("")
             );
             let config_path = yt_dlp_config_dir.join("config");
